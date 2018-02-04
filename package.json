@@ -1,0 +1,34 @@
+{
+  "name": "captpult",
+  "version": "1.0.0",
+  "description": "HEP Captpult",
+  "main": "captpult.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/sipcapture/captpult.git"
+  },
+  "keywords": [
+    "hep",
+    "hep3",
+    "capture",
+    "server",
+    "client",
+    "core",
+    "rtc"
+  ],
+  "author": "Lorenzo Mangani <lorenzo.mangani@gmail.com> (http://qxip.net/)",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/sipcapture/captpult/issues"
+  },
+  "homepage": "https://github.com/sipcapture/captpult#readme",
+  "dependencies": {
+    "@mysql/xdevapi": "^8.0.9",
+    "commander": "^2.13.0",
+    "hep-js": "^1.0.9",
+    "oh-my-log": "^5.0.1"
+  }
+}

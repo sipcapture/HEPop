@@ -1,0 +1,479 @@
+0 info it worked if it ends with ok
+1 verbose cli [ '/usr/bin/node', '/usr/local/bin/npm', 'install' ]
+2 info using npm@3.10.5
+3 info using node@v8.9.3
+4 silly loadCurrentTree Starting
+5 silly install loadCurrentTree
+6 silly install readLocalPackageData
+7 silly install normalizeTree
+8 silly loadCurrentTree Finishing
+9 silly loadIdealTree Starting
+10 silly install loadIdealTree
+11 silly cloneCurrentTree Starting
+12 silly install cloneCurrentTreeToIdealTree
+13 silly cloneCurrentTree Finishing
+14 silly loadShrinkwrap Starting
+15 silly install loadShrinkwrap
+16 silly loadShrinkwrap Finishing
+17 silly loadAllDepsIntoIdealTree Starting
+18 silly install loadAllDepsIntoIdealTree
+19 silly fetchNamedPackageData @mysql/xdevapi
+20 silly mapToRegistry name @mysql/xdevapi
+21 silly mapToRegistry scope (from package name) @mysql
+22 verbose mapToRegistry no registry URL found in name for scope @mysql
+23 silly mapToRegistry using default registry
+24 silly mapToRegistry registry https://registry.npmjs.org/
+25 silly mapToRegistry data Result {
+25 silly mapToRegistry   raw: '@mysql/xdevapi',
+25 silly mapToRegistry   scope: '@mysql',
+25 silly mapToRegistry   escapedName: '@mysql%2fxdevapi',
+25 silly mapToRegistry   name: '@mysql/xdevapi',
+25 silly mapToRegistry   rawSpec: '',
+25 silly mapToRegistry   spec: 'latest',
+25 silly mapToRegistry   type: 'tag' }
+26 silly mapToRegistry uri https://registry.npmjs.org/@mysql%2fxdevapi
+27 silly fetchNamedPackageData commander
+28 silly mapToRegistry name commander
+29 silly mapToRegistry using default registry
+30 silly mapToRegistry registry https://registry.npmjs.org/
+31 silly mapToRegistry data Result {
+31 silly mapToRegistry   raw: 'commander',
+31 silly mapToRegistry   scope: null,
+31 silly mapToRegistry   escapedName: 'commander',
+31 silly mapToRegistry   name: 'commander',
+31 silly mapToRegistry   rawSpec: '',
+31 silly mapToRegistry   spec: 'latest',
+31 silly mapToRegistry   type: 'tag' }
+32 silly mapToRegistry uri https://registry.npmjs.org/commander
+33 silly fetchNamedPackageData hep-js
+34 silly mapToRegistry name hep-js
+35 silly mapToRegistry using default registry
+36 silly mapToRegistry registry https://registry.npmjs.org/
+37 silly mapToRegistry data Result {
+37 silly mapToRegistry   raw: 'hep-js',
+37 silly mapToRegistry   scope: null,
+37 silly mapToRegistry   escapedName: 'hep-js',
+37 silly mapToRegistry   name: 'hep-js',
+37 silly mapToRegistry   rawSpec: '',
+37 silly mapToRegistry   spec: 'latest',
+37 silly mapToRegistry   type: 'tag' }
+38 silly mapToRegistry uri https://registry.npmjs.org/hep-js
+39 silly fetchNamedPackageData oh-my-log
+40 silly mapToRegistry name oh-my-log
+41 silly mapToRegistry using default registry
+42 silly mapToRegistry registry https://registry.npmjs.org/
+43 silly mapToRegistry data Result {
+43 silly mapToRegistry   raw: 'oh-my-log',
+43 silly mapToRegistry   scope: null,
+43 silly mapToRegistry   escapedName: 'oh-my-log',
+43 silly mapToRegistry   name: 'oh-my-log',
+43 silly mapToRegistry   rawSpec: '',
+43 silly mapToRegistry   spec: 'latest',
+43 silly mapToRegistry   type: 'tag' }
+44 silly mapToRegistry uri https://registry.npmjs.org/oh-my-log
+45 verbose request uri https://registry.npmjs.org/commander
+46 verbose request no auth needed
+47 info attempt registry request try #1 at 14:49:10
+48 verbose request using bearer token for auth
+49 verbose request id 3fb9a8dd44ac344d
+50 verbose etag "5a75f61a-13a42"
+51 verbose lastModified Sat, 3 Feb 2018 17:49:14 GMT
+52 http request GET https://registry.npmjs.org/commander
+53 verbose request uri https://registry.npmjs.org/oh-my-log
+54 verbose request no auth needed
+55 info attempt registry request try #1 at 14:49:10
+56 verbose request using bearer token for auth
+57 verbose etag "5850c1ac-66d5"
+58 verbose lastModified Wed, 14 Dec 2016 3:51:08 GMT
+59 http request GET https://registry.npmjs.org/oh-my-log
+60 verbose request uri https://registry.npmjs.org/@mysql%2fxdevapi
+61 verbose request no auth needed
+62 info attempt registry request try #1 at 14:49:10
+63 verbose request using bearer token for auth
+64 verbose etag W/"5a70be47-381e"
+65 verbose lastModified Tue, 30 Jan 2018 18:49:43 GMT
+66 http request GET https://registry.npmjs.org/@mysql%2fxdevapi
+67 verbose request uri https://registry.npmjs.org/hep-js
+68 verbose request no auth needed
+69 info attempt registry request try #1 at 14:49:10
+70 verbose request using bearer token for auth
+71 verbose etag "5a6217cf-2aa0"
+72 verbose lastModified Fri, 19 Jan 2018 16:07:43 GMT
+73 http request GET https://registry.npmjs.org/hep-js
+74 http 304 https://registry.npmjs.org/oh-my-log
+75 verbose headers { date: 'Sun, 04 Feb 2018 13:49:10 GMT',
+75 verbose headers   via: '1.1 varnish',
+75 verbose headers   'cache-control': 'max-age=300',
+75 verbose headers   etag: '"5850c1ac-66d5"',
+75 verbose headers   age: '1008',
+75 verbose headers   connection: 'keep-alive',
+75 verbose headers   'x-served-by': 'cache-ams4447-AMS',
+75 verbose headers   'x-cache': 'HIT',
+75 verbose headers   'x-cache-hits': '1',
+75 verbose headers   'x-timer': 'S1517752150.155367,VS0,VE1',
+75 verbose headers   vary: 'Accept-Encoding, Accept' }
+76 silly get cb [ 304,
+76 silly get   { date: 'Sun, 04 Feb 2018 13:49:10 GMT',
+76 silly get     via: '1.1 varnish',
+76 silly get     'cache-control': 'max-age=300',
+76 silly get     etag: '"5850c1ac-66d5"',
+76 silly get     age: '1008',
+76 silly get     connection: 'keep-alive',
+76 silly get     'x-served-by': 'cache-ams4447-AMS',
+76 silly get     'x-cache': 'HIT',
+76 silly get     'x-cache-hits': '1',
+76 silly get     'x-timer': 'S1517752150.155367,VS0,VE1',
+76 silly get     vary: 'Accept-Encoding, Accept' } ]
+77 verbose etag https://registry.npmjs.org/oh-my-log from cache
+78 verbose get saving oh-my-log to /home/lorenzo/.npm/registry.npmjs.org/oh-my-log/.cache.json
+79 verbose correctMkdir /home/lorenzo/.npm correctMkdir not in flight; initializing
+80 http 304 https://registry.npmjs.org/commander
+81 verbose headers { date: 'Sun, 04 Feb 2018 13:49:10 GMT',
+81 verbose headers   via: '1.1 varnish',
+81 verbose headers   'cache-control': 'max-age=300',
+81 verbose headers   etag: '"5a75f61a-13a42"',
+81 verbose headers   age: '7975',
+81 verbose headers   connection: 'keep-alive',
+81 verbose headers   'x-served-by': 'cache-ams4425-AMS',
+81 verbose headers   'x-cache': 'HIT',
+81 verbose headers   'x-cache-hits': '1',
+81 verbose headers   'x-timer': 'S1517752150.156437,VS0,VE1',
+81 verbose headers   vary: 'Accept-Encoding, Accept' }
+82 silly get cb [ 304,
+82 silly get   { date: 'Sun, 04 Feb 2018 13:49:10 GMT',
+82 silly get     via: '1.1 varnish',
+82 silly get     'cache-control': 'max-age=300',
+82 silly get     etag: '"5a75f61a-13a42"',
+82 silly get     age: '7975',
+82 silly get     connection: 'keep-alive',
+82 silly get     'x-served-by': 'cache-ams4425-AMS',
+82 silly get     'x-cache': 'HIT',
+82 silly get     'x-cache-hits': '1',
+82 silly get     'x-timer': 'S1517752150.156437,VS0,VE1',
+82 silly get     vary: 'Accept-Encoding, Accept' } ]
+83 verbose etag https://registry.npmjs.org/commander from cache
+84 verbose get saving commander to /home/lorenzo/.npm/registry.npmjs.org/commander/.cache.json
+85 verbose correctMkdir /home/lorenzo/.npm correctMkdir already in flight; waiting
+86 http 304 https://registry.npmjs.org/hep-js
+87 verbose headers { date: 'Sun, 04 Feb 2018 13:49:10 GMT',
+87 verbose headers   via: '1.1 varnish',
+87 verbose headers   'cache-control': 'max-age=300',
+87 verbose headers   etag: '"5a6217cf-2aa0"',
+87 verbose headers   age: '2978',
+87 verbose headers   connection: 'keep-alive',
+87 verbose headers   'x-served-by': 'cache-ams4140-AMS',
+87 verbose headers   'x-cache': 'HIT',
+87 verbose headers   'x-cache-hits': '1',
+87 verbose headers   'x-timer': 'S1517752150.161873,VS0,VE1',
+87 verbose headers   vary: 'Accept-Encoding, Accept' }
+88 silly get cb [ 304,
+88 silly get   { date: 'Sun, 04 Feb 2018 13:49:10 GMT',
+88 silly get     via: '1.1 varnish',
+88 silly get     'cache-control': 'max-age=300',
+88 silly get     etag: '"5a6217cf-2aa0"',
+88 silly get     age: '2978',
+88 silly get     connection: 'keep-alive',
+88 silly get     'x-served-by': 'cache-ams4140-AMS',
+88 silly get     'x-cache': 'HIT',
+88 silly get     'x-cache-hits': '1',
+88 silly get     'x-timer': 'S1517752150.161873,VS0,VE1',
+88 silly get     vary: 'Accept-Encoding, Accept' } ]
+89 verbose etag https://registry.npmjs.org/hep-js from cache
+90 verbose get saving hep-js to /home/lorenzo/.npm/registry.npmjs.org/hep-js/.cache.json
+91 verbose correctMkdir /home/lorenzo/.npm correctMkdir already in flight; waiting
+92 silly resolveWithNewModule oh-my-log@5.0.1 checking installable status
+93 silly cache add args [ 'oh-my-log@^5.0.1', null ]
+94 verbose cache add spec oh-my-log@^5.0.1
+95 silly cache add parsed spec Result {
+95 silly cache add   raw: 'oh-my-log@^5.0.1',
+95 silly cache add   scope: null,
+95 silly cache add   escapedName: 'oh-my-log',
+95 silly cache add   name: 'oh-my-log',
+95 silly cache add   rawSpec: '^5.0.1',
+95 silly cache add   spec: '>=5.0.1 <6.0.0',
+95 silly cache add   type: 'range' }
+96 silly addNamed oh-my-log@>=5.0.1 <6.0.0
+97 verbose addNamed ">=5.0.1 <6.0.0" is a valid semver range for oh-my-log
+98 silly addNameRange { name: 'oh-my-log', range: '>=5.0.1 <6.0.0', hasData: false }
+99 silly mapToRegistry name oh-my-log
+100 silly mapToRegistry using default registry
+101 silly mapToRegistry registry https://registry.npmjs.org/
+102 silly mapToRegistry data Result {
+102 silly mapToRegistry   raw: 'oh-my-log',
+102 silly mapToRegistry   scope: null,
+102 silly mapToRegistry   escapedName: 'oh-my-log',
+102 silly mapToRegistry   name: 'oh-my-log',
+102 silly mapToRegistry   rawSpec: '',
+102 silly mapToRegistry   spec: 'latest',
+102 silly mapToRegistry   type: 'tag' }
+103 silly mapToRegistry uri https://registry.npmjs.org/oh-my-log
+104 verbose addNameRange registry:https://registry.npmjs.org/oh-my-log not in flight; fetching
+105 silly resolveWithNewModule commander@2.13.0 checking installable status
+106 silly cache add args [ 'commander@^2.13.0', null ]
+107 verbose cache add spec commander@^2.13.0
+108 silly cache add parsed spec Result {
+108 silly cache add   raw: 'commander@^2.13.0',
+108 silly cache add   scope: null,
+108 silly cache add   escapedName: 'commander',
+108 silly cache add   name: 'commander',
+108 silly cache add   rawSpec: '^2.13.0',
+108 silly cache add   spec: '>=2.13.0 <3.0.0',
+108 silly cache add   type: 'range' }
+109 silly addNamed commander@>=2.13.0 <3.0.0
+110 verbose addNamed ">=2.13.0 <3.0.0" is a valid semver range for commander
+111 silly addNameRange { name: 'commander', range: '>=2.13.0 <3.0.0', hasData: false }
+112 silly mapToRegistry name commander
+113 silly mapToRegistry using default registry
+114 silly mapToRegistry registry https://registry.npmjs.org/
+115 silly mapToRegistry data Result {
+115 silly mapToRegistry   raw: 'commander',
+115 silly mapToRegistry   scope: null,
+115 silly mapToRegistry   escapedName: 'commander',
+115 silly mapToRegistry   name: 'commander',
+115 silly mapToRegistry   rawSpec: '',
+115 silly mapToRegistry   spec: 'latest',
+115 silly mapToRegistry   type: 'tag' }
+116 silly mapToRegistry uri https://registry.npmjs.org/commander
+117 verbose addNameRange registry:https://registry.npmjs.org/commander not in flight; fetching
+118 verbose get https://registry.npmjs.org/commander not expired, no request
+119 silly addNameRange number 2 { name: 'commander', range: '>=2.13.0 <3.0.0', hasData: true }
+120 silly addNameRange versions [ 'commander',
+120 silly addNameRange   [ '0.0.1',
+120 silly addNameRange     '0.0.3',
+120 silly addNameRange     '0.0.4',
+120 silly addNameRange     '0.0.5',
+120 silly addNameRange     '0.1.0',
+120 silly addNameRange     '0.2.0',
+120 silly addNameRange     '0.2.1',
+120 silly addNameRange     '0.3.0',
+120 silly addNameRange     '0.3.1',
+120 silly addNameRange     '0.3.2',
+120 silly addNameRange     '0.3.3',
+120 silly addNameRange     '0.4.0',
+120 silly addNameRange     '0.4.1',
+120 silly addNameRange     '0.4.2',
+120 silly addNameRange     '0.4.3',
+120 silly addNameRange     '0.5.0',
+120 silly addNameRange     '0.5.1',
+120 silly addNameRange     '0.6.0',
+120 silly addNameRange     '0.6.1',
+120 silly addNameRange     '0.5.2',
+120 silly addNameRange     '1.0.0',
+120 silly addNameRange     '1.0.1',
+120 silly addNameRange     '1.0.2',
+120 silly addNameRange     '1.0.3',
+120 silly addNameRange     '1.0.4',
+120 silly addNameRange     '1.0.5',
+120 silly addNameRange     '1.1.0',
+120 silly addNameRange     '1.1.1',
+120 silly addNameRange     '1.2.0',
+120 silly addNameRange     '1.3.0',
+120 silly addNameRange     '1.3.1',
+120 silly addNameRange     '1.3.2',
+120 silly addNameRange     '2.0.0',
+120 silly addNameRange     '2.1.0',
+120 silly addNameRange     '2.2.0',
+120 silly addNameRange     '2.3.0',
+120 silly addNameRange     '2.4.0',
+120 silly addNameRange     '2.5.0',
+120 silly addNameRange     '2.5.1',
+120 silly addNameRange     '2.6.0',
+120 silly addNameRange     '2.7.0',
+120 silly addNameRange     '2.7.1',
+120 silly addNameRange     '2.8.0',
+120 silly addNameRange     '2.8.1',
+120 silly addNameRange     '2.9.0',
+120 silly addNameRange     '2.10.0',
+120 silly addNameRange     '2.11.0',
+120 silly addNameRange     '2.12.0',
+120 silly addNameRange     '2.12.1',
+120 silly addNameRange     '2.12.2',
+120 silly addNameRange     '2.13.0' ] ]
+121 silly addNamed commander@2.13.0
+122 verbose addNamed "2.13.0" is a plain semver version for commander
+123 verbose get https://registry.npmjs.org/oh-my-log not expired, no request
+124 silly addNameRange number 2 { name: 'oh-my-log', range: '>=5.0.1 <6.0.0', hasData: true }
+125 silly addNameRange versions [ 'oh-my-log',
+125 silly addNameRange   [ '1.0.0',
+125 silly addNameRange     '2.0.0',
+125 silly addNameRange     '2.0.1',
+125 silly addNameRange     '2.1.0',
+125 silly addNameRange     '3.0.0',
+125 silly addNameRange     '3.0.1',
+125 silly addNameRange     '4.0.0',
+125 silly addNameRange     '4.0.1',
+125 silly addNameRange     '4.0.2',
+125 silly addNameRange     '5.0.0',
+125 silly addNameRange     '5.0.1' ] ]
+126 silly addNamed oh-my-log@5.0.1
+127 verbose addNamed "5.0.1" is a plain semver version for oh-my-log
+128 silly fetchNamedPackageData No valid target from cache, forcing network
+129 verbose request uri https://registry.npmjs.org/hep-js
+130 verbose request no auth needed
+131 info attempt registry request try #1 at 14:49:10
+132 verbose request using bearer token for auth
+133 http request GET https://registry.npmjs.org/hep-js
+134 silly cache afterAdd commander@2.13.0
+135 verbose afterAdd /home/lorenzo/.npm/commander/2.13.0/package/package.json not in flight; writing
+136 verbose correctMkdir /home/lorenzo/.npm correctMkdir not in flight; initializing
+137 silly cache afterAdd oh-my-log@5.0.1
+138 verbose afterAdd /home/lorenzo/.npm/oh-my-log/5.0.1/package/package.json not in flight; writing
+139 verbose correctMkdir /home/lorenzo/.npm correctMkdir not in flight; initializing
+140 http 200 https://registry.npmjs.org/hep-js
+141 verbose headers { 'content-type': 'application/json; charset=UTF-8',
+141 verbose headers   server: 'UploadServer',
+141 verbose headers   'cache-control': 'max-age=300',
+141 verbose headers   'last-modified': 'Fri, 19 Jan 2018 16:07:43 GMT',
+141 verbose headers   etag: '"5a6217cf-2aa0"',
+141 verbose headers   'content-encoding': 'gzip',
+141 verbose headers   'content-length': '2238',
+141 verbose headers   'accept-ranges': 'bytes',
+141 verbose headers   date: 'Sun, 04 Feb 2018 13:49:10 GMT',
+141 verbose headers   via: '1.1 varnish',
+141 verbose headers   age: '2978',
+141 verbose headers   connection: 'keep-alive',
+141 verbose headers   'x-served-by': 'cache-ams4447-AMS',
+141 verbose headers   'x-cache': 'HIT',
+141 verbose headers   'x-cache-hits': '1',
+141 verbose headers   'x-timer': 'S1517752150.269087,VS0,VE1',
+141 verbose headers   vary: 'Accept-Encoding, Accept' }
+142 silly get cb [ 200,
+142 silly get   { 'content-type': 'application/json; charset=UTF-8',
+142 silly get     server: 'UploadServer',
+142 silly get     'cache-control': 'max-age=300',
+142 silly get     'last-modified': 'Fri, 19 Jan 2018 16:07:43 GMT',
+142 silly get     etag: '"5a6217cf-2aa0"',
+142 silly get     'content-encoding': 'gzip',
+142 silly get     'content-length': '2238',
+142 silly get     'accept-ranges': 'bytes',
+142 silly get     date: 'Sun, 04 Feb 2018 13:49:10 GMT',
+142 silly get     via: '1.1 varnish',
+142 silly get     age: '2978',
+142 silly get     connection: 'keep-alive',
+142 silly get     'x-served-by': 'cache-ams4447-AMS',
+142 silly get     'x-cache': 'HIT',
+142 silly get     'x-cache-hits': '1',
+142 silly get     'x-timer': 'S1517752150.269087,VS0,VE1',
+142 silly get     vary: 'Accept-Encoding, Accept' } ]
+143 verbose get saving hep-js to /home/lorenzo/.npm/registry.npmjs.org/hep-js/.cache.json
+144 verbose correctMkdir /home/lorenzo/.npm correctMkdir not in flight; initializing
+145 verbose afterAdd /home/lorenzo/.npm/commander/2.13.0/package/package.json written
+146 verbose afterAdd /home/lorenzo/.npm/oh-my-log/5.0.1/package/package.json written
+147 silly fetchPackageMetaData Error: No compatible version found: hep-js@^1.0.9
+147 silly fetchPackageMetaData Valid install targets:
+147 silly fetchPackageMetaData 1.0.8, 1.0.7, 0.0.5, 0.0.4, 0.0.3, 0.0.2, 0.0.1
+147 silly fetchPackageMetaData
+147 silly fetchPackageMetaData     at pickVersionFromRegistryDocument (/usr/local/lib/node_modules/npm/lib/fetch-package-metadata.js:170:16)
+147 silly fetchPackageMetaData     at /usr/local/lib/node_modules/npm/node_modules/iferr/index.js:13:50
+147 silly fetchPackageMetaData     at /usr/local/lib/node_modules/npm/lib/utils/pulse-till-done.js:20:8
+147 silly fetchPackageMetaData     at saved (/usr/local/lib/node_modules/npm/lib/cache/caching-client.js:174:7)
+147 silly fetchPackageMetaData     at /usr/local/lib/node_modules/npm/node_modules/graceful-fs/polyfills.js:210:7
+147 silly fetchPackageMetaData     at FSReqWrap.oncomplete (fs.js:135:15)
+147 silly fetchPackageMetaData  error for hep-js@^1.0.9 Error: No compatible version found: hep-js@^1.0.9
+147 silly fetchPackageMetaData Valid install targets:
+147 silly fetchPackageMetaData 1.0.8, 1.0.7, 0.0.5, 0.0.4, 0.0.3, 0.0.2, 0.0.1
+147 silly fetchPackageMetaData
+147 silly fetchPackageMetaData     at pickVersionFromRegistryDocument (/usr/local/lib/node_modules/npm/lib/fetch-package-metadata.js:170:16)
+147 silly fetchPackageMetaData     at /usr/local/lib/node_modules/npm/node_modules/iferr/index.js:13:50
+147 silly fetchPackageMetaData     at /usr/local/lib/node_modules/npm/lib/utils/pulse-till-done.js:20:8
+147 silly fetchPackageMetaData     at saved (/usr/local/lib/node_modules/npm/lib/cache/caching-client.js:174:7)
+147 silly fetchPackageMetaData     at /usr/local/lib/node_modules/npm/node_modules/graceful-fs/polyfills.js:210:7
+147 silly fetchPackageMetaData     at FSReqWrap.oncomplete (fs.js:135:15)
+148 http 304 https://registry.npmjs.org/@mysql%2fxdevapi
+149 verbose headers { server: 'nginx/1.10.3',
+149 verbose headers   'last-modified': 'Tue, 30 Jan 2018 18:49:43 GMT',
+149 verbose headers   etag: '"5a70be47-381e"',
+149 verbose headers   'cache-control': 'max-age=0',
+149 verbose headers   'accept-ranges': 'bytes',
+149 verbose headers   date: 'Sun, 04 Feb 2018 13:49:10 GMT',
+149 verbose headers   via: '1.1 varnish',
+149 verbose headers   connection: 'keep-alive',
+149 verbose headers   'x-served-by': 'cache-ams4448-AMS',
+149 verbose headers   'x-cache': 'MISS',
+149 verbose headers   'x-cache-hits': '0',
+149 verbose headers   'x-timer': 'S1517752150.161111,VS0,VE754' }
+150 silly get cb [ 304,
+150 silly get   { server: 'nginx/1.10.3',
+150 silly get     'last-modified': 'Tue, 30 Jan 2018 18:49:43 GMT',
+150 silly get     etag: '"5a70be47-381e"',
+150 silly get     'cache-control': 'max-age=0',
+150 silly get     'accept-ranges': 'bytes',
+150 silly get     date: 'Sun, 04 Feb 2018 13:49:10 GMT',
+150 silly get     via: '1.1 varnish',
+150 silly get     connection: 'keep-alive',
+150 silly get     'x-served-by': 'cache-ams4448-AMS',
+150 silly get     'x-cache': 'MISS',
+150 silly get     'x-cache-hits': '0',
+150 silly get     'x-timer': 'S1517752150.161111,VS0,VE754' } ]
+151 verbose etag https://registry.npmjs.org/@mysql%2fxdevapi from cache
+152 verbose get saving @mysql/xdevapi to /home/lorenzo/.npm/registry.npmjs.org/_40mysql_252fxdevapi/.cache.json
+153 verbose correctMkdir /home/lorenzo/.npm correctMkdir not in flight; initializing
+154 silly resolveWithNewModule @mysql/xdevapi@8.0.9 checking installable status
+155 silly cache add args [ '@mysql/xdevapi@^8.0.9', null ]
+156 verbose cache add spec @mysql/xdevapi@^8.0.9
+157 silly cache add parsed spec Result {
+157 silly cache add   raw: '@mysql/xdevapi@^8.0.9',
+157 silly cache add   scope: '@mysql',
+157 silly cache add   escapedName: '@mysql%2fxdevapi',
+157 silly cache add   name: '@mysql/xdevapi',
+157 silly cache add   rawSpec: '^8.0.9',
+157 silly cache add   spec: '>=8.0.9 <9.0.0',
+157 silly cache add   type: 'range' }
+158 silly addNamed @mysql/xdevapi@>=8.0.9 <9.0.0
+159 verbose addNamed ">=8.0.9 <9.0.0" is a valid semver range for @mysql/xdevapi
+160 silly addNameRange { name: '@mysql/xdevapi',
+160 silly addNameRange   range: '>=8.0.9 <9.0.0',
+160 silly addNameRange   hasData: false }
+161 silly mapToRegistry name @mysql/xdevapi
+162 silly mapToRegistry scope (from package name) @mysql
+163 verbose mapToRegistry no registry URL found in name for scope @mysql
+164 silly mapToRegistry using default registry
+165 silly mapToRegistry registry https://registry.npmjs.org/
+166 silly mapToRegistry data Result {
+166 silly mapToRegistry   raw: '@mysql/xdevapi',
+166 silly mapToRegistry   scope: '@mysql',
+166 silly mapToRegistry   escapedName: '@mysql%2fxdevapi',
+166 silly mapToRegistry   name: '@mysql/xdevapi',
+166 silly mapToRegistry   rawSpec: '',
+166 silly mapToRegistry   spec: 'latest',
+166 silly mapToRegistry   type: 'tag' }
+167 silly mapToRegistry uri https://registry.npmjs.org/@mysql%2fxdevapi
+168 verbose addNameRange registry:https://registry.npmjs.org/@mysql%2fxdevapi not in flight; fetching
+169 verbose get https://registry.npmjs.org/@mysql%2fxdevapi not expired, no request
+170 silly addNameRange number 2 { name: '@mysql/xdevapi',
+170 silly addNameRange   range: '>=8.0.9 <9.0.0',
+170 silly addNameRange   hasData: true }
+171 silly addNameRange versions [ '@mysql/xdevapi',
+171 silly addNameRange   [ '1.0.4', '1.0.5', '1.0.6', '8.0.7', '8.0.8', '8.0.9' ] ]
+172 silly addNamed @mysql/xdevapi@8.0.9
+173 verbose addNamed "8.0.9" is a plain semver version for @mysql/xdevapi
+174 silly cache afterAdd @mysql/xdevapi@8.0.9
+175 verbose afterAdd /home/lorenzo/.npm/@mysql/xdevapi/8.0.9/package/package.json not in flight; writing
+176 verbose correctMkdir /home/lorenzo/.npm correctMkdir not in flight; initializing
+177 verbose afterAdd /home/lorenzo/.npm/@mysql/xdevapi/8.0.9/package/package.json written
+178 silly rollbackFailedOptional Starting
+179 silly rollbackFailedOptional Finishing
+180 silly runTopLevelLifecycles Starting
+181 silly runTopLevelLifecycles Finishing
+182 silly install printInstalled
+183 verbose stack Error: No compatible version found: hep-js@^1.0.9
+183 verbose stack Valid install targets:
+183 verbose stack 1.0.8, 1.0.7, 0.0.5, 0.0.4, 0.0.3, 0.0.2, 0.0.1
+183 verbose stack
+183 verbose stack     at pickVersionFromRegistryDocument (/usr/local/lib/node_modules/npm/lib/fetch-package-metadata.js:170:16)
+183 verbose stack     at /usr/local/lib/node_modules/npm/node_modules/iferr/index.js:13:50
+183 verbose stack     at /usr/local/lib/node_modules/npm/lib/utils/pulse-till-done.js:20:8
+183 verbose stack     at saved (/usr/local/lib/node_modules/npm/lib/cache/caching-client.js:174:7)
+183 verbose stack     at /usr/local/lib/node_modules/npm/node_modules/graceful-fs/polyfills.js:210:7
+183 verbose stack     at FSReqWrap.oncomplete (fs.js:135:15)
+184 verbose cwd /usr/src/lmangani/captpult
+185 error Linux 4.4.0-103-generic
+186 error argv "/usr/bin/node" "/usr/local/bin/npm" "install"
+187 error node v8.9.3
+188 error npm  v3.10.5
+189 error No compatible version found: hep-js@^1.0.9
+189 error Valid install targets:
+189 error 1.0.8, 1.0.7, 0.0.5, 0.0.4, 0.0.3, 0.0.2, 0.0.1
+190 error If you need help, you may report this error at:
+190 error     <https://github.com/npm/npm/issues>
+191 verbose exit [ 1, true ]
