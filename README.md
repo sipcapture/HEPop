@@ -8,7 +8,7 @@ NodeJS [HEP](https://hep.sipcapture.org) Server & Switch for [HOMER](https://git
   hepop [options] [command]
 ```
 
-### Options:
+#### Options:
 ```
     -V, --version            output the version number
     -p, --port <number>      port to listen on
@@ -16,14 +16,14 @@ NodeJS [HEP](https://hep.sipcapture.org) Server & Switch for [HOMER](https://git
     -h, --help               output usage information
 ```
 
-### Commands:
+#### Commands:
 ```
     http    start HTTP HEP server
     tcp     start TCP HEP server
     udp     start UDP HEP server
 ```
 
-
+#### Example
 ```
 $ hepop -p 9063 udp
 
