@@ -1,14 +1,14 @@
 <img src="http://i.imgur.com/RSUlFRa.gif" width="120" alt="HEP"><img src="https://d30y9cdsu7xlg0.cloudfront.net/png/30712-200.png" width=50>
 
 # HEPop
-Nodejs HEP3 Server & Switch
+NodeJS [HEP](https://hep.sipcapture.org) Server & Switch for [HOMER](https://github.com/sipcapture/homer) 
 
 ### Usage
 ```
   hepop [options] [command]
 ```
 
-### Options:
+#### Options:
 ```
     -V, --version            output the version number
     -p, --port <number>      port to listen on
@@ -16,14 +16,14 @@ Nodejs HEP3 Server & Switch
     -h, --help               output usage information
 ```
 
-### Commands:
+#### Commands:
 ```
     http    start HTTP HEP server
-    tcp     start TCP HEP server
-    udp     start UDP HEP server
+    tcp     start TCP  HEP server
+    udp     start UDP  HEP server
 ```
 
-
+#### Example
 ```
 $ hepop -p 9063 udp
 
