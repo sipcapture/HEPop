@@ -1,21 +1,25 @@
 {
-  "name": "captpult",
+  "name": "HEPop",
   "version": "1.0.0",
-  "description": "HEP Captpult",
-  "main": "captpult.js",
+  "description": "HEP Packet Server & Switch",
+  "main": "hepop.js",
   "bin": {
-    "captpult": "./captpult.js"
+    "hepop": "./hepop.js"
   },
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/sipcapture/captpult.git"
+    "url": "git+https://github.com/sipcapture/hepop.git"
   },
   "keywords": [
     "hep",
+    "eep",
     "hep3",
+    "encapsulation",
+    "homer",
+    "sipcapture",
     "capture",
     "server",
     "client",
@@ -25,9 +29,9 @@
   "author": "Lorenzo Mangani <lorenzo.mangani@gmail.com> (http://qxip.net/)",
   "license": "MIT",
   "bugs": {
-    "url": "https://github.com/sipcapture/captpult/issues"
+    "url": "https://github.com/sipcapture/hepop/issues"
   },
-  "homepage": "https://github.com/sipcapture/captpult#readme",
+  "homepage": "https://github.com/sipcapture/hepop#readme",
   "dependencies": {
     "@mysql/xdevapi": "^8.0.9",
     "commander": "^2.13.0",
