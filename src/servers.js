@@ -17,10 +17,10 @@ const log = logger('client', {
   }
 })
 
-const processHep = function processHep(data) {
+const processHep = function processHep(data,socket) {
 	try {
 	  var decoded = hepjs.decapsulate(data);
-  	  log('%data:cyan (%s:italic:dim %d:italic:gray) [%d:blue] ${decoded}', socket.remoteAddress, socket.remotePort, data.length)
+  	  log('%data:cyan [%s:blue] %s:yellow', JSON.stringify(socket), JSON.stringify(decoded));
 	} catch(err) { log('%error:red %s', err.toString() ) }
 }
 
@@ -37,7 +37,7 @@ exports.tcp = function({ port = undefined, address = '127.0.0.1' } = { address: 
   server.on('connection', (socket) => {
     log('%connect:green (%s:italic:dim %d:italic:gray)', socket.remoteAddress, socket.remotePort)
 
-    socket.on('data', (data) => processHep(data))
+    socket.on('data', (data) => processHep(data,socket))
     socket.on('error', (err) => log('%error:red (%s:italic:dim %d:italic:gray) %s', socket.remoteAddress, socket.remotePort, err.toString()))
     socket.on('end', () => log('%disconnect:red️ (%s:italic:dim %d:italic:gray)', socket.remoteAddress, socket.remotePort))
 
@@ -47,7 +47,7 @@ exports.tcp = function({ port = undefined, address = '127.0.0.1' } = { address: 
   server.listen(port, address)
 }
 
-exports.upd = function({ port = undefined, address = '127.0.0.1' } = { address: '127.0.0.1' }) {
+exports.udp = function({ port = undefined, address = '127.0.0.1' } = { address: '127.0.0.1' }) {
   var socket = dgram.createSocket('udp4')
 
   socket.on('error', (err) => log('error %s:yellow', err.message))
@@ -76,7 +76,7 @@ exports.http = function({ port = undefined, address = '127.0.0.1' } = { address:
     response.writeHead(200, { 'Content-Type': request.headers['content-type'] || 'text/plain' })
 
     request.on('data', (data) => {
-      processHep(data);
+      processHep(data,request.socket);
       // response.write(data)
     })
 
