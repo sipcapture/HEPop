@@ -5,6 +5,8 @@ const dgram = require('dgram')
 const logger = require('oh-my-log')
 const net =require('net')
 
+var sip = require('sip');
+
 const log = logger('client', {
   prefix: '[%__date:magenta]',
   locals: {
@@ -20,7 +22,15 @@ const log = logger('client', {
 const processHep = function processHep(data,socket) {
 	try {
 	  var decoded = hepjs.decapsulate(data);
-  	  log('%data:cyan [%s:blue] %s:yellow', JSON.stringify(socket), JSON.stringify(decoded));
+  	  log('%data:cyan [%s:blue] %s:yellow', JSON.stringify(socket), JSON.stringify(decoded) );
+	  switch(decoded.payloadType) {
+		case 1:
+	  	  log('%data:cyan [%s:blue]', 'SIP' );
+		  console.log( sip.parse(decoded.payload) );
+		  break;
+		default:
+	  	  log('%data:cyan [%s:blue]', 'NOT SIP' );
+	  }
 	} catch(err) { log('%error:red %s', err.toString() ) }
 }
 
