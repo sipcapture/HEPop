@@ -19,8 +19,8 @@ NodeJS [HEP](https://hep.sipcapture.org) Server & Switch for [HOMER](https://git
 #### Commands:
 ```
     http    start HTTP HEP server
-    tcp     start TCP HEP server
-    udp     start UDP HEP server
+    tcp     start TCP  HEP server
+    udp     start UDP  HEP server
 ```
 
 #### Example
