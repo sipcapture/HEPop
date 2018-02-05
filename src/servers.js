@@ -22,14 +22,15 @@ const log = logger('client', {
 const processHep = function processHep(data,socket) {
 	try {
 	  var decoded = hepjs.decapsulate(data);
-  	  log('%data:cyan [%s:blue] %s:yellow', JSON.stringify(socket), JSON.stringify(decoded) );
+  	  log('%data:cyan HEP [%s:blue]', JSON.stringify(socket) );
 	  switch(decoded.payloadType) {
 		case 1:
-	  	  log('%data:cyan [%s:blue]', 'SIP' );
-		  console.log( sip.parse(decoded.payload) );
+	  	  log('%data:cyan HEP Type [%s:blue]', 'SIP' );
+		  log('%data:cyan HEP Payload [%s:yellow]', sip.parse(decoded.payload) );
 		  break;
 		default:
-	  	  log('%data:cyan [%s:blue]', 'NOT SIP' );
+	  	  log('%data:cyan HEP Type [%s:blue]', decoded.payloadType );
+		  log('%data:cyan HEP Payload [%s:yellow]', decoded.payload );
 	  }
 	} catch(err) { log('%error:red %s', err.toString() ) }
 }
