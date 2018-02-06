@@ -1,6 +1,5 @@
-const logger = require('oh-my-log')
-
-exports.log = logger('client', {
+const logger = require('oh-my-log');
+const log = logger('client', {
   prefix: '[%__date:magenta]',
   locals: {
     'connect': '⚪',
@@ -10,4 +9,6 @@ exports.log = logger('client', {
     'start': '▶️',
     'stop': '❌'
   }
-})
+});
+
+module.exports = log;
