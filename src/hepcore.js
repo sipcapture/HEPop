@@ -1,5 +1,5 @@
 const hepjs = require('hep-js');
-const log = require('./logger);
+const log = require('./logger');
 
 exports.encapsulate = hepjs.encapsulate;
 exports.decapsulate = hepjs.decapsulate;
