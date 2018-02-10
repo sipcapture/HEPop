@@ -4,7 +4,7 @@
  */
 
 const log = require('./logger');
-const bucket_emitter = require('bucket-emitter')
+const bucket_emitter = require('bucket_emitter')
 
 const bucket = bucket_emitter.create({
     timeout: 1000, //if there's no data input until timeout, emit data forcefully. 
