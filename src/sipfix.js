@@ -1,7 +1,8 @@
 const log = require('./logger');
-const bucket = require('./bucket');
+const bucket = require('./bucket').bucket;
 const sipfix = require('sipfix');
-		    
+const stringify = require('safe-stable-stringify');
+
 exports.processIpfix = function processIpfix(data,socket) {
 	try {		
 		var dlen = data.byteLength;
@@ -36,7 +37,7 @@ exports.processIpfix = function processIpfix(data,socket) {
 			if (decoded) {
 				decoded.SrcIP = Array.prototype.join.call(decoded.SrcIP, '.');
 				decoded.DstIP = Array.prototype.join.call(decoded.DstIP, '.');
-				log('%data:cyan SIPFIX Payload [%s:yellow]', decoded );
+				log('%data:cyan SIPFIX Payload [%s:yellow]', stringify(decoded) );
 				bucket.push(decoded);
 			}
 			// Process Next
@@ -62,7 +63,7 @@ exports.processIpfix = function processIpfix(data,socket) {
 			if (decoded) {
 				decoded.SrcIP = Array.prototype.join.call(decoded.SrcIP, '.');
 				decoded.DstIP = Array.prototype.join.call(decoded.DstIP, '.');
-				log('%data:cyan SIPFIX Payload [%s:yellow]', decoded );
+				log('%data:cyan SIPFIX Payload [%s:yellow]', stringify(decoded) );
 				bucket.push(decoded);
 			}
 			return;
@@ -79,7 +80,7 @@ exports.processIpfix = function processIpfix(data,socket) {
 				qos.CallerOutDstIP = Array.prototype.join.call(qos.CallerOutDstIP, '.');
 				qos.CalleeOutSrcIP = Array.prototype.join.call(qos.CalleeOutSrcIP, '.');
 				qos.CalleeOutDstIP = Array.prototype.join.call(qos.CalleeOutDstIP, '.');
-				log('%data:cyan SIPFIX QOS Payload [%s:yellow]', qos );
+				log('%data:cyan SIPFIX QOS Payload [%s:yellow]', stringify(qos) );
 				bucket.push(decoded);
 			}
 		}
