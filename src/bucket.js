@@ -4,7 +4,7 @@
  */
 
 const log = require('./logger');
-const bucket_emitter = require('bucket_emitter')
+const bucket_emitter = require('./bulk-emitter')
 const stringify = require('safe-stable-stringify');
 
 log('%start:green Initializing Bulk bucket...');
