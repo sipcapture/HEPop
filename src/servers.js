@@ -1,24 +1,10 @@
 const hepjs = require('hep-js');
-
-const _http = require('http')
-const dgram = require('dgram')
-const logger = require('oh-my-log')
-const net =require('net')
-
-var sipfix = require('sipfix');
-var sip = require('sip');
-
-const log = logger('client', {
-  prefix: '[%__date:magenta]',
-  locals: {
-    'connect': '⚪',
-    'disconnect': '⚫️️',
-    'error': '✖️',
-    'data': '✔',
-    'start': '▶️',
-    'stop': '❌'
-  }
-})
+const _http = require('http');
+const dgram = require('dgram');
+const net = require('net');
+const sipfix = require('sipfix');
+const sip = require('sip');
+const log = require('./logger');
 
 const processHep = function processHep(data,socket) {
 	try {
