@@ -3,6 +3,7 @@ const log = require('./logger);
 
 exports.encapsulate = hepjs.encapsulate;
 exports.decapsulate = hepjs.decapsulate;
+		    
 exports.processHep = function processHep(data,socket) {
 	try {
 	  var decoded = hepjs.decapsulate(data);
