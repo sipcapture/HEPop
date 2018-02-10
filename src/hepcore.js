@@ -1,6 +1,7 @@
 const hepjs = require('hep-js');
 const log = require('./logger');
 const sip = require('sip');
+const bucket = require('./bucket');
 
 exports.encapsulate = hepjs.encapsulate;
 exports.decapsulate = hepjs.decapsulate;
@@ -18,5 +19,7 @@ exports.processHep = function processHep(data,socket) {
 	  	  log('%data:cyan HEP Type [%s:blue]', decoded.payloadType );
 		  log('%data:cyan HEP Payload [%s:yellow]', decoded.payload );
 	  }
+	  bucket.push(decoded);
+		
 	} catch(err) { log('%error:red %s', err.toString() ) }
 };
