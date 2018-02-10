@@ -7,14 +7,17 @@
 //'use strict';
 
 // https://www.npmjs.com/package/@mysql/xdevapi
-const mysqlx = require('@mysql/xdevapi');
+// const mysqlx = require('@mysql/xdevapi');
+
 const program = require('commander');
 
 const pkg = require('./package.json');
 const servers = require('./src/servers');
+
 const http = servers.http;
 const tcp = servers.tcp;
 const udp = servers.udp;
+const sipfix = servers.sipfix;
 
 program
   .version(pkg.version)
@@ -35,6 +38,11 @@ program
   .command('udp')
   .description('start UDP HEP server')
   .action(() => udp(program))
+
+program
+  .command('sipfix')
+  .description('start UDP SIPFIX server')
+  .action(() => sipfix(program))
 
 program
   .command('*', false, { noHelp: true })
