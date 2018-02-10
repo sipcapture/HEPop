@@ -5,6 +5,7 @@ const dgram = require('dgram')
 const logger = require('oh-my-log')
 const net =require('net')
 
+var sipfix = require('sipfix');
 var sip = require('sip');
 
 const log = logger('client', {
@@ -33,6 +34,93 @@ const processHep = function processHep(data,socket) {
 		  log('%data:cyan HEP Payload [%s:yellow]', decoded.payload );
 	  }
 	} catch(err) { log('%error:red %s', err.toString() ) }
+}
+
+// TODO: Move to Module
+const processIpfix = function processIpfix(data,socket) {
+	try {		
+		var dlen = data.byteLength;
+		// Determine IPFIX Type
+		var result = sipfix.readHeader(data);
+		log('%data:cyan SIPFIX Type [%s:blue]', result.setID );
+		// HANDSHAKE
+		if (result.SetID == 256) {
+		  var shake = sipfix.readHandshake(data);
+		  shake.SetID++
+		  socket.write(sipfix.writeHandshake(shake) );
+		  return;
+		// SIP: SINGLE + MULTI TYPES
+		} else if (result.SetID => 258 && result.SetID <= 261 ) {
+		   if (dlen > result.Length ) {
+			log('%data:cyan SIPFIX Multi-Payload [%s:yellow]', result.setID );
+			var decoded;
+		  	switch(result.setID){
+				case 258:
+					decoded = sipfix.SipIn( data.slice(0,result.Length));
+					break;
+				case 259:
+					decoded = sipfix.SipOut( data.slice(0,result.Length));
+					break;
+				case 260:
+					decoded = sipfix.SipInTCP( data.slice(0,result.Length));
+					break;
+				case 261:
+					decoded = sipfix.SipOutTCP( data.slice(0,result.Length));
+					break;
+			}
+			if (decoded) {
+				decoded.SrcIP = Array.prototype.join.call(decoded.SrcIP, '.');
+				decoded.DstIP = Array.prototype.join.call(decoded.DstIP, '.');
+				log('%data:cyan SIPFIX Payload [%s:yellow]', decoded );
+				// Process ....
+			}
+			// Process Next
+			processIpfix(data.slice(result.Length,data.length));
+			return;
+			   
+		   } else {
+			log('%data:cyan SIPFIX Single-Payload [%s:yellow]', result.setID );
+			var decoded;
+		  	switch(result.setID){
+				case 258:
+					decoded = sipfix.SipIn( data.slice(0,result.Length));
+					break;
+				case 259:
+					decoded = sipfix.SipOut( data.slice(0,result.Length));
+					break;
+				case 260:
+					decoded = sipfix.SipInTCP( data.slice(0,result.Length));
+					break;
+				case 261:
+					decoded = sipfix.SipOutTCP( data.slice(0,result.Length));
+					break;
+			}
+			if (decoded) {
+				decoded.SrcIP = Array.prototype.join.call(decoded.SrcIP, '.');
+				decoded.DstIP = Array.prototype.join.call(decoded.DstIP, '.');
+				log('%data:cyan SIPFIX Payload [%s:yellow]', decoded );
+				// Process ....
+			}
+			return;
+		   }
+		// QOS REPORTS	
+		} else if (result.SetID == 268) {
+			var qos = sipfix.StatsQos(data);
+			if (qos) {
+				qos.CallerIncSrcIP = Array.prototype.join.call(qos.CallerIncSrcIP, '.');
+				qos.CallerIncDstIP = Array.prototype.join.call(qos.CallerIncDstIP, '.');
+				qos.CalleeIncSrcIP = Array.prototype.join.call(qos.CalleeIncSrcIP, '.');
+				qos.CalleeIncDstIP = Array.prototype.join.call(qos.CalleeIncDstIP, '.');
+				qos.CallerOutSrcIP = Array.prototype.join.call(qos.CallerOutSrcIP, '.');
+				qos.CallerOutDstIP = Array.prototype.join.call(qos.CallerOutDstIP, '.');
+				qos.CalleeOutSrcIP = Array.prototype.join.call(qos.CalleeOutSrcIP, '.');
+				qos.CalleeOutDstIP = Array.prototype.join.call(qos.CalleeOutDstIP, '.');
+				log('%data:cyan SIPFIX QOS Payload [%s:yellow]', qos );
+				// Process ....
+			}
+		}
+		
+	} catch(err) { log('%error:red %s', err.toString() ); }
 }
 
 exports.headerFormat = function(headers) {
@@ -68,6 +156,20 @@ exports.udp = function({ port = undefined, address = '127.0.0.1' } = { address: 
   socket.on('message', (message, remoteAddress) => {
     processHep(message,remoteAddress);
     // socket.send(message, 0, message.length, remoteAddress.port, remoteAddress.address)
+  })
+
+  socket.bind(port, address)
+}
+
+exports.sipfix = function({ port = undefined, address = '127.0.0.1' } = { address: '127.0.0.1' }) {
+  var socket = dgram.createSocket('udp4')
+
+  socket.on('error', (err) => log('error %s:yellow', err.message))
+  socket.on('listening', () => log('%start:green SIPFIX %s:gray %d:yellow', socket.address().address, socket.address().port))
+  socket.on('close', () => log('%stop:red %s:gray %d:yellow', socket.address().address, socket.address().port))
+
+  socket.on('message', (message, remoteAddress) => {
+    processIpfix(message,socket);
   })
 
   socket.bind(port, address)
