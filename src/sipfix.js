@@ -6,18 +6,18 @@ exports.processIpfix = function processIpfix(data,socket) {
 		var dlen = data.byteLength;
 		// Determine IPFIX Type
 		var result = sipfix.readHeader(data);
+		var decoded;
 		log('%data:cyan SIPFIX Type [%s:blue]', result.setID );
 		// HANDSHAKE
 		if (result.SetID == 256) {
 		  var shake = sipfix.readHandshake(data);
 		  shake.SetID++
-		  socket.write(sipfix.writeHandshake(shake) );
+		  socket.write( sipfix.writeHandshake(shake) );
 		  return;
-		// SIP: SINGLE + MULTI TYPES
-		} else if (result.SetID => 258 && result.SetID <= 261 ) {
+
+		} else if (result.SetID >= 258 && result.SetID <= 261 ) {
 		   if (dlen > result.Length ) {
 			log('%data:cyan SIPFIX Multi-Payload [%s:yellow]', result.setID );
-			var decoded;
 		  	switch(result.setID){
 				case 258:
 					decoded = sipfix.SipIn( data.slice(0,result.Length));
@@ -44,7 +44,6 @@ exports.processIpfix = function processIpfix(data,socket) {
 			   
 		   } else {
 			log('%data:cyan SIPFIX Single-Payload [%s:yellow]', result.setID );
-			var decoded;
 		  	switch(result.setID){
 				case 258:
 					decoded = sipfix.SipIn( data.slice(0,result.Length));

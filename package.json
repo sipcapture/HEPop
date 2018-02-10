@@ -36,6 +36,7 @@
     "@mysql/xdevapi": "^8.0.9",
     "commander": "^2.13.0",
     "hep-js": "^1.0.9",
+    "knex": "^0.14.3",
     "oh-my-log": "^5.0.1",
     "sip": "0.0.4",
     "sipfix": "^1.0.1"
