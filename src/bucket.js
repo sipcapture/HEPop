@@ -7,10 +7,12 @@ var getConfig = require('./config').getConfig;
 const log = require('./logger');
 const bucket_emitter = require('./bulk-emitter')
 const stringify = require('safe-stable-stringify');
+var r;
 
 try {
-  const r = require('./rethink').connect();
-} catch(e){ log('%stop:red Failed to Initialize RethinkDB',e); }
+  r = require('./rethink').connect();
+  log('%start:green Initialize RethinkDB driver' );
+} catch(e){ log('%stop:red Failed to Initialize RethinkDB driver',e); return; }
 
 log('%start:green Initializing Bulk bucket...');
 const bucket = bucket_emitter.create({

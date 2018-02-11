@@ -10,11 +10,11 @@ NodeJS [HEP](https://hep.sipcapture.org) Server & Switch for [HOMER](https://git
 
 #### Options:
 ```
-    -V, --version   output the version number
-    -p, --port      port to listen on
-    -a, --address   network address to listen on
-    -r  --rethink   valid rethinkdb connection object 
-    -h, --help      output usage information
+    -V, --version      output the version number
+    -p, --port         port to listen on
+    -a, --address      network address to listen on
+    -c  --configfile   path to configuration file 
+    -h, --help         output usage information
 ```
 
 #### Commands:
@@ -35,7 +35,7 @@ $ hepop -p 9063 udp
 ```
 ##### Local UDP HEP to Remote RethinkDB
 ```
-$ hepop -p 2999 -r '{"servers":[{"host":"10.0.0.1","port":28015}]}' udp
+$ hepop -p 2999 --configfile ./myconfig.js udp
 
 [02:44:41 AM] ▶️ Creating a pool connected to 10.0.0.1:28015
 [02:44:41 AM] ▶️ Initializing Bulk bucket...

@@ -12,16 +12,16 @@ exports.connect = function(){
     log('%stop:red Failed Initializing RethinkDB [%s:blue]');
     return;
   }
-  log('%start:cyan Initializing RethinkDB [%s:blue]',rtconfig.rethink);
-  r = require('rethinkdbdash')(JSON.parse(rtconfig.rethink));
+  log('%start:cyan Initializing RethinkDB [%s:blue]',stringify(rtconfig.rethink));
+  r = require('rethinkdbdash')(rtconfig.rethink);
   r.getPoolMaster().on('healthy', function(healthy) {
-    if (healthy) { log('%start:green RethinkDB healthy'); }
-    else { log('%stop:red RethinkDB unhealthy'); }
+    if (healthy === true) { log('%start:green RethinkDB healthy'); }
+    else { log('%stop:red RethinkDB unhealthy');}
   });
+  exports.r = r;
   return r;
 }
 
-exports.r = r;
 
 exports.createDb = function(dbName,tableName){
   if(dbName) { r.dbCreate(dbName).run(); db = dbname; }
