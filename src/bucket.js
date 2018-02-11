@@ -3,10 +3,14 @@
  * bucket.push(object);
  */
 
+var getConfig = require('./config').getConfig;
 const log = require('./logger');
 const bucket_emitter = require('./bulk-emitter')
 const stringify = require('safe-stable-stringify');
-const r = require('./rethink').connect({ servers: [ { host: 'de4.sipcapture.io', port: 28015 }] });
+
+try {
+  const r = require('./rethink').connect();
+} catch(e){ log('%stop:red Failed to Initialize RethinkDB',e); }
 
 log('%start:green Initializing Bulk bucket...');
 const bucket = bucket_emitter.create({
@@ -17,7 +21,7 @@ const bucket = bucket_emitter.create({
 
 bucket.on('data', function(data) {
   // Bulk ready to emit!
-  log('%data:orange BULK Out [%s:blue]', stringify(data) );
+  log('%data:cyan BULK Out [%s:blue]', stringify(data) );
   r.table('hep').insert(data).run();
 }).on('error', function(err) {
   log('%error:red %s', err.toString() )

@@ -10,6 +10,7 @@
 // const mysqlx = require('@mysql/xdevapi');
 
 const program = require('commander');
+const setConfig = require('./src/config').setConfig;
 
 const pkg = require('./package.json');
 const servers = require('./src/servers');
@@ -23,25 +24,30 @@ program
   .version(pkg.version)
   .option('-p, --port <number>', 'port to listen on', Number)
   .option('-a, --address <address>', 'network address to listen on', String)
+  .option('-r, --rethink <rethink>', 'rethinkdb config object', String)
 
 program
   .command('http')
   .description('start HTTP HEP server')
+  .action(() => setConfig(program))
   .action(() => http(program))
 
 program
   .command('tcp')
   .description('start TCP HEP server')
+  .action(() => setConfig(program))
   .action(() => tcp(program))
 
 program
   .command('udp')
   .description('start UDP HEP server')
+  .action(() => setConfig(program))
   .action(() => udp(program))
 
 program
   .command('sipfix')
   .description('start UDP SIPFIX server')
+  .action(() => setConfig(program))
   .action(() => sipfix(program))
 
 program

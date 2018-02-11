@@ -2,20 +2,26 @@
  * ReThinkDB Connector
  */
 
-var log = require('./logger');
-var db,table;
+const log = require('./logger');
+const stringify = require('safe-stable-stringify');
+var db,table,r;
 
-exports.connect = function(config){
-  if (!config) config = { servers: [ { host: '127.0.0.1', port: 28015 }] };
-  var r = require('rethinkdbdash')(config);
-
+exports.connect = function(){
+  var rtconfig = require('./config').getConfig();
+  if(!rtconfig.rethink) {
+    log('%stop:red Failed Initializing RethinkDB [%s:blue]');
+    return;
+  }
+  log('%start:cyan Initializing RethinkDB [%s:blue]',rtconfig.rethink);
+  r = require('rethinkdbdash')(JSON.parse(rtconfig.rethink));
   r.getPoolMaster().on('healthy', function(healthy) {
     if (healthy) { log('%start:green RethinkDB healthy'); }
     else { log('%stop:red RethinkDB unhealthy'); }
   });
-  exports.r = r;
   return r;
 }
+
+exports.r = r;
 
 exports.createDb = function(dbName,tableName){
   if(dbName) { r.dbCreate(dbName).run(); db = dbname; }

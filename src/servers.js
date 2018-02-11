@@ -4,17 +4,20 @@ const dgram = require('dgram');
 const net = require('net');
 
 const log = require('./logger');
-const hep = require('./hepcore');
-const sipfix = require('./sipfix');
 
-const processHep = hep.processHep;
-const processIpfix = sipfix.processIpfix;
+function init(){
+  const hep = require('./hepcore');
+  const sipfix = require('./sipfix');
+  const processHep = hep.processHep;
+  const processIpfix = sipfix.processIpfix;
+}
 
 exports.headerFormat = function(headers) {
   return Object.keys(headers).map(() => '%s:cyan: %s:yellow').join(' ')
 }
 
 exports.tcp = function({ port = undefined, address = '127.0.0.1' } = { address: '127.0.0.1' }) {
+  init();
   let server = net.createServer()
 
   server.on('error', (err) => log('%error:red %s', err.toString()))
@@ -34,6 +37,7 @@ exports.tcp = function({ port = undefined, address = '127.0.0.1' } = { address: 
 }
 
 exports.udp = function({ port = undefined, address = '127.0.0.1' } = { address: '127.0.0.1' }) {
+  init();
   var socket = dgram.createSocket('udp4')
 
   socket.on('error', (err) => log('error %s:yellow', err.message))
@@ -49,6 +53,7 @@ exports.udp = function({ port = undefined, address = '127.0.0.1' } = { address: 
 }
 
 exports.sipfix = function({ port = undefined, address = '127.0.0.1' } = { address: '127.0.0.1' }) {
+  init();
   var socket = dgram.createSocket('udp4')
 
   socket.on('error', (err) => log('error %s:yellow', err.message))
@@ -63,6 +68,7 @@ exports.sipfix = function({ port = undefined, address = '127.0.0.1' } = { addres
 }
 
 exports.http = function({ port = undefined, address = '127.0.0.1' } = { address: '127.0.0.1' }) {
+  init();
   let server = _http.createServer()
 
   server.on('error', (err) => log('%error:red %s', err.toString()))
@@ -94,3 +100,4 @@ exports.http = function({ port = undefined, address = '127.0.0.1' } = { address:
 
   server.listen(port, address)
 }
+
