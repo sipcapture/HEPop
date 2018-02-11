@@ -1,0 +1,17 @@
+{
+  "name": "hepop-api",
+  "version": "1.0.0",
+  "description": "HEPop API for RethinkDB",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "Lorenzo Mangani <lorenzo.mangani@gmail.com> (http://qxip.net/)",
+  "license": "MIT",
+  "dependencies": {
+    "bluebird": "^3.5.1",
+    "express": "^4.16.2",
+    "http": "0.0.0",
+    "rethinkdb-websocket-server": "^0.6.0"
+  }
+}
