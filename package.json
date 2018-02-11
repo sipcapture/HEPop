@@ -1,6 +1,6 @@
 {
   "name": "HEPop",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "HEP Packet Server & Switch",
   "main": "hepop.js",
   "bin": {
@@ -24,7 +24,9 @@
     "server",
     "client",
     "core",
-    "rtc"
+    "rtc",
+    "rethinkdb",
+    "elasticsearch"
   ],
   "author": "Lorenzo Mangani <lorenzo.mangani@gmail.com> (http://qxip.net/)",
   "license": "MIT",
@@ -33,11 +35,14 @@
   },
   "homepage": "https://github.com/sipcapture/hepop#readme",
   "dependencies": {
+    "async": "^2.6.0",
     "commander": "^2.13.0",
+    "elasticsearch": "^14.1.0",
     "events": "^2.0.0",
     "hep-js": "^1.0.9",
     "knex": "^0.14.3",
     "oh-my-log": "^5.0.1",
+    "optimist": "^0.6.1",
     "rethinkdbdash": "^2.3.31",
     "safe-stable-stringify": "^1.0.1",
     "sip": "0.0.4",
