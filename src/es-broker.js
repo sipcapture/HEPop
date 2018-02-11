@@ -5,9 +5,12 @@
  */
 
 const log = require('./logger');
+const sharedConfig = require('./config');
 
 var broker = function (opts) 
 {
+	var config = sharedConfig.getConfig();
+	
 	var async = require('async'),
 		elasticsearch = require('elasticsearch'),
 		util = require('util'),
