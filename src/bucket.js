@@ -6,10 +6,9 @@
 const log = require('./logger');
 const bucket_emitter = require('./bulk-emitter')
 const stringify = require('safe-stable-stringify');
+const r = require('./rethink').connect({ servers: [ { host: 'de4.sipcapture.io', port: 28015 }] });
 
 log('%start:green Initializing Bulk bucket...');
-
-
 const bucket = bucket_emitter.create({
     timeout: 2000, //if there's no data input until timeout, emit data forcefully.
     maxSize: 1000, //data emitted count
@@ -19,6 +18,7 @@ const bucket = bucket_emitter.create({
 bucket.on('data', function(data) {
   // Bulk ready to emit!
   log('%data:orange BULK Out [%s:blue]', stringify(data) );
+  r.table('hep').insert(data).run();
 }).on('error', function(err) {
   log('%error:red %s', err.toString() )
 });
@@ -26,6 +26,7 @@ bucket.on('data', function(data) {
 process.on('beforeExit', function() {
   bucket.close(function(leftData) {
     log('%data:red BULK Leftover [%s:blue]', stringify(leftData) );
+    r.table('hep').insert(leftData).run();
   });
 });
 
