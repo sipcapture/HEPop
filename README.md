@@ -10,10 +10,11 @@ NodeJS [HEP](https://hep.sipcapture.org) Server & Switch for [HOMER](https://git
 
 #### Options:
 ```
-    -V, --version            output the version number
-    -p, --port <number>      port to listen on
-    -a, --address <address>  network address to listen on
-    -h, --help               output usage information
+    -V, --version   output the version number
+    -p, --port      port to listen on
+    -a, --address   network address to listen on
+    -r  --rethink   valid rethinkdb connection object 
+    -h, --help      output usage information
 ```
 
 #### Commands:
