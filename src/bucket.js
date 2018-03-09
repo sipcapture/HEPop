@@ -37,3 +37,4 @@ process.on('beforeExit', function() {
 });
 
 exports.bucket = bucket;
+exports.r = r;

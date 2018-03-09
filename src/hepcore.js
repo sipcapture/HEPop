@@ -2,6 +2,7 @@ const hepjs = require('hep-js');
 const log = require('./logger');
 const sip = require('sip');
 const bucket = require('./bucket').bucket;
+const r = require('./bucket').r;
 const stringify = require('safe-stable-stringify');
 
 exports.encapsulate = hepjs.encapsulate;
@@ -20,6 +21,7 @@ exports.processHep = function processHep(data,socket) {
 	  	  log('%data:cyan HEP Type [%s:blue]', decoded.payloadType );
 		  log('%data:cyan HEP Payload [%s:yellow]', stringify(decoded.payload) );
 	  }
+	  if(decoded.rcinfo.timeSeconds) decoded.rcinfo.ts = r.epochTime(decoded.rcinfo.timeSeconds);
 	  bucket.push(decoded);
 		
 	} catch(err) { log('%error:red %s', err.toString() ) }
