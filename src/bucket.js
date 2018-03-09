@@ -24,6 +24,7 @@ const bucket = bucket_emitter.create({
 bucket.on('data', function(data) {
   // Bulk ready to emit!
   log('%data:cyan BULK Out [%s:blue]', stringify(data) );
+  // TODO: add chain emitter to multiple backends or pipelines
   r.table('hep').insert(data).run();
 }).on('error', function(err) {
   log('%error:red %s', err.toString() )
