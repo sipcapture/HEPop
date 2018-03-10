@@ -15,56 +15,22 @@ const getConfig = require('./src/config').getConfig;
 
 const pkg = require('./package.json');
 const servers = require('./src/servers');
-
-const http = servers.http;
-const tcp = servers.tcp;
-const udp = servers.udp;
-const sipfix = servers.sipfix;
+const select = servers.select;
 
 program
   .version(pkg.version)
-  .option('-p, --port <number>', 'port to listen on', Number)
+  .option('-p, --port <number>', 'port to listen on', Number, 9060)
   .option('-a, --address <address>', 'network address to listen on', String)
-  .option('-d, --database <address>', 'database name', String)
-  .option('-t, --table <address>', 'database table name', String)
+  .option('-d, --dbName <address>', 'database name', String)
+  .option('-t, --tableName <address>', 'database table name', String)
   .option('-c, --configfile <configfile>', 'configuration file', String)
-
-program
-  .command('http')
-  .description('start HTTP HEP server')
-  .action(() => setConfig(program))
-  .action(() => http(getConfig()))
-
-program
-  .command('tcp')
-  .description('start TCP HEP server')
-  .action(() => setConfig(program))
-  .action(() => tcp(getConfig()))
-
-program
-  .command('udp')
-  .description('start UDP HEP server')
-  .action(() => setConfig(program))
-  .action(() => udp(getConfig()))
-
-program
-  .command('sipfix')
-  .description('start UDP SIPFIX server')
-  .action(() => setConfig(program))
-  .action(() => sipfix(getConfig()))
-
-program
-  .command('help', false, { noHelp: true })
-  .action(() => program.help())
-
-program
-  .command('*', false, { noHelp: true })
-  .action(() => program.help())
-
-program
+  .option('-s, --socket <socket>', 'socket service (udp,tcp,http,sipfix)', String, 'udp')
   .parse(process.argv)
 
-if (!process.argv.slice(2).length) {
+if (!program.socket||!program||!program.configfile) {
   program.help()
+} else {
+  setConfig(program);
+  select(program);
 }
 
