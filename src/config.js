@@ -18,7 +18,7 @@ exports.setConfig = function(config){
 	// log('%data:green CONFIG SET [%s:blue]', stringify(sharedConfig) );
 	// If config file is provided, override
 	if (sharedConfig.configfile) sharedConfig = readConfig(sharedConfig.configfile);
-	log('%data:green CONFIG FILE [%s:blue]', stringify(sharedConfig) );
+	if (config.debug) log('%data:green CONFIG FILE [%s:blue]', stringify(sharedConfig) );
 
   } catch(e) {  log('%data:red SET CONFIG ERROR [%s:cyan]', err ); process.exit(1); }
 };

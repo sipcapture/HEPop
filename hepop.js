@@ -54,6 +54,10 @@ program
   .action(() => sipfix(getConfig()))
 
 program
+  .command('help', false, { noHelp: true })
+  .action(() => program.help())
+
+program
   .command('*', false, { noHelp: true })
   .action(() => program.help())
 

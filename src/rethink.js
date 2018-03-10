@@ -10,7 +10,8 @@ exports.connect = function(){
   var rtconfig = require('./config').getConfig();
   if(!rtconfig.rethink) {
     log('%stop:red Failed Initializing RethinkDB [%s:blue]');
-    return;
+    process.exit();
+    //return;
   }
   log('%start:cyan Initializing RethinkDB [%s:blue]',stringify(rtconfig.rethink));
   r = require('rethinkdbdash')(rtconfig.rethink);
