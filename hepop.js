@@ -27,10 +27,10 @@ program
   .option('-s, --socket <socket>', 'socket service (udp,tcp,http,sipfix)', String, 'udp')
   .parse(process.argv)
 
-if (!program.socket||!program||!program.configfile) {
+if (!program.socket||!program.configfile) {
   program.help()
 } else {
   setConfig(program);
-  select(program);
+  select(getConfig());
 }
 
