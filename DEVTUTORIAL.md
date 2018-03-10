@@ -1,4 +1,6 @@
-# Dev Tutorial
+<img src="http://i.imgur.com/RSUlFRa.gif" width="120" alt="HEP"><img src="https://d30y9cdsu7xlg0.cloudfront.net/png/30712-200.png" width=50>
+
+# HEPop DEV Tutorial
 This quick tutorial will allow testing the insertion pipeline, hep decoding and query formats using HEPop & RethinkDB
 
 ### Requirements
