@@ -18,14 +18,18 @@ exports.connect = function(){
     if (healthy === true) { log('%start:green RethinkDB healthy'); }
     else { log('%stop:red RethinkDB unhealthy');}
   });
+
+  if(rtconfig.dbName) try { r.dbCreate(rtconfig.dbName).run(); db = rtconfig.dbName; } catch(e) { log('%s:red',e) }
+  if(rtconfig.tableName) try { r.db(rtconfig.dbName).tableCreate(rtconfig.tableName).run(); table = rtconfig.tableName; } catch(e) { log('%s:red',e) }
+
   exports.r = r;
   return r;
 }
 
 
-exports.createDb = function(dbName,tableName){
-  if(dbName) { r.dbCreate(dbName).run(); db = dbname; }
-  if(tableName) { r.db(dbName).tableCreate(tableName).run(); table = tableName; }
+exports.createDb = function(r,dbName,tableName){
+  if(dbName) try { r.dbCreate(dbName).run(); db = dbName; } catch(e) { log('%s:red',e) }
+  if(tableName) try { r.db(dbName).tableCreate(tableName).run(); table = tableName; } catch(e) { log('%s:red',e) }
 }
 exports.createTable = function(tableName){
   if(tableName) { r.db(db).tableCreate(tableName).run(); table = tableName; }

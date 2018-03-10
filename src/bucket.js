@@ -3,7 +3,7 @@
  * bucket.push(object);
  */
 
-var getConfig = require('./config').getConfig;
+var config = require('./config').getConfig();
 const log = require('./logger');
 const bucket_emitter = require('./bulk-emitter')
 const stringify = require('safe-stable-stringify');
@@ -25,7 +25,7 @@ bucket.on('data', function(data) {
   // Bulk ready to emit!
   log('%data:cyan BULK Out [%s:blue]', stringify(data) );
   // TODO: add chain emitter to multiple backends or pipelines
-  r.table('hep').insert(data).run();
+  r.db(config.dbName).table(config.tableName).insert(data).run();
 }).on('error', function(err) {
   log('%error:red %s', err.toString() )
 });
@@ -33,7 +33,7 @@ bucket.on('data', function(data) {
 process.on('beforeExit', function() {
   bucket.close(function(leftData) {
     log('%data:red BULK Leftover [%s:blue]', stringify(leftData) );
-    r.table('hep').insert(leftData).run();
+    r.db(config.dbName).table(config.tableName).insert(leftData).run();
   });
 });
 

@@ -24,6 +24,8 @@ program
   .version(pkg.version)
   .option('-p, --port <number>', 'port to listen on', Number)
   .option('-a, --address <address>', 'network address to listen on', String)
+  .option('-d, --database <address>', 'database name', String)
+  .option('-t, --table <address>', 'database table name', String)
   .option('-c, --configfile <configfile>', 'configuration file', String)
 
 program
