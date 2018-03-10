@@ -20,9 +20,9 @@ const select = servers.select;
 program
   .version(pkg.version)
   .option('-p, --port <number>', 'port to listen on', Number, 9060)
-  .option('-a, --address <address>', 'network address to listen on', String)
-  .option('-d, --dbName <address>', 'database name', String)
-  .option('-t, --tableName <address>', 'database table name', String)
+  .option('-a, --address <address>', 'network address to listen on', String, '127.0.0.1')
+  .option('-d, --dbName <address>', 'database name', String, 'hepic')
+  .option('-t, --tableName <address>', 'database table name', String, 'hep')
   .option('-c, --configfile <configfile>', 'configuration file', String)
   .option('-s, --socket <socket>', 'socket service (udp,tcp,http,sipfix)', String, 'udp')
   .parse(process.argv)
