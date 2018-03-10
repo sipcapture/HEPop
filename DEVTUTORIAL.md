@@ -8,9 +8,13 @@ This quick tutorial will allow testing the insertion pipeline, hep decoding and 
 * [hepgen.js](http://github.com/sipcapture/hepgen.js)
 
 #### Create Config
+Save your preferences somewhere, ie: `/opt/hepop/myconfig.js'
 ```
 {
   "id" : "HEPop101",
+  "socket": "udp",
+  "port": 9060,
+  "address": "127.0.0.1",
   "dbName": "hepic",
   "tableName": "hep",
   "rethink" : {
@@ -26,15 +30,15 @@ This quick tutorial will allow testing the insertion pipeline, hep decoding and 
 ```
 
 #### Start HEPop
-
+Launch HEPop using your configuration file. Launch with no parameters for `help`
 ```
-nodejs hepop.js -p 9222 udp -c /opt/hepop/myconfig.js 
+nodejs hepop.js -c /opt/hepop/myconfig.js 
 ```
 
 #### Send HEP data
 ```
 cd hepgen.js && npm install
-nodejs hepgen.js -p 9222 -c ./config/scanner.js
+nodejs hepgen.js -s 127.0.0.1 -p 9060 -c ./config/scanner.js
 ```
 
 #### RQL Query
