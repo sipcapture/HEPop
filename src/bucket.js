@@ -19,8 +19,7 @@ const bucket = bucket_emitter.create(config.queue);
 
 bucket.on('data', function(data) {
   // Bulk ready to emit!
-  log('%data:cyan BULK Out [%s:blue]', stringify(data) );
-  log('%data:cyan CONFIG [%s:yellow]', stringify(config) );
+  if (config.debug) log('%data:cyan BULK Out [%s:blue]', stringify(data) );
   // TODO: add chain emitter to multiple backends or pipelines
   r.db(config.dbName).table(config.tableName).insert(data).run();
 }).on('error', function(err) {
@@ -29,7 +28,7 @@ bucket.on('data', function(data) {
 
 process.on('beforeExit', function() {
   bucket.close(function(leftData) {
-    log('%data:red BULK Leftover [%s:blue]', stringify(leftData) );
+    if (config.debug) log('%data:red BULK Leftover [%s:blue]', stringify(leftData) );
     r.db(config.dbName).table(config.tableName).insert(leftData).run();
   });
 });
