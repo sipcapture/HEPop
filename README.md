@@ -3,6 +3,9 @@
 # HEPop
 NodeJS [HEP](https://hep.sipcapture.org) Server & Switch for [HOMER](https://github.com/sipcapture/homer) 
 
+## WARNING
+This is a prototype under heavy development, please do not use for any purpose other than testing!
+
 ### Usage
 ```
   hepop [options] [command]
