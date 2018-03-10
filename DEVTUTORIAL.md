@@ -9,6 +9,8 @@ This quick tutorial will allow testing the insertion pipeline, hep decoding and 
 ```
 {
   "id" : "HEPop101",
+  "dbName": "hepic",
+  "tableName": "hep",
   "rethink" : {
 	"servers":[
 		{
