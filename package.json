@@ -39,6 +39,7 @@
     "commander": "^2.13.0",
     "elasticsearch": "^14.1.0",
     "events": "^2.0.0",
+    "flat": "^4.0.0",
     "hep-js": "^1.0.12",
     "knex": "^0.14.3",
     "oh-my-log": "^5.0.1",
