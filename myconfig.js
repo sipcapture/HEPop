@@ -1,7 +1,7 @@
 {
   "id" : "HEPop101",
   "socket": "udp", // udp, tcp, http, sipfix
-  "port": 2999,
+  "port": 9060,
   "address": "127.0.0.1",
   "queue": {
     "timeout": 2000, //if there's no data input until timeout, emit data forcefully.
