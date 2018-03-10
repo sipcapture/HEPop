@@ -11,6 +11,7 @@
 
 const program = require('commander');
 const setConfig = require('./src/config').setConfig;
+const getConfig = require('./src/config').getConfig;
 
 const pkg = require('./package.json');
 const servers = require('./src/servers');
@@ -32,25 +33,25 @@ program
   .command('http')
   .description('start HTTP HEP server')
   .action(() => setConfig(program))
-  .action(() => http(program))
+  .action(() => http(getConfig()))
 
 program
   .command('tcp')
   .description('start TCP HEP server')
   .action(() => setConfig(program))
-  .action(() => tcp(program))
+  .action(() => tcp(getConfig()))
 
 program
   .command('udp')
   .description('start UDP HEP server')
   .action(() => setConfig(program))
-  .action(() => udp(program))
+  .action(() => udp(getConfig()))
 
 program
   .command('sipfix')
   .description('start UDP SIPFIX server')
   .action(() => setConfig(program))
-  .action(() => sipfix(program))
+  .action(() => sipfix(getConfig()))
 
 program
   .command('*', false, { noHelp: true })
