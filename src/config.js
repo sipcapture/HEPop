@@ -20,7 +20,7 @@ exports.setConfig = function(config){
 	if (sharedConfig.configfile) sharedConfig = readConfig(sharedConfig.configfile);
 	if (config.debug) log('%data:green CONFIG FILE [%s:blue]', stringify(sharedConfig) );
 
-  } catch(e) {  log('%data:red SET CONFIG ERROR [%s:cyan]', err ); process.exit(1); }
+  } catch(e) {  log('%data:red SET CONFIG ERROR [%s:cyan]', e ); process.exit(1); }
 };
 
 exports.getConfig = function(){

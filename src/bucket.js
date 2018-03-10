@@ -15,15 +15,12 @@ try {
 } catch(e){ log('%stop:red Failed to Initialize RethinkDB driver',e); return; }
 
 log('%start:green Initializing Bulk bucket...');
-const bucket = bucket_emitter.create({
-    timeout: 2000, //if there's no data input until timeout, emit data forcefully.
-    maxSize: 1000, //data emitted count
-    useInterval: true //if this value is true, data event is emitted even If new data is pushed.
-});
+const bucket = bucket_emitter.create(config.queue);
 
 bucket.on('data', function(data) {
   // Bulk ready to emit!
   log('%data:cyan BULK Out [%s:blue]', stringify(data) );
+  log('%data:cyan CONFIG [%s:yellow]', stringify(config) );
   // TODO: add chain emitter to multiple backends or pipelines
   r.db(config.dbName).table(config.tableName).insert(data).run();
 }).on('error', function(err) {

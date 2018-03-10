@@ -20,8 +20,8 @@ exports.connect = function(){
     else { log('%stop:red RethinkDB unhealthy');}
   });
 
-  if(rtconfig.dbName) try { r.dbCreate(rtconfig.dbName).run(); db = rtconfig.dbName; } catch(e) { log('%s:red',e) }
-  if(rtconfig.tableName) try { r.db(rtconfig.dbName).tableCreate(rtconfig.tableName).run(); table = rtconfig.tableName; } catch(e) { log('%s:red',e) }
+  if(rtconfig.dbName) r.dbCreate(rtconfig.dbName).run().catch(function(err) {});
+  if(rtconfig.tableName) r.db(rtconfig.dbName).tableCreate(rtconfig.tableName).run().catch(function(err) {});
 
   exports.r = r;
   return r;
