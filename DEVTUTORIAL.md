@@ -103,3 +103,11 @@ r.db('hepic').table('hep').between( r.epochTime(1520684154), r.epochTime(1520684
 r.db('hepic').table('hep').between( new Date((new Date()).getTime() - 1000 * 60), new Date(), {index: 'rcinfo.ts'});
 ```
 
+Search by Range, Method, select Payload:
+```
+r.db('hepic').table('hep').between( new Date((new Date()).getTime() - 10000 * 60), new Date(), {index: 'rcinfo.ts'}).filter({
+    sip: {
+        method: "INVITE"
+    }
+}).limit(10).getField('payload');
+```
