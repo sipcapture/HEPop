@@ -25,13 +25,17 @@ if (config.db.rethink){
     // Bulk ready to emit!
     if (config.debug) log('%data:cyan RethinkDB BULK Out [%s:blue]', stringify(data) );
     // TODO: add chain emitter to multiple backends or pipelines
-    r.db(config.dbName).table(config.tableName).insert(data).run();
+    r.db(config.dbName).table(config.tableName).insert(data).run(durability="soft", noreply=true);
   }).on('error', function(err) {
     log('%error:red %s', err.toString() )
   });
 
  } catch(e){ log('%stop:red Failed to Initialize RethinkDB driver/queue',e); return; }
 }
+
+exports.bucket = r_bucket;
+exports.r = r;
+
 // PGSql
 if (config.db.pgsql){
  try {
@@ -50,13 +54,15 @@ if (config.db.pgsql){
  } catch(e){ log('%stop:red Failed to Initialize PGSql driver/queue',e); return; }
 }
 
+exports.pgp_bucket = p_bucket;
+exports.pgp = pgp;
+
+
 
 process.on('beforeExit', function() {
   bucket.close(function(leftData) {
     if (config.debug) log('%data:red BULK Leftover [%s:blue]', stringify(leftData) );
-    if (r) r.db(config.dbName).table(config.tableName).insert(leftData).run();
+    if (r) r.db(config.dbName).table(config.tableName).insert(leftData).run(durability="soft", noreply=True);
   });
 });
 
-exports.bucket = r_bucket;
-exports.r = r;

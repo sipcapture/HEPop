@@ -1,7 +1,8 @@
 const hepjs = require('hep-js');
 const log = require('./logger');
 const sip = require('sip');
-const bucket = require('./bucket').bucket;
+const r_bucket = require('./bucket').bucket;
+const pgp_bucket = require('./bucket').pgp_bucket;
 const r = require('./bucket').r;
 const stringify = require('safe-stable-stringify');
 const flatten = require('flat')
@@ -17,7 +18,7 @@ exports.processHep = function processHep(data,socket) {
 	  try { var decoded = hepjs.decapsulate(data); decoded = flatten(decoded); } catch(e) { log('%s:red',e); }
 	  switch(decoded['rcinfo.payloadType']) {
 		case 1:
-		  try { decoded.sip = sip.parse(decoded.payload); } catch(e) {}
+		  // try { decoded.sip = sip.parse(decoded.payload); } catch(e) {}
 	  	  if (config.debug) {
 			log('%data:cyan HEP Type [%s:blue]', 'SIP' );
 		  	log('%data:cyan HEP Payload [%s:yellow]', stringify( decoded.sip, null, 2) );
@@ -30,7 +31,8 @@ exports.processHep = function processHep(data,socket) {
 		  }
 	  }
 	  if(decoded['rcinfo.timeSeconds']) decoded['rcinfo.ts'] = r.epochTime(decoded['rcinfo.timeSeconds']);
-	  bucket.push(decoded);
+	  if (r_bucket) r_bucket.push(decoded);
+	  if (pgp_bucket) pgp_bucket.push(decoded);
 		
 	} catch(err) { log('%error:red %s', err.toString() ) }
 };
