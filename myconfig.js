@@ -10,13 +10,21 @@
   },
   "dbName": "hepic",
   "tableName": "hep",
-  "rethink" : {
-    "servers":[
-	{
-	  "host": "127.0.0.1",
-	  "port":28015
-	}
-    ]
+  "db": {
+	"rethink" : {
+	  "servers":[
+	    {
+		"host": "127.0.0.1",
+		"port":28015
+	    }
+  	  ]
+	},
+  	"pgsql":{
+  	  host: 'localhost', // 'localhost' is the default;
+  	  port: 5432, // 5432 is the default;
+  	  user: 'myUser',
+  	  password: 'myPassword'
+  	}
   },
   "debug": false
 }

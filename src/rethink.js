@@ -8,13 +8,13 @@ var db,table,r;
 
 exports.connect = function(){
   var rtconfig = require('./config').getConfig();
-  if(!rtconfig.rethink) {
+  if(!rtconfig.db.rethink) {
     log('%stop:red Failed Initializing RethinkDB [%s:blue]');
     process.exit();
     //return;
   }
-  log('%start:cyan Initializing RethinkDB [%s:blue]',stringify(rtconfig.rethink));
-  r = require('rethinkdbdash')(rtconfig.rethink);
+  log('%start:cyan Initializing RethinkDB [%s:blue]',stringify(rtconfig.db.rethink));
+  r = require('rethinkdbdash')(rtconfig.db.rethink);
   r.getPoolMaster().on('healthy', function(healthy) {
     if (healthy === true) { log('%start:green RethinkDB healthy'); }
     else { log('%stop:red RethinkDB unhealthy');}
