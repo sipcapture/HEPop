@@ -8,24 +8,40 @@ This quick tutorial will allow testing the insertion pipeline, hep decoding and 
 * [hepgen.js](http://github.com/sipcapture/hepgen.js)
 
 #### Create Config
-Save your preferences somewhere, ie: `/opt/hepop/myconfig.js'
+Save your preferences somewhere, ie: `/opt/hepop/myconfig.js` choosing either rethinkdb or postgres... or both!
 ```
 {
-  "id" : "HEPop101",
-  "socket": "udp",
-  "port": 9060,
-  "address": "127.0.0.1",
-  "dbName": "hepic",
-  "tableName": "hep",
-  "rethink" : {
-	"servers":[
-		{
-		  "host": "your.rethinkdb.server",
-		  "port":28015
-		}
-	]
-  }
+   "id":"HEPop101",
+   "socket":"udp",
+   "port":2999,
+   "address":"127.0.0.1",
+   "queue":{
+      "timeout":2000,
+      "maxSize":1000,
+      "useInterval":true
+   },
+   "dbName":"hepic",
+   "tableName":"hep",
+   "db":{
+      "rethink":{
+         "servers":[
+            {
+               "host":"rethinkdb.host",
+               "port":28015
+            }
+         ]
+      },
+      "pgsql":{
+         "host":"pgsql.host",
+         "port":15432,
+         "database":"hepic",
+         "user":"postgres",
+         "password":"sipcapture"
+      }
+   },
+   "debug":true
 }
+
 
 ```
 
@@ -115,3 +131,12 @@ r.db('hepic').table('hep').between( new Date((new Date()).getTime() - 10000 * 60
     }
 }).limit(10).getField('payload');
 ```
+
+#### PGSql Query
+Query the inserted data using JSON fields:
+```
+SELECT
+ data -> 'rcinfo.payloadType' AS payloadType
+FROM
+ hepic;
+ ```
