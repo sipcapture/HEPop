@@ -84,6 +84,11 @@ r.db('hepic').table('hep').between( new Date((new Date()).getTime() - 10000 * 60
 ```
 
 #### PGSql Query
+Get JSON columns
+```
+SELECT json_object_keys(data) FROM hepic
+```
+
 Query the inserted data using JSON fields:
 ```
 SELECT
