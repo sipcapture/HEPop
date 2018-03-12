@@ -101,3 +101,14 @@ WHERE (data->>'rcinfo.timeSeconds')::int
   BETWEEN EXTRACT(EPOCH FROM date '2018-03-01') 
       AND EXTRACT(EPOCH FROM date '2018-04-01' + interval '1 day')
 ```
+
+Search by Range, Method, select Payload:
+```
+SELECT data -> 'payload' AS payload 
+FROM hepic
+WHERE (data->>'rcinfo.timeSeconds')::int 
+  BETWEEN EXTRACT(EPOCH FROM date '2018-01-01') 
+      AND EXTRACT(EPOCH FROM date '2018-04-01' + interval '1 day')
+  AND (data->>'rcinfo.payloadType')::int  = 1
+
+ ```
