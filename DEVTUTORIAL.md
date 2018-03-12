@@ -24,12 +24,10 @@ Save your preferences somewhere, ie: `/opt/hepop/myconfig.js` choosing either re
    "tableName":"hep",
    "db":{
       "rethink":{
-         "servers":[
-            {
-               "host":"rethinkdb.host",
-               "port":28015
-            }
-         ]
+         "servers":[{
+            "host":"rethinkdb.host",
+            "port":28015
+         }]
       },
       "pgsql":{
          "host":"pgsql.host",
