@@ -93,3 +93,11 @@ SELECT
 FROM
  hepic;
  ```
+ Range Query using JSON fields:
+```
+SELECT *
+FROM hepic
+WHERE (data->>'rcinfo.timeSeconds')::int 
+  BETWEEN EXTRACT(EPOCH FROM date '2018-03-01') 
+      AND EXTRACT(EPOCH FROM date '2018-04-01' + interval '1 day')
+```
