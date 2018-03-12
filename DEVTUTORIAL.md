@@ -4,7 +4,7 @@
 This quick tutorial will allow testing the insertion pipeline, hep decoding and query formats using HEPop & RethinkDB
 
 ### Requirements
-* RethinkDB 2.5.6
+* RethinkDB 2.5.6+ or PostreSQL 9.2+
 * [hepgen.js](http://github.com/sipcapture/hepgen.js)
 
 #### Create Config
