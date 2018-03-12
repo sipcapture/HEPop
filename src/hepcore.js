@@ -18,7 +18,7 @@ exports.processHep = function processHep(data,socket) {
 	  try { var decoded = hepjs.decapsulate(data); decoded = flatten(decoded); } catch(e) { log('%s:red',e); }
 	  switch(decoded['rcinfo.payloadType']) {
 		case 1:
-		  // try { decoded.sip = sip.parse(decoded.payload); } catch(e) {}
+		  try { decoded.sip = sip.parse(decoded.payload); } catch(e) {}
 	  	  if (config.debug) {
 			log('%data:cyan HEP Type [%s:blue]', 'SIP' );
 		  	log('%data:cyan HEP Payload [%s:yellow]', stringify( decoded.sip, null, 2) );

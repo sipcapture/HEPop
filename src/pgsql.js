@@ -7,7 +7,14 @@ const log = require('./logger');
 const stringify = require('safe-stable-stringify');
 const pgp = require('pg-promise')({
     /* initialization options */
-    capSQL: true // capitalize all generated SQL
+    capSQL: true, // capitalize all generated SQL
+    connect(client, dc, isFresh) {
+        const cp = client.connectionParameters;
+        log('%start:green Connected to PGsql database:', cp.database);
+    },
+    error(err, e) {
+        log('%stop:red Caught PGsql error:', err,e);
+   }
 });
 var config = require('./config').getConfig();
 var cs;
@@ -35,10 +42,10 @@ if(!config.db.pgsql) {
 
 try {
     db = pgp(config.db.pgsql);
+    db.connect();
     exports.pgp = db;
-    var prep = prepare(config.dbName);
     log('%start:cyan Initializing PGSql driver [%s:blue]', stringify(config.db.pgsql));
-    log('%start:cyan Initializing PGSql table [%s:blue]', prep);
+    log('%start:cyan Initializing PGSql table [%s:blue]', prepare(config.dbName));
 } catch(err){
     log('%stop:red Failed Initializing PGsql driver [%s:blue]',err);
     process.exit();
@@ -58,7 +65,7 @@ if (!config.db.pgsql.schema){
 exports.setTemplate = function(name){
 	if (!config.db.pgsql.schema||!name) return false;
 	cs = new pgp.helpers.ColumnSet(schema, name);
-	prepare(name,db);
+	prepare(name);
 };
 
 
@@ -72,9 +79,9 @@ exports.insert = function(bulk){
 	}
 	//var query = pgp.helpers.insert(bulk,cs); // params: bulk_array, template
 	var values = bulk.map(function(item) {
-	  return "'"+stringify(item).replace(/,}$/,"}")+"'";
+	  return "'"+stringify(item).replace(/,}/,"}")+"'";
 	});
-	var insertquery = "INSERT INTO "+config.dbName+" (data) VALUES ("+values.join('),(')+")";
+	var insertquery = "INSERT INTO "+config.dbName+" (data) VALUES ("+values.join('),(')+");";
 	if (config.debug) log('Query: %s',insertquery);
 	// executing the query:
 	db.none(insertquery)

@@ -10,8 +10,8 @@ const stringify = require('safe-stable-stringify');
 var r = false;
 var pgp = false;
 
-var r_bucket = false;
-var p_bucket = false;
+var r_bucket;
+var p_bucket;
 
 // RethinkDB
 if (config.db.rethink){
@@ -24,7 +24,6 @@ if (config.db.rethink){
   r_bucket.on('data', function(data) {
     // Bulk ready to emit!
     if (config.debug) log('%data:cyan RethinkDB BULK Out [%s:blue]', stringify(data) );
-    // TODO: add chain emitter to multiple backends or pipelines
     r.db(config.dbName).table(config.tableName).insert(data).run(durability="soft", noreply=true);
   }).on('error', function(err) {
     log('%error:red %s', err.toString() )
@@ -45,7 +44,6 @@ if (config.db.pgsql){
   p_bucket.on('data', function(data) {
     // Bulk ready to emit!
     if (config.debug) log('%data:cyan PGSQL BULK Out [%s:blue]', stringify(data) );
-    // TODO: add chain emitter to multiple backends or pipelines
     pgp.insert(data);
   }).on('error', function(err) {
     log('%error:red %s', err.toString() )
