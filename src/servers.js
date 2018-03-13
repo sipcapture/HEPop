@@ -6,9 +6,11 @@ const log = require('./logger');
 
 const getFuncs = function(){
   const hep = require('./hepcore');
+  const jsoncore = require('./jsoncore');
   const sipfix = require('./sipfix');
   return {
 	processHep: hep.processHep,
+	processJson: jsoncore.processJson,
  	processIpfix: sipfix.processIpfix
   }
 }
@@ -84,17 +86,17 @@ var self = module.exports = {
 	  server.on('connection', (socket) => log('%connect:green (%s:italic:dim %d:italic:gray)', socket.remoteAddress, socket.remotePort))
 	  server.on('request', (request, response) => {
 	    log('%data:cyan (%s:italic:dim %d:italic:gray) HTTP/%s:dim %s:green %s:blue', request.socket.remoteAddress, request.socket.remotePort, request.httpVersion, request.method, request.url)
-	    log(`%data:cyan (%s:italic:dim %d:italic:gray) ${headerFormat(request.headers)}`, request.socket.remoteAddress, request.socket.remotePort, ...request.rawHeaders)
+	    log(`%data:cyan (%s:italic:dim %d:italic:gray) ${self.headerFormat(request.headers)}`, request.socket.remoteAddress, request.socket.remotePort, ...request.rawHeaders)
 
 	    response.writeHead(200, { 'Content-Type': request.headers['content-type'] || 'text/plain' })
 
 	    request.on('data', (data) => {
-	      funcs.processHep(data,request.socket);
+	      funcs.processJson(data,request.socket);
 	      // response.write(data)
 	    })
 
 	    if (request.rawTrailers.length > 0) {
-	      log(`%data:cyan (%s:italic:dim %d:italic:gray) ${headerFormat(request.trailers)}`, request.socket.remoteAddress, request.socket.remotePort, ...request.rawTrailers)
+	      log(`%data:cyan (%s:italic:dim %d:italic:gray) ${self.headerFormat(request.trailers)}`, request.socket.remoteAddress, request.socket.remotePort, ...request.rawTrailers)
 	    }
 
 	    request.on('end', () => {

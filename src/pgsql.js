@@ -20,8 +20,7 @@ var config = require('./config').getConfig();
 var cs;
 var db;
 
-var prepare = function(name){
-	var query = "CREATE TABLE IF NOT EXISTS "+name+" (ID serial NOT NULL PRIMARY KEY, data json NOT NULL );"
+var prepare = function(query){
 	db.none(query)
 	    .then(data => {
 	        // success;
@@ -45,7 +44,10 @@ try {
     db.connect();
     exports.pgp = db;
     log('%start:cyan Initializing PGSql driver [%s:blue]', stringify(config.db.pgsql));
-    log('%start:cyan Initializing PGSql table [%s:blue]', prepare(config.dbName));
+    var doDb = "CREATE DATABASE "+config.dbName;
+    prepare(doDb);
+    var doTable = "CREATE TABLE IF NOT EXISTS "+config.tableName+" (ID serial NOT NULL PRIMARY KEY, data json NOT NULL );"
+    prepare(doTable);
 } catch(err){
     log('%stop:red Failed Initializing PGsql driver [%s:blue]',err);
     process.exit();
@@ -81,13 +83,13 @@ exports.insert = function(bulk){
 	var values = bulk.map(function(item) {
 	  return "'"+stringify(item).replace(/,}/,"}")+"'";
 	});
-	var insertquery = "INSERT INTO "+config.dbName+" (data) VALUES ("+values.join('),(')+");";
+	var insertquery = "INSERT INTO "+config.tableName+" (data) VALUES ("+values.join('),(')+");";
 	if (config.debug) log('Query: %s',insertquery);
 	// executing the query:
 	db.none(insertquery)
 	    .then(data => {
 	        // success;
-		if (config.debug) log('PGP RES: %s',data);
+		if (config.debug && data) log('PGP RES: %s',data);
 		return data;
 	    })
 	    .catch(error => {
