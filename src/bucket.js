@@ -12,6 +12,8 @@ var pgp = false;
 
 var r_bucket;
 var p_bucket;
+var e_bucket;
+var m_bucket;
 
 // RethinkDB
 if (config.db.rethink){
@@ -55,6 +57,34 @@ if (config.db.pgsql){
 exports.pgp_bucket = p_bucket;
 exports.pgp = pgp;
 
+// MongoDB
+if (config.db.mongodb.url){
+ try {
+  mdb = require('./mongodb').connect();
+  m_bucket = bucket_emitter.create(config.queue);
+  m_bucket.on('data', function(data) {
+    // Bulk ready to emit!
+    if (config.debug) log('%data:cyan MongoDB BULK Out [%s:blue]', stringify(data) );
+    mdb.collection('hep').insertMany(data);
+  }).on('error', function(err) {
+    log('%error:red %s', err.toString() )
+  });
+
+ } catch(e){ log('%stop:red Failed to Initialize MongoDB driver/queue',e); return; }
+}
+
+exports.mdb_bucket = m_bucket;
+exports.mdb = mdb;
+
+
+// Elastic
+if (config.db.elastic){
+ try {
+  var EsBroker = require('./es-broker');
+  var es = EsBroker.create(config.db.elastic);
+  exports.e_bucket = es;
+ } catch(e){ log('%stop:red Failed to Initialize Elastic driver/queue',e); return; }
+}
 
 
 process.on('beforeExit', function() {
