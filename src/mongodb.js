@@ -18,7 +18,7 @@ let _db
      log('%start:cyan Initializing MongoDB [%s:blue]',stringify(rtconfig.db.mongodb.url));
      try {
          MongoClient.connect(rtconfig.db.mongodb.url, (err, db) => {
-             _db = db.db('hep');
+             _db = db.db(rtconfig.dbName);
              return callback(err)
          })
      } catch (e) {

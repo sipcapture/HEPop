@@ -69,7 +69,7 @@ if (config.db.mongodb.url){
 	  m_bucket.on('data', function(data) {
 	    // Bulk ready to emit!
 	    if (config.debug) log('%data:cyan MongoDB BULK Out [%s:blue]', stringify(data) );
-	    	mdb.collection('hep').insertMany(data, function(err,result){
+	    	mdb.collection(config.tableName).insertMany(data, function(err,result){
 			if (err) log('%stop:red Failed to Insert: ',err);
 			if (config.debug) log('%start:green Inserted: ', result.insertedCount);
 		});
