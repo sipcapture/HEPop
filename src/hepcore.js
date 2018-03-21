@@ -3,6 +3,7 @@ const log = require('./logger');
 const sip = require('sip');
 const r_bucket = require('./bucket').bucket;
 const pgp_bucket = require('./bucket').pgp_bucket;
+const mdb_bucket = require('./bucket').mdb_bucket;
 const r = require('./bucket').r;
 const stringify = require('safe-stable-stringify');
 const flatten = require('flat')
@@ -30,9 +31,10 @@ exports.processHep = function processHep(data,socket) {
 		  	log('%data:cyan HEP Payload [%s:yellow]', stringify(decoded.payload) );
 		  }
 	  }
-	  if(decoded['rcinfo.timeSeconds']) decoded['rcinfo.ts'] = r.epochTime(decoded['rcinfo.timeSeconds']);
+	  // if(decoded['rcinfo.timeSeconds']) decoded['rcinfo.ts'] = r.epochTime(decoded['rcinfo.timeSeconds']);
 	  if (r_bucket) r_bucket.push(decoded);
 	  if (pgp_bucket) pgp_bucket.push(decoded);
+	  if (mdb_bucket) mdb_bucket.push(decoded);
 		
 	} catch(err) { log('%error:red %s', err.toString() ) }
 };

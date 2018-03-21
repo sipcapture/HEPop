@@ -60,21 +60,29 @@ exports.pgp = pgp;
 // MongoDB
 if (config.db.mongodb.url){
  try {
-  mdb = require('./mongodb').connect();
   m_bucket = bucket_emitter.create(config.queue);
-  m_bucket.on('data', function(data) {
-    // Bulk ready to emit!
-    if (config.debug) log('%data:cyan MongoDB BULK Out [%s:blue]', stringify(data) );
-    mdb.collection('hep').insertMany(data);
-  }).on('error', function(err) {
-    log('%error:red %s', err.toString() )
+  mongo = require('./mongodb');
+  var error = mongo.connectDB(function(err){
+	if (err) throw err;
+	var mdb = mongo.getDB();
+
+	  m_bucket.on('data', function(data) {
+	    // Bulk ready to emit!
+	    if (config.debug) log('%data:cyan MongoDB BULK Out [%s:blue]', stringify(data) );
+	    	mdb.collection('hep').insertMany(data, function(err,result){
+			if (err) log('%stop:red Failed to Insert: ',err);
+			if (config.debug) log('%start:green Inserted: ', result.insertedCount);
+		});
+	  }).on('error', function(err) {
+	    log('%error:red %s', err.toString() )
+	  });
+
   });
 
  } catch(e){ log('%stop:red Failed to Initialize MongoDB driver/queue',e); return; }
 }
 
 exports.mdb_bucket = m_bucket;
-exports.mdb = mdb;
 
 
 // Elastic

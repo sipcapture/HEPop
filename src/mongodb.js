@@ -4,29 +4,30 @@
 
 const log = require('./logger');
 const stringify = require('safe-stable-stringify');
-var mdb,table;
+var MongoClient = require('mongodb').MongoClient;
 
-var MongoClient = require('mongodb').MongoClient
-  , assert = require('assert');
+let _db
 
+ const connectDB = async (callback) => {
+     var rtconfig = require('./config').getConfig();
+     if(!rtconfig.db.mongodb.url) {
+       log('%stop:red Failed Initializing MongoDB [%s:blue]');
+       process.exit();
+       //return;
+     }
+     log('%start:cyan Initializing MongoDB [%s:blue]',stringify(rtconfig.db.mongodb.url));
+     try {
+         MongoClient.connect(rtconfig.db.mongodb.url, (err, db) => {
+             _db = db.db('hep');
+             return callback(err)
+         })
+     } catch (e) {
+         throw e
+     }
+ }
 
-exports.connect = function(){
-  var rtconfig = require('./config').getConfig();
-  if(!rtconfig.db.mongodb) {
-    log('%stop:red Failed Initializing MongoDB [%s:blue]');
-    process.exit();
-    //return;
-  }
-  log('%start:cyan Initializing MongoDB [%s:blue]',stringify(rtconfig.db.mongodb.url));
+ const getDB = () => _db
 
-  MongoClient.connect(rtconfig.db.mongodb.url, function(err, db) {
-  assert.equal(null, err);
-  console.log("Connected successfully to server");
-  mdb = db;
-  //db.close();
-  });
+ const disconnectDB = () => _db.close()
 
-  exports.db = mdb;
-  return mdb;
-}
-
+ module.exports = { connectDB, getDB, disconnectDB }
