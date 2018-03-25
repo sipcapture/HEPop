@@ -16,7 +16,9 @@ exports.processHep = function processHep(data,socket) {
 	try {
   	  if (config.debug) log('%data:cyan HEP Net [%s:blue]', JSON.stringify(socket) );
 	  try { var decoded = hepjs.decapsulate(data); decoded = flatten(decoded); } catch(e) { log('%s:red',e); }
-	  switch(decoded['rcinfo.payloadType']) {
+	  /* optional future dissectors */	
+	  if (config.dissect.sip) {
+	    switch(decoded['rcinfo.payloadType']) {
 		case 1:
 		  try { decoded.sip = sip.parse(decoded.payload); } catch(e) {}
 	  	  if (config.debug) {
@@ -29,6 +31,7 @@ exports.processHep = function processHep(data,socket) {
 			log('%data:cyan HEP Type [%s:blue]', decoded.payloadType );
 		  	log('%data:cyan HEP Payload [%s:yellow]', stringify(decoded.payload) );
 		  }
+	    }
 	  }
 	  if (r_bucket) { 
 	     if(decoded['rcinfo.timeSeconds']) decoded['rcinfo.ts'] = r.epochTime(decoded['rcinfo.timeSeconds']);
