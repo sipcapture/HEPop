@@ -19,14 +19,14 @@
 	    }
   	  ]
 	},
-  	"pgsql":{
+  	"mongodb":{
 	  "url": "mongodb://localhost:27017/homer"
 	},
   	"pgsql":{
-  	  host: 'localhost', // 'localhost' is the default;
-  	  port: 5432, // 5432 is the default;
-  	  user: 'myUser',
-  	  password: 'myPassword'
+  	  "host": "localhost", // "localhost" is the default;
+  	  "port": 5432, // 5432 is the default;
+  	  "user": "myUser",
+  	  "password": "myPassword"
   	}
   },
   "debug": false

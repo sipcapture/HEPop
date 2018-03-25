@@ -58,7 +58,7 @@ exports.pgp_bucket = p_bucket;
 exports.pgp = pgp;
 
 // MongoDB
-if (config.db.mongodb.url){
+if (config.db.mongodb && config.db.mongodb.url){
  try {
   m_bucket = bucket_emitter.create(config.queue);
   mongo = require('./mongodb');
