@@ -14,7 +14,6 @@ exports.decapsulate = hepjs.decapsulate;
 		    
 exports.processHep = function processHep(data,socket) {
 	try {
-	  //var decoded = hepjs.decapsulate(data);
   	  if (config.debug) log('%data:cyan HEP Net [%s:blue]', JSON.stringify(socket) );
 	  try { var decoded = hepjs.decapsulate(data); decoded = flatten(decoded); } catch(e) { log('%s:red',e); }
 	  switch(decoded['rcinfo.payloadType']) {
@@ -31,8 +30,10 @@ exports.processHep = function processHep(data,socket) {
 		  	log('%data:cyan HEP Payload [%s:yellow]', stringify(decoded.payload) );
 		  }
 	  }
-	  // if(decoded['rcinfo.timeSeconds']) decoded['rcinfo.ts'] = r.epochTime(decoded['rcinfo.timeSeconds']);
-	  if (r_bucket) r_bucket.push(decoded);
+	  if (r_bucket) { 
+	     if(decoded['rcinfo.timeSeconds']) decoded['rcinfo.ts'] = r.epochTime(decoded['rcinfo.timeSeconds']);
+	     r_bucket.push(decoded);
+	  }
 	  if (pgp_bucket) pgp_bucket.push(decoded);
 	  if (mdb_bucket) mdb_bucket.push(decoded);
 		
