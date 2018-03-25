@@ -29,5 +29,8 @@
   	  "password": "myPassword"
   	}
   },
+  "dissect" : {
+	  "sip": false
+  },
   "debug": false
 }
