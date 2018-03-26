@@ -3,6 +3,12 @@
 # HEPop
 NodeJS [HEP](https://hep.sipcapture.org) Server & Switch for [HOMER](https://github.com/sipcapture/homer) 
 
+*HEPop* features native HEP3 decoding and experimental backend support:
+  * PGSQL
+  * MongoDB
+  * RethinkDB
+  * Elasticsearch
+
 ## WARNING
 This is a prototype under heavy development, please do not use for any purpose other than testing!
 
@@ -21,6 +27,8 @@ This is a prototype under heavy development, please do not use for any purpose o
     -c, --configfile <configfile>  configuration file
     -s, --socket <socket>          socket service (udp,tcp,http,sipfix) (default: udp)
 ```
+#### Config
+See [myconfig.js](https://github.com/sipcapture/HEPop/blob/master/myconfig.js) for an example configuration bundle
 
 #### Socket Types:
 ```
