@@ -51,6 +51,7 @@ exports.processHep = function processHep(data,socket) {
 			log('%data:cyan HEP Type [%s:blue]', decoded.payloadType );
 		  	log('%data:cyan HEP Payload [%s:yellow]', stringify(decoded.payload) );
 		  }
+	    }
 	  }
 
 	  if (pgp_bucket) pgp_bucket.push(insert);
