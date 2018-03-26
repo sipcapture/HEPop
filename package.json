@@ -1,0 +1,57 @@
+{
+  "name": "HEPop",
+  "version": "1.0.3",
+  "description": "HEP Packet Server & Switch",
+  "main": "hepop.js",
+  "bin": {
+    "hepop": "./hepop.js"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/sipcapture/hepop.git"
+  },
+  "keywords": [
+    "hep",
+    "eep",
+    "hep3",
+    "encapsulation",
+    "homer",
+    "sipcapture",
+    "capture",
+    "server",
+    "client",
+    "core",
+    "rtc",
+    "postgres",
+    "mongodb",
+    "rethinkdb",
+    "elasticsearch"
+  ],
+  "author": "Lorenzo Mangani <lorenzo.mangani@gmail.com> (http://qxip.net/)",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/sipcapture/hepop/issues"
+  },
+  "homepage": "https://github.com/sipcapture/hepop#readme",
+  "dependencies": {
+    "async": "^2.6.0",
+    "commander": "^2.13.0",
+    "elasticsearch": "^14.1.0",
+    "events": "^2.0.0",
+    "flat": "^4.0.0",
+    "hep-js": "^1.0.12",
+    "knex": "^0.14.3",
+    "mongodb": "^3.0.4",
+    "npm": "^5.7.1",
+    "oh-my-log": "^5.0.1",
+    "optimist": "^0.6.1",
+    "pg-promise": "^8.2.1",
+    "rethinkdbdash": "^2.3.31",
+    "safe-stable-stringify": "^1.0.1",
+    "sip": "0.0.4",
+    "sipfix": "^1.0.1"
+  }
+}
