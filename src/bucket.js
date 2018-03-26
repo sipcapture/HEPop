@@ -25,7 +25,7 @@ if (config.db.rethink){
   r_bucket = bucket_emitter.create(config.queue);
   r_bucket.on('data', function(data) {
     // Bulk ready to emit!
-    if (config.debug) log('%data:cyan RethinkDB BULK Out [%s:blue]', stringify(data) );
+    if (config.debug) log('%data:cyan RethinkDB BULK Out %s:blue', stringify(data) );
     r.db(config.dbName).table(config.tableName).insert(data).run(durability="soft", noreply=true);
   }).on('error', function(err) {
     log('%error:red %s', err.toString() )
@@ -45,7 +45,7 @@ if (config.db.pgsql){
   p_bucket = bucket_emitter.create(config.queue);
   p_bucket.on('data', function(data) {
     // Bulk ready to emit!
-    if (config.debug) log('%data:cyan PGSQL BULK Out [%s:blue]', stringify(data) );
+    if (config.debug) log('%data:cyan PGSQL BULK Out %s:blue', stringify(data) );
     pgp.insert(data);
   }).on('error', function(err) {
     log('%error:red %s', err.toString() )
@@ -68,7 +68,7 @@ if (config.db.mongodb && config.db.mongodb.url){
 
 	  m_bucket.on('data', function(data) {
 	    // Bulk ready to emit!
-	    if (config.debug) log('%data:cyan MongoDB BULK Out [%s:blue]', stringify(data) );
+	    if (config.debug) log('%data:cyan MongoDB BULK Out %s:blue', stringify(data) );
 	    	mdb.collection(config.tableName).insertMany(data, function(err,result){
 			if (err) log('%stop:red Failed to Insert: ',err);
 			if (config.debug) log('%start:green Inserted: ', result.insertedCount);

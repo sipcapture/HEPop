@@ -1,6 +1,6 @@
 {
   "name": "HEPop",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "HEP Packet Server & Switch",
   "main": "hepop.js",
   "bin": {
@@ -25,6 +25,8 @@
     "client",
     "core",
     "rtc",
+    "postgres",
+    "mongodb",
     "rethinkdb",
     "elasticsearch"
   ],

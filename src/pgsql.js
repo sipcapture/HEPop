@@ -16,6 +16,7 @@ const pgp = require('pg-promise')({
         log('%stop:red Caught PGsql error:', err,e);
    }
 });
+var format = require('pg-format');
 var config = require('./config').getConfig();
 var cs;
 var db;
@@ -44,9 +45,11 @@ try {
     db.connect();
     exports.pgp = db;
     log('%start:cyan Initializing PGSql driver [%s:blue]', stringify(config.db.pgsql));
-    var doDb = "CREATE DATABASE "+config.dbName;
-    prepare(doDb);
-    var doTable = "CREATE TABLE IF NOT EXISTS "+config.tableName+" (ID serial NOT NULL PRIMARY KEY, data json NOT NULL );"
+    //var doDb = "CREATE DATABASE "+config.dbName;
+    //prepare(doDb);
+    var doTable = "CREATE TABLE IF NOT EXISTS "+config.tableName+" " 
+		+ "(id BIGSERIAL NOT NULL, gid smallint DEFAULT '0', create_date timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,"
+ 		+ "hep_header json NOT NULL, payload json NOT NULL, raw varchar(2000) NOT NULL, PRIMARY KEY (id,create_date) );"
     prepare(doTable);
 } catch(err){
     log('%stop:red Failed Initializing PGsql driver [%s:blue]',err);
@@ -56,8 +59,8 @@ try {
 
 
 if (!config.db.pgsql.schema){
-  var tableSchema = config.db.pgsql.schema || ['data'];
-  var tableName = {table: config.tableName || 'hepic' };
+  var tableSchema = config.db.pgsql.schema || ['hep_header','payload','raw'];
+  var tableName = {table: config.tableName || 'homer_data' };
   cs = new pgp.helpers.ColumnSet(tableSchema, tableName);
 }
 
@@ -79,12 +82,9 @@ exports.insert = function(bulk){
 	    log('%stop:red Missing Schema/Templace for PGsql [%s:blue]');
 	    return false;
 	}
-	//var query = pgp.helpers.insert(bulk,cs); // params: bulk_array, template
-	var values = bulk.map(function(item) {
-	  return "'"+stringify(item).replace(/,}/,"}")+"'";
-	});
-	var insertquery = "INSERT INTO "+config.tableName+" (data) VALUES ("+values.join('),(')+");";
-	if (config.debug) log('Query: %s',insertquery);
+	log('GOT BULK: %s',JSON.stringify(bulk));
+
+	const insertquery = pgp.helpers.insert(bulk, cs);
 	// executing the query:
 	db.none(insertquery)
 	    .then(data => {
