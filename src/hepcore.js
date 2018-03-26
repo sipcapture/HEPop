@@ -20,10 +20,11 @@ exports.processHep = function processHep(data,socket) {
 		//decoded = flatten(decoded); 
 		var insert = { "hep_header": decoded.rcinfo,
 				"payload": {},
-				"raw": decoded.payload 
+				"raw": decoded.payload || ""
 		};
 
 	  } catch(e) { log('%s:red',e); }
+
 	  switch(insert.hep_header.payloadType) {
 		case 1:
 		  try { var sip = sip.parse(decoded.payload); } catch(e) {}
@@ -51,7 +52,6 @@ exports.processHep = function processHep(data,socket) {
 			log('%data:cyan HEP Type [%s:blue]', decoded.payloadType );
 		  	log('%data:cyan HEP Payload [%s:yellow]', stringify(decoded.payload) );
 		  }
-	    }
 	  }
 
 	  if (pgp_bucket) pgp_bucket.push(insert);

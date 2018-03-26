@@ -16,7 +16,6 @@ const pgp = require('pg-promise')({
         log('%stop:red Caught PGsql error:', err,e);
    }
 });
-var format = require('pg-format');
 var config = require('./config').getConfig();
 var cs;
 var db;
