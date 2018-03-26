@@ -1,3 +1,5 @@
+#!/usr/bin/env node
+
 /*
  * HEP Op
  * (c) 2018 QXIP BV
@@ -5,9 +7,6 @@
  */
 
 //'use strict';
-
-// https://www.npmjs.com/package/@mysql/xdevapi
-// const mysqlx = require('@mysql/xdevapi');
 
 const program = require('commander');
 const setConfig = require('./src/config').setConfig;
