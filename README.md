@@ -1,7 +1,7 @@
 <img src="http://i.imgur.com/RSUlFRa.gif" width="120" alt="HEP"><img src="https://d30y9cdsu7xlg0.cloudfront.net/png/30712-200.png" width=50>
 
 # HEPop
-NodeJS [HEP](https://hep.sipcapture.org) Server & Switch for [HOMER](https://github.com/sipcapture/homer) 
+NodeJS [HEP](https://hep.sipcapture.org) Server & Switch for [HOMER 7](https://github.com/sipcapture/homer) 
 
 ## WARNING
 This is a prototype under heavy development, please do not use for any purpose other than testing!
