@@ -29,5 +29,12 @@
   	  "password": "myPassword"
   	}
   },
+  "metrics": {
+	"influx":{
+		"period": 30000,
+		"dbName": "hep",
+		"hostname": "localhost:8086"
+	}
+  },
   "debug": false
 }

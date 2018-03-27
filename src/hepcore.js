@@ -11,13 +11,18 @@ const config = require('./config').getConfig();
 
 exports.encapsulate = hepjs.encapsulate;
 exports.decapsulate = hepjs.decapsulate;
-		    
+
+if(config.metrics && config.metrics.influx){
+	const metrics = require('./metrics');
+	const mm = metrics.withTags({ instanceId: config.id||"HEPop" });
+}
+
 exports.processHep = function processHep(data,socket) {
 	try {
   	  if (config.debug) log('%data:cyan HEP Net [%s:blue]', JSON.stringify(socket) );
-	  try { 
-		var decoded = hepjs.decapsulate(data); 
-		//decoded = flatten(decoded); 
+	  try {
+		var decoded = hepjs.decapsulate(data);
+		//decoded = flatten(decoded);
 		var insert = { "hep_header": decoded.rcinfo,
 				"payload": {},
 				"raw": decoded.payload || ""
@@ -27,14 +32,13 @@ exports.processHep = function processHep(data,socket) {
 
 	  switch(insert.hep_header.payloadType) {
 		case 1:
-		  try { var sip = sipdec.parse(insert.raw); 
+		  try { var sip = sipdec.parse(insert.raw);
 			  log("SIP HEADERS: %s", stringify(sip), insert.raw);
 
 		  	insert.payload.protocol = 'SIP';
 		  	if (sip && sip.headers) {
 				  var hdr = sip.headers;
 				  if (hdr['call-id']) insert.payload.callid = hdr['call-id'];
-				  if (hdr['user-agent']) insert.payload.uas = hdr['user-agent'];
 				  if (hdr.cseq && hdr.cseq.seq) insert.payload.cseq = hdr.cseq.seq;
 				  if (hdr.from) {
 					if (hdr.from.name || hdr.from.params.uri ) insert.payload.from_user = hdr.from.name || hdr.from.params.uri;
@@ -44,7 +48,14 @@ exports.processHep = function processHep(data,socket) {
 					if (hdr.to.name) insert.payload.to_user = hdr.to.name;
 					if (hdr.to.params.tag) insert.payload.to_tag = hdr.to.params.tag;
 				  }
-				  if (sip.method) insert.payload.method = sip.method;
+				  if (sip.method||sip.status) {
+					insert.payload.method = sip.method||sip.status;
+					if(mm) mm.increment(mm.counter("method", { code: sip.method || sip.status }));
+				  }
+				  if (hdr['user-agent']) {
+					insert.payload.uas = hdr['user-agent'];
+					if (mm) mm.increment(mm.counter("uac", { name: hdr['user-agent'] }));
+				  }
 			  }
 	  		  if (config.debug) {
 				log('%data:cyan HEP Type [%s:blue]', 'SIP' );
@@ -58,14 +69,15 @@ exports.processHep = function processHep(data,socket) {
 		  	log('%data:cyan HEP Payload [%s:yellow]', stringify(decoded.payload) );
 		  }
 	  }
+	  if (mm) mm.increment(mm.counter("hep", { type: insert.hep_header.payloadType  }));
 
 	  if (pgp_bucket) pgp_bucket.push(insert);
 
-	  if (r_bucket) { 
+	  if (r_bucket) {
 	     if(decoded['rcinfo.timeSeconds']) decoded['rcinfo.ts'] = r.epochTime(decoded['rcinfo.timeSeconds']);
 	     r_bucket.push(decoded);
 	  }
 	  if (mdb_bucket) mdb_bucket.push(decoded);
-		
+
 	} catch(err) { log('%error:red %s', err.toString() ) }
 };

@@ -3,12 +3,21 @@ const stringify = require('safe-stable-stringify');
 const config = require('./config').getConfig();
 const crow = require("crow-metrics");
 
+if (config.metrics && config.metrics.influx){
+
 // metrics object, publishing every 10 seconds
-const metrics = crow.Metrics.create({ period: config.metrics.period || 10000, log: log, expire: config.metrics.expire|| "forever" });
+const metrics = crow.Metrics.create({ period: config.metrics.influx.period || 10000, log: log, expire: config.metrics.influx.expire|| "forever" });
 // connect and publish metrics to InfluxDB
-metrics.events.attach(crow.exportInfluxDb({ hostname: config.metrics.hostname || "localhost:8086", database: config.metrics.dbName || "homer" }));
+metrics.events.attach(crow.exportInfluxDb({ hostname: config.metrics.influx.hostname || "localhost:8086", database: config.metrics.influx.dbName || "homer" }));
+
+} else {
+
+const metrics = false;
+
+}
 
 exports.metrics = metrics;
+
 
 /*
 
