@@ -6,17 +6,16 @@ const crow = require("crow-metrics");
 if (config.metrics && config.metrics.influx){
 
 // metrics object, publishing every 10 seconds
-const metrics = crow.Metrics.create({ period: config.metrics.influx.period || 10000, log: log, expire: config.metrics.influx.expire|| "forever" });
+const metrics = crow.Metrics.create({ period: config.metrics.influx.period || 10000, expire: config.metrics.influx.expire|| "forever" });
+console.log(metrics);
+
 // connect and publish metrics to InfluxDB
-metrics.events.attach(crow.exportInfluxDb({ hostname: config.metrics.influx.hostname || "localhost:8086", database: config.metrics.influx.dbName || "homer" }));
+crow.exportInfluxDb(metrics.events, { hostname: config.metrics.influx.hostname || "localhost:8086", database: config.metrics.influx.dbName || "homer" });
 
-} else {
-
-const metrics = false;
+exports.metrics = metrics;
 
 }
 
-exports.metrics = metrics;
 
 
 /*
