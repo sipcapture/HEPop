@@ -13,9 +13,10 @@ exports.encapsulate = hepjs.encapsulate;
 exports.decapsulate = hepjs.decapsulate;
 
 if(config.metrics && config.metrics.influx){
-	const metrics = require('./metrics');
-	const mm = metrics.withTags({ instanceId: config.id||"HEPop" });
+        const metrics = require('./metrics');
+        const mm = metrics;
 }
+
 
 exports.processHep = function processHep(data,socket) {
 	try {
