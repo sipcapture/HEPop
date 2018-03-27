@@ -12,9 +12,14 @@ const config = require('./config').getConfig();
 exports.encapsulate = hepjs.encapsulate;
 exports.decapsulate = hepjs.decapsulate;
 
-if(config.metrics && config.metrics.influx){
-        const metrics = require('./metrics');
-        const mm = metrics;
+const metrics = require('./metrics').metrics;
+var mm = true;
+
+if(!config.metrics || !config.metrics.influx){
+	log('%data:red Metrics disabled');
+	mm = false;
+} else {
+	log('%data:green Metrics enabled %s', stringify(config.metrics.influx));
 }
 
 
@@ -34,7 +39,6 @@ exports.processHep = function processHep(data,socket) {
 	  switch(insert.hep_header.payloadType) {
 		case 1:
 		  try { var sip = sipdec.parse(insert.raw);
-			  log("SIP HEADERS: %s", stringify(sip), insert.raw);
 
 		  	insert.payload.protocol = 'SIP';
 		  	if (sip && sip.headers) {
@@ -51,11 +55,11 @@ exports.processHep = function processHep(data,socket) {
 				  }
 				  if (sip.method||sip.status) {
 					insert.payload.method = sip.method||sip.status;
-					if(mm) mm.increment(mm.counter("method", { code: sip.method || sip.status }));
+					if(mm) metrics.increment(metrics.counter("method", { code: sip.method || sip.status }));
 				  }
 				  if (hdr['user-agent']) {
 					insert.payload.uas = hdr['user-agent'];
-					if (mm) mm.increment(mm.counter("uac", { name: hdr['user-agent'] }));
+					if (mm) metrics.increment(metrics.counter("uac", { name: hdr['user-agent'] }));
 				  }
 			  }
 	  		  if (config.debug) {
@@ -70,7 +74,7 @@ exports.processHep = function processHep(data,socket) {
 		  	log('%data:cyan HEP Payload [%s:yellow]', stringify(decoded.payload) );
 		  }
 	  }
-	  if (mm) mm.increment(mm.counter("hep", { type: insert.hep_header.payloadType  }));
+	  if (mm) metrics.increment(metrics.counter("hep", { type: insert.hep_header.payloadType  }));
 
 	  if (pgp_bucket) pgp_bucket.push(insert);
 
