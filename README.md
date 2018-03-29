@@ -4,16 +4,22 @@
 NodeJS [HEP](https://hep.sipcapture.org) Server & Switch for [HOMER 7](https://github.com/sipcapture/homer) 
 
 ## WARNING
-This is a prototype under heavy development, please do not use for any purpose other than testing!
+This is an unstable prototype under heavy development, please do not use for any purpose other than testing!
 
 ### About
 
-*HEPop* is a pure NodeJS Capture Server featuring native HEP3 decoding and experimental backend support for:
-  * PGSQL
-  * MongoDB
-  * RethinkDB
-  * Elasticsearch
+*HEPop* is a pure NodeJS Capture Server featuring native HEP3 decoding, bulking and experimental backend support
 
+- [x] Data
+  - SQL
+    - [x] PGSQL
+  - NOSQL
+    - [x] MongoDB
+    - [x] RethinkDB
+    - [x] Elasticsearch
+- [x] Metrics
+  - [x] InfluxDB
+  - [ ] Prometheus
 
 
 ### Usage
