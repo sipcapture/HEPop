@@ -39,7 +39,7 @@
   "dependencies": {
     "async": "^2.6.0",
     "commander": "^2.13.0",
-    "crow-metrics": "^4.0.1",
+    "crow-metrics": "^4.1.0",
     "elasticsearch": "^14.1.0",
     "events": "^2.0.0",
     "flat": "^4.0.0",
@@ -49,10 +49,10 @@
     "npm": "^5.7.1",
     "oh-my-log": "^5.0.1",
     "optimist": "^0.6.1",
+    "parsip": "1.0.2",
     "pg-promise": "^8.2.1",
     "rethinkdbdash": "^2.3.31",
     "safe-stable-stringify": "^1.0.1",
-    "sip": "0.0.4",
     "sipfix": "^1.0.1"
   }
 }

@@ -1,6 +1,6 @@
 const hepjs = require('hep-js');
 const log = require('./logger');
-const sipdec = require('sip');
+const sipdec = require('parsip');
 const r_bucket = require('./bucket').bucket;
 const pgp_bucket = require('./bucket').pgp_bucket;
 const mdb_bucket = require('./bucket').mdb_bucket;
@@ -12,11 +12,18 @@ const config = require('./config').getConfig();
 exports.encapsulate = hepjs.encapsulate;
 exports.decapsulate = hepjs.decapsulate;
 
-if(config.metrics && config.metrics.influx){
-        const metrics = require('./metrics');
-        const mm = metrics;
+const metrics = require('./metrics').metrics;
+var mm = true;
+
+if(!config.metrics || !config.metrics.influx){
+	log('%data:red Metrics disabled');
+	mm = false;
+} else {
+	log('%data:green Metrics enabled %s', stringify(config.metrics.influx));
 }
 
+
+var buckets = [];
 
 exports.processHep = function processHep(data,socket) {
 	try {
@@ -24,38 +31,46 @@ exports.processHep = function processHep(data,socket) {
 	  try {
 		var decoded = hepjs.decapsulate(data);
 		//decoded = flatten(decoded);
-		var insert = { "hep_header": decoded.rcinfo,
-				"payload": {},
+		var insert = { "protocol_header": decoded.rcinfo,
+				"data_header": {},
 				"raw": decoded.payload || ""
 		};
 
 	  } catch(e) { log('%s:red',e); }
 
-	  switch(insert.hep_header.payloadType) {
-		case 1:
-		  try { var sip = sipdec.parse(insert.raw);
-			  log("SIP HEADERS: %s", stringify(sip), insert.raw);
+	  // Create protocol bucket
+	  var key = insert.protocol_header.payloadType +"_"+ (insert.protocol_header.transactionType || "default");
+	  if (!buckets[key]) buckets[key] = require('./bucket').pgp_bucket;
+	  buckets[key].set_id("hep_proto_"+key);
 
-		  	insert.payload.protocol = 'SIP';
+	  switch(insert.protocol_header.payloadType) {
+		case 1:
+		  // todo: move to modular function!
+		  try { var sip = sipdec.getSIP(insert.raw);
+			if (config.debug) log('%stop:red %s',stringify(sip));
+		  	insert.data_header.protocol = 'SIP';
 		  	if (sip && sip.headers) {
 				  var hdr = sip.headers;
-				  if (hdr['call-id']) insert.payload.callid = hdr['call-id'];
-				  if (hdr.cseq && hdr.cseq.seq) insert.payload.cseq = hdr.cseq.seq;
-				  if (hdr.from) {
-					if (hdr.from.name || hdr.from.params.uri ) insert.payload.from_user = hdr.from.name || hdr.from.params.uri;
-					if (hdr.from.params.tag) insert.payload.from_tag = hdr.from.params.tag;
+				  if (sip.call_id) insert.data_header.callid = sip.call_id;
+				  if (sip.cseq) insert.data_header.cseq = sip.cseq;
+				  if (sip.from) {
+					if (sip.from.uri._user) insert.data_header.from_user = sip.from.uri._user;
+					if (sip.from_tag) insert.data_header.from_tag = sip.from_tag;
 				  }
-				  if (hdr.to) {
-					if (hdr.to.name) insert.payload.to_user = hdr.to.name;
-					if (hdr.to.params.tag) insert.payload.to_tag = hdr.to.params.tag;
+				  if (sip.to) {
+					if (sip.to.uri._user) insert.data_header.to_user = sip.to.uri._user;
+					if (sip.to_tag) insert.data_header.to_tag = sip.to_tag;
+				  }
+				  if (sip.ruri) {
+					if (sip.ruri_user) insert.data_header.ruri_user = sip.ruri._user;
 				  }
 				  if (sip.method||sip.status) {
-					insert.payload.method = sip.method||sip.status;
-					if(mm) mm.increment(mm.counter("method", { code: sip.method || sip.status }));
+					insert.data_header.method = sip.method||sip.status+"";
+					if(mm) metrics.increment(metrics.counter("method", { "ip": socket.address || "0.0.0.0" }, insert.data_header.method  ) );
 				  }
-				  if (hdr['user-agent']) {
-					insert.payload.uas = hdr['user-agent'];
-					if (mm) mm.increment(mm.counter("uac", { name: hdr['user-agent'] }));
+				  if (hdr['User-Agent'][0]) {
+					insert.data_header.uas = hdr['User-Agent'][0].raw;
+					if (mm) metrics.increment(metrics.counter("uac", { "ip": socket.address || "0.0.0.0" }, hdr['User-Agent'][0].raw ));
 				  }
 			  }
 	  		  if (config.debug) {
@@ -70,9 +85,9 @@ exports.processHep = function processHep(data,socket) {
 		  	log('%data:cyan HEP Payload [%s:yellow]', stringify(decoded.payload) );
 		  }
 	  }
-	  if (mm) mm.increment(mm.counter("hep", { type: insert.hep_header.payloadType  }));
+	  if (mm) metrics.increment(metrics.counter("hep", { "ip": socket.address || "0.0.0.0" }, insert.protocol_header.payloadType ));
 
-	  if (pgp_bucket) pgp_bucket.push(insert);
+	  if (pgp_bucket) buckets[key].push(insert);
 
 	  if (r_bucket) {
 	     if(decoded['rcinfo.timeSeconds']) decoded['rcinfo.ts'] = r.epochTime(decoded['rcinfo.timeSeconds']);

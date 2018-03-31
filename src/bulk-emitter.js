@@ -1,13 +1,13 @@
 var events = require('events');
 
-function Bucket(opts) {
+function Bucket(opts,uuid) {
 	this.bulk = [];
 	this.timeout = opts.timeout || 10000;
 	this.maxSize = opts.maxSize || 1000;
 	this.useInterval = opts.useInterval || opts.use_interval || false;
 	this.emitter = new events.EventEmitter();
 	this.timer = null;
-
+	this.uuid = uuid;
 	if (this.useInterval) {
 		this.set_timer();
 	}
@@ -34,7 +34,7 @@ Bucket.prototype.emit = function() {
 	if (this.bulk.length == 0) {
 		return;
 	}
-	this.emitter.emit('data', this.bulk.slice());
+	this.emitter.emit('data', this.bulk.slice(), this.uuid);
 	this.bulk = [];
 }
 
@@ -53,6 +53,7 @@ function BucketExternal(bucket) {
 	this.bucket = bucket;
 }
 
+
 BucketExternal.prototype.on = function(event, cb) {
 	this.bucket.emitter.on(event, cb);
 	return this;
@@ -67,6 +68,11 @@ BucketExternal.prototype.push = function(data, cb) {
 	this.bucket.check();
 }
 
+BucketExternal.prototype.set_id = function(id, cb) {
+	console.log('SET Bucket ID:',id);
+	this.bucket.uuid = id;
+}
+
 BucketExternal.prototype.close = function(cb) {
 	clearTimeout(this.bucket.timer);
 	if (cb && typeof cb == 'function') {
@@ -75,8 +81,8 @@ BucketExternal.prototype.close = function(cb) {
 	}
 }
 
-function create(opts) {
-	return new BucketExternal(new Bucket(opts));
+function create(opts,uuid) {
+	return new BucketExternal(new Bucket(opts,uuid));
 }
 
 module.exports = {

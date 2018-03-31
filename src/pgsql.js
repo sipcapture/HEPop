@@ -39,6 +39,14 @@ if(!config.db.pgsql) {
     //return;
   }
 
+
+var createTable = function(tableName){
+    var doTable = "CREATE TABLE IF NOT EXISTS "+tableName+" " 
+		+ "(id BIGSERIAL NOT NULL, gid smallint DEFAULT '0', create_date timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,"
+ 		+ "protocol_header json NOT NULL, data_header jsonb NOT NULL, raw varchar(2000) NOT NULL, PRIMARY KEY (id,create_date) );"
+    prepare(doTable);
+}
+
 try {
     db = pgp(config.db.pgsql);
     db.connect();
@@ -46,10 +54,6 @@ try {
     log('%start:cyan Initializing PGSql driver [%s:blue]', stringify(config.db.pgsql));
     //var doDb = "CREATE DATABASE "+config.dbName;
     //prepare(doDb);
-    var doTable = "CREATE TABLE IF NOT EXISTS "+config.tableName+" " 
-		+ "(id BIGSERIAL NOT NULL, gid smallint DEFAULT '0', create_date timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,"
- 		+ "hep_header json NOT NULL, payload json NOT NULL, raw varchar(2000) NOT NULL, PRIMARY KEY (id,create_date) );"
-    prepare(doTable);
 } catch(err){
     log('%stop:red Failed Initializing PGsql driver [%s:blue]',err);
     process.exit();
@@ -58,7 +62,7 @@ try {
 
 
 if (!config.db.pgsql.schema){
-  var tableSchema = config.db.pgsql.schema || ['hep_header','payload','raw'];
+  var tableSchema = config.db.pgsql.schema || ['protocol_header','data_header','raw'];
   var tableName = {table: config.tableName || 'homer_data' };
   cs = new pgp.helpers.ColumnSet(tableSchema, tableName);
 }
@@ -73,22 +77,33 @@ exports.setTemplate = function(name){
 };
 
 
+var tables = [];
+
 // Generating a multi-row insert query:
 // insert(values, cs);
 // => INSERT INTO "hepic"("col_a","col_b") VALUES('a1','b1'),('a2','b2')
-exports.insert = function(bulk){
+exports.insert = function(bulk,id){
+	if (id && !tables[id]) {
+	    var tableSchema = config.db.pgsql.schema || ['protocol_header','data_header','raw'];
+	    var tableName = {table: id };
+	    cs = new pgp.helpers.ColumnSet(tableSchema, tableName);
+	    tables[id] = cs;
+	    createTable(id);
+	} else { cs = tables[id] }
+
 	if (!cs) {
 	    log('%stop:red Missing Schema/Templace for PGsql [%s:blue]');
 	    return false;
 	}
-	log('GOT BULK: %s',JSON.stringify(bulk));
+
+	log('GOT BULK ID:%s: %s',id, JSON.stringify(bulk));
 
 	const insertquery = pgp.helpers.insert(bulk, cs);
 	// executing the query:
 	db.none(insertquery)
 	    .then(data => {
 	        // success;
-		if (config.debug && data) log('PGP RES: %s',data);
+		if (config.debug) log('PGP RES: %s',data);
 		return data;
 	    })
 	    .catch(error => {
