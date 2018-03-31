@@ -7,14 +7,13 @@ var logger = {};
 logger.trace = logger.debug = logger.info = logger.warn = logger.error = log;
 
 if (config.metrics && config.metrics.influx){
-
+logger.info('%start:green initializing crow-metrics...');
 // metrics object, publishing every 10 seconds
 const metrics = crow.Metrics.create({ period: config.metrics.influx.period || 10000 });
 // connect and publish metrics to InfluxDB
 crow.exportInfluxDb(metrics.events, { hostname: config.metrics.influx.hostname || "localhost:8086", database: config.metrics.influx.dbName || "homer", log: logger });
 
 exports.metrics = metrics;
-exports.crow = crow;
 
 }
 

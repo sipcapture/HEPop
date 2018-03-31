@@ -43,10 +43,11 @@ if (config.db.pgsql){
   pgp = require('./pgsql');
   pgp.setTemplate(config.db.pgsql.schema);
   p_bucket = bucket_emitter.create(config.queue);
-  p_bucket.on('data', function(data) {
+  p_bucket.on('data', function(data,id) {
     // Bulk ready to emit!
+    if (config.debug) log('%data:cyan PGSQL BULK ID %s:blue', id );
     if (config.debug) log('%data:cyan PGSQL BULK Out %s:blue', stringify(data) );
-    pgp.insert(data);
+    pgp.insert(data,id);
   }).on('error', function(err) {
     log('%error:red %s', err.toString() )
   });
