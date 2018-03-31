@@ -47,8 +47,11 @@ $ hepop -c ./myconfig.js
 ```
 
 #### Screenshots
+##### homer7
+<img src="https://user-images.githubusercontent.com/1423657/38167363-37b30454-3534-11e8-9b18-e06564f3dd3a.png" width=500/>
+
 ##### metrics
-![image](https://user-images.githubusercontent.com/1423657/38167092-d89ebeb2-352f-11e8-8a67-7ada2fa1967e.png)
+<img src="https://user-images.githubusercontent.com/1423657/38167092-d89ebeb2-352f-11e8-8a67-7ada2fa1967e.png" width=500/>
 
 ----
 
