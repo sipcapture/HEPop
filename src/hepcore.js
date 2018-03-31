@@ -65,10 +65,10 @@ exports.processHep = function processHep(data,socket) {
 					if (sip.ruri_user) insert.data_header.ruri_user = sip.ruri._user;
 				  }
 				  if ( sip.method ) {
-					insert.data_header.method = sip.method + sip.status_code ? ":"+sip.status_code : "";
+					insert.data_header.method = sip.method;
 				  }
 				  if ( sip.status_code ) {
-					if (sip.method) insert.data_header.method += ":"+ sip.status_code;
+					if (sip.status_code != sip.method) insert.data_header.method += ":"+ sip.status_code;
 					else insert.data_header.method = sip.status_code;
 				  }
 				  if(mm) metrics.increment(metrics.counter("method", { "ip": socket.address || "0.0.0.0" }, insert.data_header.method  ) );

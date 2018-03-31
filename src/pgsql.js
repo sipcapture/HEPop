@@ -96,7 +96,7 @@ exports.insert = function(bulk,id){
 	    return false;
 	}
 
-	log('GOT BULK ID:%s: %s',id, JSON.stringify(bulk));
+	if (config.debug) log('GOT BULK ID:%s: %s',id, JSON.stringify(bulk));
 
 	const insertquery = pgp.helpers.insert(bulk, cs);
 	// executing the query:
