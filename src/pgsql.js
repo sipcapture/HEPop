@@ -103,12 +103,15 @@ exports.insert = function(bulk,id){
 	db.none(insertquery)
 	    .then(data => {
 	        // success;
-		if (config.debug) log('PGP RES: %s',data);
+		if (config.debug && data) log('PGP RES: %s',data);
 		return data;
 	    })
 	    .catch(error => {
 	        // error;
 		if (config.debug) log('PGP ERR: %s',error);
+		if (error.includes('does not exist') {
+			createTable(id);
+		}
 		return error;
 	    });
 };
