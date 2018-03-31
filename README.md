@@ -1,10 +1,10 @@
-<img src="http://i.imgur.com/RSUlFRa.gif" width="120" alt="HEP"><img src="https://d30y9cdsu7xlg0.cloudfront.net/png/30712-200.png" width=50>
 
-# HEPop
+
+# <img src="https://user-images.githubusercontent.com/1423657/38167108-1797647a-3530-11e8-9cef-349459d8fa21.png" width=250>
 NodeJS [HEP](https://hep.sipcapture.org) Server & Switch for [HOMER 7](https://github.com/sipcapture/homer) 
 
 ## WARNING
-This is an unstable prototype under heavy development, please do not use for any purpose other than testing!
+This is an **unstable prototype** under heavy development, please **do not use** for any purpose other than testing!
 
 ### About
 
@@ -45,6 +45,10 @@ See [myconfig.js](https://github.com/sipcapture/HEPop/blob/master/myconfig.js) f
 ```
 $ hepop -c ./myconfig.js
 ```
+
+#### Screenshots
+##### metrics
+![image](https://user-images.githubusercontent.com/1423657/38167092-d89ebeb2-352f-11e8-8a67-7ada2fa1967e.png)
 
 ----
 
