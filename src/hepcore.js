@@ -47,27 +47,30 @@ exports.processHep = function processHep(data,socket) {
 		case 1:
 		  // todo: move to modular function!
 		  try { var sip = sipdec.getSIP(insert.raw);
-
+			if (config.debug) log('%stop:red %s',stringify(sip));
 		  	insert.data_header.protocol = 'SIP';
 		  	if (sip && sip.headers) {
 				  var hdr = sip.headers;
-				  if (hdr['Call-ID'] && hdr['Call-ID'][0]) insert.data_header.callid = hdr['Call-ID'][0].parsed;
-				  if (hdr.CSeq && hdr.CSeq[0]) insert.data_header.cseq = hdr.CSeq[0].parsed.value;
-				  if (hdr.from) {
+				  if (sip.call_id) insert.data_header.callid = sip.call_id;
+				  if (sip.cseq) insert.data_header.cseq = sip.cseq;
+				  if (sip.from) {
 					if (sip.from.uri._user) insert.data_header.from_user = sip.from.uri._user;
-					if (sip.from.parameters.tag) insert.data_header.from_tag = sip.from.parameters.tag;
+					if (sip.from_tag) insert.data_header.from_tag = sip.from_tag;
 				  }
-				  if (hdr.to) {
+				  if (sip.to) {
 					if (sip.to.uri._user) insert.data_header.to_user = sip.to.uri._user;
-					if (sip.to.parameters.tag) insert.data_header.to_tag = sip.to.parameters.tag;
+					if (sip.to_tag) insert.data_header.to_tag = sip.to_tag;
+				  }
+				  if (sip.ruri) {
+					if (sip.ruri_user) insert.data_header.ruri_user = sip.ruri._user;
 				  }
 				  if (sip.method||sip.status) {
-					insert.data_header.method = sip.method||sip.status;
+					insert.data_header.method = sip.method||sip.status+"";
 					if(mm) metrics.increment(metrics.counter("method", { "ip": socket.address || "0.0.0.0" }, insert.data_header.method  ) );
 				  }
-				  if (hdr['User-Agent']) {
-					insert.data_header.uas = hdr['User-Agent'].raw;
-					if (mm) metrics.increment(metrics.counter("uac", { "ip": socket.address || "0.0.0.0" }, hdr['User-Agent'].raw));
+				  if (hdr['User-Agent'][0]) {
+					insert.data_header.uas = hdr['User-Agent'][0].raw;
+					if (mm) metrics.increment(metrics.counter("uac", { "ip": socket.address || "0.0.0.0" }, hdr['User-Agent'][0].raw ));
 				  }
 			  }
 	  		  if (config.debug) {
@@ -82,10 +85,9 @@ exports.processHep = function processHep(data,socket) {
 		  	log('%data:cyan HEP Payload [%s:yellow]', stringify(decoded.payload) );
 		  }
 	  }
-	  if (mm) metrics.increment(metrics.counter("hep", { "ip": socket.address || "0.0.0.0" }, insert.protocol_header.payloadType));
+	  if (mm) metrics.increment(metrics.counter("hep", { "ip": socket.address || "0.0.0.0" }, insert.protocol_header.payloadType ));
 
 	  if (pgp_bucket) buckets[key].push(insert);
-	  //if (pgp_bucket) pgp_bucket.push(insert);
 
 	  if (r_bucket) {
 	     if(decoded['rcinfo.timeSeconds']) decoded['rcinfo.ts'] = r.epochTime(decoded['rcinfo.timeSeconds']);
