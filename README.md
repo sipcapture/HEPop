@@ -1,6 +1,5 @@
 
-
-# <img src="https://d30y9cdsu7xlg0.cloudfront.net/png/30712-200.png" width=80><img src="https://user-images.githubusercontent.com/1423657/38167108-1797647a-3530-11e8-9cef-349459d8fa21.png" width=250>
+# <img src="https://user-images.githubusercontent.com/1423657/38167420-070b1a0c-3535-11e8-8d25-be0f38779b7b.png"/>
 NodeJS [HEP](https://hep.sipcapture.org) Server & Switch for [HOMER 7](https://github.com/sipcapture/homer) 
 
 ## WARNING
