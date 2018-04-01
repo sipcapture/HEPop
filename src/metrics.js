@@ -15,7 +15,7 @@ metrics.events.attach(crow.exportInfluxDb({
 	database: config.metrics.influx.dbName || "homer", 
 	log: logger, 
 	fieldName: config.metrics.influx.fieldName || "value", 
-	expire: config.metrics.influx.expire ||600000 }
+	expire: config.metrics.influx.expire ||300000 }
 ));
 
 exports.metrics = metrics;

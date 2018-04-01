@@ -11,6 +11,22 @@
   "dbName": "hepic",
   "tableName": "hep",
   "db": {
+  	"pgsql":{
+  	  "host": "localhost",
+  	  "port": 5432,
+  	  "user": "homer_user",
+  	  "password": "homer_password"
+  	}
+  },
+  "metrics": {
+	"influx":{
+		"period": 30000,
+		"expire": 300000, 
+		"dbName": "hep",
+		"hostname": "localhost:8086"
+	}
+  },
+  "db_off": {
 	"rethink" : {
 	  "servers":[
 	    {
@@ -21,19 +37,6 @@
 	},
   	"mongodb":{
 	  "url": "mongodb://localhost:27017/homer"
-	},
-  	"pgsql":{
-  	  "host": "localhost", // "localhost" is the default;
-  	  "port": 5432, // 5432 is the default;
-  	  "user": "myUser",
-  	  "password": "myPassword"
-  	}
-  },
-  "metrics": {
-	"influx":{
-		"period": 30000,
-		"dbName": "hep",
-		"hostname": "localhost:8086"
 	}
   },
   "debug": false
