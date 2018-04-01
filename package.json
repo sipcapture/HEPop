@@ -1,6 +1,6 @@
 {
   "name": "HEPop",
-  "version": "1.0.4",
+  "version": "1.0.5",
   "description": "HEP Packet Server & Switch",
   "main": "hepop.js",
   "bin": {
@@ -40,11 +40,11 @@
     "async": "^2.6.0",
     "commander": "^2.13.0",
     "crow-metrics": "^4.1.0",
+    "debug": "^3.1.0",
     "elasticsearch": "^14.1.0",
     "events": "^2.0.0",
     "flat": "^4.0.0",
     "hep-js": "^1.0.13",
-    "knex": "^0.14.3",
     "mongodb": "^3.0.4",
     "npm": "^5.7.1",
     "oh-my-log": "^5.0.1",
