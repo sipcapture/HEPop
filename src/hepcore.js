@@ -42,6 +42,7 @@ exports.processHep = function processHep(data,socket) {
 	  var key = insert.protocol_header.payloadType +"_"+ (insert.protocol_header.transactionType || "default");
 	  if (!buckets[key]) buckets[key] = require('./bucket').pgp_bucket;
 	  buckets[key].set_id("hep_proto_"+key);
+	  var iptags = { "ip": socket.address || "0.0.0.0" };
 
 	  switch(insert.protocol_header.payloadType) {
 		case 1:
@@ -71,11 +72,11 @@ exports.processHep = function processHep(data,socket) {
 					if (sip.status_code != sip.method) insert.data_header.method += ":"+ sip.status_code;
 					else insert.data_header.method = sip.status_code;
 				  }
-				  if(mm) metrics.increment(metrics.counter("method", { "ip": socket.address || "0.0.0.0" }, insert.data_header.method  ) );
+				  if(mm) metrics.increment(metrics.counter("method", iptags, insert.data_header.method  ) );
 
 				  if (hdr['User-Agent'][0]) {
 					insert.data_header.uas = hdr['User-Agent'][0].raw;
-					if (mm) metrics.increment(metrics.counter("uac", { "ip": socket.address || "0.0.0.0" }, hdr['User-Agent'][0].raw ));
+					if (mm) metrics.increment(metrics.counter("uac", iptags, hdr['User-Agent'][0].raw ));
 				  }
 			  }
 	  		  if (config.debug) {
@@ -84,13 +85,32 @@ exports.processHep = function processHep(data,socket) {
 			  }
 		  } catch(e) { log("%data:red %s",e);}
 		  break;
+		case 5:
+		  /* RTCP */
+		  try {
+			  var rtcp = JSON.parse(insert.raw);
+			  if (config.debug){
+				log('%data:cyan HEP Type [%s:blue]', insert.protocol_header.payloadType );
+			  	log('%data:cyan HEP RTCP Payload [%s:yellow]', stringify( rtcp, null, 2) );
+			  }
+			  if (rtcp.report_blocks){
+				var tags = { "ip": socket.address || "0.0.0.0", type: rtcp.type || 0 };
+				for(i=0;i<rtcp.report_blocks.length;i++){
+				  if (mm && rtcp.report_blocks[i].fraction_lost) metrics.setGauge(metrics.gauge("rtcp", tags, "fraction_lost" ), rtcp.report_blocks[i].fraction_lost);
+				  if (mm && rtcp.report_blocks[i].packets_lost) metrics.setGauge(metrics.gauge("rtcp", tags, "packets_lost" ), rtcp.report_blocks[i].packets_lost);
+				  if (mm && rtcp.report_blocks[i].ia_jitter) metrics.setGauge(metrics.gauge("rtcp", tags, "jitter" ), rtcp.report_blocks[i].ia_jitter);
+				  if (mm && rtcp.report_blocks[i].dlsr) metrics.setGauge(metrics.gauge("rtcp", tags, "dlsr" ), rtcp.report_blocks[i].dlsr);
+				}
+			  }
+		  } catch(e) {}
+		  break;
 		default:
 	  	  if (config.debug) {
 			log('%data:cyan HEP Type [%s:blue]', decoded.payloadType );
 		  	log('%data:cyan HEP Payload [%s:yellow]', stringify(decoded.payload) );
 		  }
 	  }
-	  if (mm) metrics.increment(metrics.counter("hep", { "ip": socket.address || "0.0.0.0" }, insert.protocol_header.payloadType ));
+	  if (mm) metrics.increment(metrics.counter("hep", iptags, insert.protocol_header.payloadType ));
 
 	  if (pgp_bucket) buckets[key].push(insert);
 
