@@ -12,10 +12,15 @@ This is an **unstable prototype** under heavy development, please **do not use**
 ### About
 
 *HEPop* is a pure NodeJS Capture Server featuring native HEP3 decoding, bulking and experimental backend support
-
-- [x] Data
+- [x] HEP
+  - TYPES
+    - [x] 1: SIP, RTCP-XR, X-RTP, P-RTP-Stats
+    - [x] 5: RTCP Reports
+    - [x] 34: RTPAGent Reports
+    - [x] 100: JSON Logs
+- [x] Storage
   - SQL
-    - [x] PGSQL
+    - [x] PGSQL (JSON)
   - NOSQL
     - [x] MongoDB
     - [x] RethinkDB
