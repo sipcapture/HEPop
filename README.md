@@ -1,10 +1,13 @@
-<img src="http://i.imgur.com/RSUlFRa.gif" width="120" alt="HEP"><img src="https://d30y9cdsu7xlg0.cloudfront.net/png/30712-200.png" width=50>
 
-# HEPop
-NodeJS [HEP](https://hep.sipcapture.org) Server & Switch for [HOMER 7](https://github.com/sipcapture/homer) 
+# <img src="https://user-images.githubusercontent.com/1423657/38167420-070b1a0c-3535-11e8-8d25-be0f38779b7b.png"/>
+
+**HEPop** is a stand-alone [HEP](https://github.com/sipcapture/hep) Capture Server developed in NodeJS, designed to prototype different backends for [HOMER7](https://github.com/sipcapture/homer) and emitting Metrics to external backends such as InfluxDB and Prometheus.
+
+*TLDR; instant, stand-alone, minimal HOMER Server without Kamailio or OpenSIPS dependency/options.*
+
 
 ## WARNING
-This is an unstable prototype under heavy development, please do not use for any purpose other than testing!
+This is an **unstable prototype** under heavy development, please **do not use** for any purpose other than testing!
 
 ### About
 
@@ -45,6 +48,13 @@ See [myconfig.js](https://github.com/sipcapture/HEPop/blob/master/myconfig.js) f
 ```
 $ hepop -c ./myconfig.js
 ```
+
+#### Screenshots
+##### homer7
+<img src="https://user-images.githubusercontent.com/1423657/38167363-37b30454-3534-11e8-9b18-e06564f3dd3a.png" width=500/>
+
+##### influxdb
+<img src="https://user-images.githubusercontent.com/1423657/38167092-d89ebeb2-352f-11e8-8a67-7ada2fa1967e.png" width=500/>
 
 ----
 
