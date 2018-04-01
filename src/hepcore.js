@@ -134,8 +134,9 @@ exports.processHep = function processHep(data,socket) {
 				log('%data:cyan HEP Type [%s:blue]', insert.protocol_header.payloadType );
 			  	log('%data:cyan HEP RTCP Payload [%s:yellow]', stringify( rtcp, null, 2) );
 			  }
-			  if (mm & rtcp.report_blocks){
-				var tags = { "ip": socket.address || "0.0.0.0", type: rtcp.type || 0 };
+			  if (mm & rtcp.report_blocks.length){
+				var tags = { "ip": socket.address || "0.0.0.0" };
+				if (rtcp.type) tags.type = rtcp.type;
 				for(i=0;i<rtcp.report_blocks.length;i++){
 				  if (rtcp.report_blocks[i].fraction_lost) metrics.setGauge(metrics.gauge("rtcp", tags, "fraction_lost" ), rtcp.report_blocks[i].fraction_lost);
 				  if (rtcp.report_blocks[i].packets_lost) metrics.setGauge(metrics.gauge("rtcp", tags, "packets_lost" ), rtcp.report_blocks[i].packets_lost);
@@ -160,7 +161,6 @@ exports.processHep = function processHep(data,socket) {
 				metrics.setGauge(metrics.gauge("rtp", tags, "PACKET_LOSS" ), rtp.PACKET_LOSS);
 				metrics.setGauge(metrics.gauge("rtp", tags, "JITTER" ), rtp.JITTER);
 				metrics.setGauge(metrics.gauge("rtp", tags, "MOS" ), rtp.MOS);
-				log('%data:cyan DEBUG! SENT RTP STATS!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!');
 			  }
 		  } catch(e) { log("%data:red RTPAGENTSTATS ERROR: %s",e); }
 		  break;
