@@ -26,6 +26,10 @@ This is an **unstable prototype** under heavy development, please **do not use**
     - [x] Elasticsearch
 - [x] Metrics
   - [x] InfluxDB
+    - [x] SIP methods, SIP responses
+    - [x] RTCP, RTCPXR, X-RTP-Stat
+    - [x] RTPAgent Stats
+    - [x] HEP Stats
   - [ ] Prometheus
 
 
