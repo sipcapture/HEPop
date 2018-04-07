@@ -42,19 +42,19 @@ exports.processJson = function(data,socket) {
 		case 32:
 		  if (data.event.media) tags.medium = data.event.media;
 		  if(data.event.receiving) {
-		    metrics.setGauge(metrics.gauge("janus", tags, 'Receiving') );
+		    metrics.increment(metrics.counter("janus", tags, 'Receiving') );
 		  } else if(data.event.base) {
-		    metrics.setGauge(metrics.gauge("janus", tags, 'LSR' ), data.event["lsr"] );
-		    metrics.setGauge(metrics.gauge("janus", tags, 'lost' ), data.event["lost"] || 0 );
-		    metrics.setGauge(metrics.gauge("janus", tags, 'lost-by-remote' ), data.event["lost-by-remote"] || 0 );
-		    metrics.setGauge(metrics.gauge("janus", tags, 'jitter-local' ), data.event["jitter-local"] || 0 );
-		    metrics.setGauge(metrics.gauge("janus", tags, 'jitter-remote' ), data.event["jitter-remote"] || 0);
-	            metrics.setGauge(metrics.gauge("janus", tags, 'packets-sent' ), data.event["packets-sent"] || 0);
-		    metrics.setGauge(metrics.gauge("janus", tags, 'packets-received' ), data.event["packets-sent"] || 0);
-		    metrics.setGauge(metrics.gauge("janus", tags, 'bytes-sent' ), data.event["bytes-sent"] || 0);
-		    metrics.setGauge(metrics.gauge("janus", tags, 'bytes-received' ), data.event["bytes-received"]|| 0 );
-		    metrics.setGauge(metrics.gauge("janus", tags, 'nacks-sent' ), data.event["nacks-sent"] || 0);
-		    metrics.setGauge(metrics.gauge("janus", tags, 'nacks-received' ), data.event["nacks-received"] || 0);
+		    metrics.increment(metrics.counter("janus", tags, 'LSR' ), data.event["lsr"] );
+		    metrics.increment(metrics.counter("janus", tags, 'lost' ), data.event["lost"] || 0 );
+		    metrics.increment(metrics.counter("janus", tags, 'lost-by-remote' ), data.event["lost-by-remote"] || 0 );
+		    metrics.increment(metrics.counter("janus", tags, 'jitter-local' ), data.event["jitter-local"] || 0 );
+		    metrics.increment(metrics.counter("janus", tags, 'jitter-remote' ), data.event["jitter-remote"] || 0);
+	            metrics.increment(metrics.counter("janus", tags, 'packets-sent' ), data.event["packets-sent"] || 0);
+		    metrics.increment(metrics.counter("janus", tags, 'packets-received' ), data.event["packets-sent"] || 0);
+		    metrics.increment(metrics.counter("janus", tags, 'bytes-sent' ), data.event["bytes-sent"] || 0);
+		    metrics.increment(metrics.counter("janus", tags, 'bytes-received' ), data.event["bytes-received"]|| 0 );
+		    metrics.increment(metrics.counter("janus", tags, 'nacks-sent' ), data.event["nacks-sent"] || 0);
+		    metrics.increment(metrics.counter("janus", tags, 'nacks-received' ), data.event["nacks-received"] || 0);
 		  }
 		break;
 	    }
@@ -64,17 +64,17 @@ exports.processJson = function(data,socket) {
 		var tags = { roomId: data.roomId, peerName: data.peerName, producerId: data.producerId };
 		    if (data.stats[0].mediaType) tags.media = data.stats[0].mediaType;
 		    if (data.stats[0].type) tags.media = data.stats[0].type;
-		    metrics.setGauge(metrics.gauge("mediasoup", tags, 'bitrate' ), data.stats[0]["bitrate"] );
-		    metrics.setGauge(metrics.gauge("mediasoup", tags, 'byteCount' ), data.stats[0]["byteCount"] );
-		    metrics.setGauge(metrics.gauge("mediasoup", tags, 'firCount' ), data.stats[0]["firCount"] );
-		    metrics.setGauge(metrics.gauge("mediasoup", tags, 'fractionLost' ), data.stats[0]["fractionLost"] );
-		    metrics.setGauge(metrics.gauge("mediasoup", tags, 'jitter' ), data.stats[0]["jitter"] );
-	            metrics.setGauge(metrics.gauge("mediasoup", tags, 'nackCount' ), data.stats[0]["nackCount"] );
-		    metrics.setGauge(metrics.gauge("mediasoup", tags, 'packetCount' ), data.stats[0]["packetCount"] );
-		    metrics.setGauge(metrics.gauge("mediasoup", tags, 'packetsDiscarded' ), data.stats[0]["packetsDiscarded"] );
-		    metrics.setGauge(metrics.gauge("mediasoup", tags, 'packetsLost' ), data.stats[0]["packetsLost"] );
-		    metrics.setGauge(metrics.gauge("mediasoup", tags, 'packetsRepaired' ), data.stats[0]["packetsRepaired"] );
-		    metrics.setGauge(metrics.gauge("mediasoup", tags, 'nacks-received' ), data.stats[0]["nacks-received"] );
+		    metrics.increment(metrics.counter("mediasoup", tags, 'bitrate' ), data.stats[0]["bitrate"] );
+		    metrics.increment(metrics.counter("mediasoup", tags, 'byteCount' ), data.stats[0]["byteCount"] );
+		    metrics.increment(metrics.counter("mediasoup", tags, 'firCount' ), data.stats[0]["firCount"] );
+		    metrics.increment(metrics.counter("mediasoup", tags, 'fractionLost' ), data.stats[0]["fractionLost"] );
+		    metrics.increment(metrics.counter("mediasoup", tags, 'jitter' ), data.stats[0]["jitter"] );
+	            metrics.increment(metrics.counter("mediasoup", tags, 'nackCount' ), data.stats[0]["nackCount"] );
+		    metrics.increment(metrics.counter("mediasoup", tags, 'packetCount' ), data.stats[0]["packetCount"] );
+		    metrics.increment(metrics.counter("mediasoup", tags, 'packetsDiscarded' ), data.stats[0]["packetsDiscarded"] );
+		    metrics.increment(metrics.counter("mediasoup", tags, 'packetsLost' ), data.stats[0]["packetsLost"] );
+		    metrics.increment(metrics.counter("mediasoup", tags, 'packetsRepaired' ), data.stats[0]["packetsRepaired"] );
+		    metrics.increment(metrics.counter("mediasoup", tags, 'nacks-received' ), data.stats[0]["nacks-received"] );
 	  }
 			  
 	  //if (r_bucket) r_bucket.push(JSON.parse(dec));
