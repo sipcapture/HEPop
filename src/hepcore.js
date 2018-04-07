@@ -85,15 +85,15 @@ exports.processHep = function processHep(data,socket) {
 					var temp;
 					if (sip.headers.Packetloss){
 						temp=parsip.getVQ(sip.headers.Packetloss[0].raw)['NLR'];
-						if (mm) metrics.increment(metrics.gauge("rtcpxr", iptags, 'NLR' ), temp );
+						if (mm) metrics.setGauge(metrics.gauge("rtcpxr", iptags, 'NLR' ), temp );
 					}
 					if (sip.headers.Delay){
 						temp=parsip.getVQ(sip.headers.Delay[0].raw)['IAJ'];
-						if (mm) metrics.increment(metrics.gauge("rtcpxr", iptags, 'IAJ' ), temp );
+						if (mm) metrics.setGauge(metrics.gauge("rtcpxr", iptags, 'IAJ' ), temp );
 					}
 					if (sip.headers.Qualityest){
 						temp=parsip.getVQ(sip.headers.Qualityest[0].raw)['MOSCQ'];
-						if (mm) metrics.increment(metrics.gauge("rtcpxr", iptags, 'MOSCQ' ), temp );
+						if (mm) metrics.setGauge(metrics.gauge("rtcpxr", iptags, 'MOSCQ' ), temp );
 					}
 				    }
 				  } catch(e) { log('%s:red', e); }
@@ -103,7 +103,7 @@ exports.processHep = function processHep(data,socket) {
 					try {
 						var xrtp = parsip.getVQ(hdr['X-Rtp-Stat'][0].raw);
 						Object.keys(xrtp).forEach(function(key){
-							if (mm) metrics.increment(metrics.gauge("xrtp", iptags, key ), xrtp[key] );
+							if (mm) metrics.setGauge(metrics.gauge("xrtp", iptags, key ), xrtp[key] );
 						})
 					} catch(e) { log(e); }
 				    }
@@ -114,7 +114,7 @@ exports.processHep = function processHep(data,socket) {
 					try {
 						var prtp = parsip.getVQ(hdr['P-Rtp-Stats'][0].raw);
 						Object.keys(prtp).forEach(function(key){
-							if (mm) metrics.increment(metrics.gauge("xrtp", iptags, key ), prtp[key] );
+							if (mm) metrics.setGauge(metrics.gauge("xrtp", iptags, key ), prtp[key] );
 						})
 					} catch(e) { log(e); }
 				    }
