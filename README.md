@@ -17,6 +17,13 @@ This is an **unstable prototype** under heavy development, please **do not use**
     - [x] 5: RTCP Reports
     - [x] 34: RTPAGent Reports
     - [x] 100: JSON Logs
+- [x] RTC
+  - JANUS
+    - [x] 32: Media Statistics
+  - MEDIASOUP
+    - [x] producer.stats: Media Statistics
+  
+#### Backend
 - [x] Storage
   - SQL
     - [x] PGSQL (JSON)
@@ -30,6 +37,7 @@ This is an **unstable prototype** under heavy development, please **do not use**
     - [x] RTCP, RTCPXR, X-RTP-Stat
     - [x] RTPAgent Stats
     - [x] HEP Stats
+    - [x] RTC Stats
   - [ ] Prometheus
 
 
