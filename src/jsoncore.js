@@ -3,10 +3,6 @@ const stringify = require('safe-stable-stringify');
 const flatten = require('flat')
 const config = require('./config').getConfig();
 
-if (config.db.pgsql) { const pgp_bucket = require('./bucket').pgp_bucket; }
-if (config.db.rethink) { const r_bucket = require('./bucket').bucket; const r = require('./bucket').r; }
-
-
 const metrics = require('./metrics').metrics;
 var mm = true;
 
@@ -26,7 +22,7 @@ exports.processJson = function(data,socket) {
 	  data = JSON.parse(data.toString());
   	  if (config.debug) log('%data:cyan JSON Data [%s:blue][%s:green]', stringify(data) );
 	  // DB Schema
-	  var insert = { "protocol_header": socket,
+	  var insert = { "protocol_header": socket._peername || {},
 			 "data_header": {},
 			 "raw": data || ""
 		};
@@ -87,7 +83,7 @@ exports.processJson = function(data,socket) {
 	  insert.data_header = tags;
 
 	  //if (r_bucket) r_bucket.push(JSON.parse(dec));
-	  if (pgp_bucket) buckets[key].push(insert);
+	  if (buckets[key]) buckets[key].push(insert);
 
 
 	} catch(err) { log('%error:red %s', err.toString() ) }
