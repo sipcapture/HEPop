@@ -11,36 +11,25 @@ This is an **unstable prototype** under heavy development, please **do not use**
 
 ### Features
 
-- [x] HEP
-  - TYPES
-    - [x] 1: SIP, RTCP-XR, X-RTP, P-RTP-Stats
-    - [x] 5: RTCP Reports
-    - [x] 34: RTPAGent Reports
-    - [x] 100: JSON Logs
-- [x] RTC
-  - JANUS
-    - [x] 32: Media Statistics
-  - MEDIASOUP
-    - [x] producer.stats
-    - [x] transport.stats
-  
-#### Backend
-- [x] Storage
-  - SQL
-    - [x] PGSQL (JSON)
-  - NOSQL
-    - [x] MongoDB
-    - [x] RethinkDB
-    - [x] Elasticsearch
-- [x] Metrics
-  - [x] InfluxDB
-    - [x] SIP methods, SIP responses
-    - [x] RTCP, RTCPXR, X-RTP-Stat
-    - [x] RTPAgent Stats
-    - [x] HEP Stats
-    - [x] RTC Stats
-  - [ ] Prometheus
+| PROTO     | ID              | DESCRIPTION        | STORE      | STATS                        |
+|-----------|-----------------|--------------------|------------|------------------------------|
+| HEP       | 1               | SIP                | JSON       | SIP methods, SIP responses   |
+|           | 5               | RTCP Reports       | Timeseries | RTCP, RTCPXR, X-RTP-Stat     |
+|           | 34              | RTP Agent Report   | Timeseries | RTP, RTCP Stats              |
+|           | 100             | JSON Logs          | JSON       | String, JSON Object          |
+|           | 1000+           | Dynamic Types      | JSON       |                              |
+| JANUS     | any             | Custom JSON Fields | JSON       | session_id, handle_id, event |
+|           | 34              | Media Stats        | Timeseries | RTCP Statistics              |
+| MEDIASOUP | any             | Custom JSON Fields | JSON       | roomId, peerName, producerId |
+|           | producer.stats  | Media Stats        | Timeseries | RTCP Statistics              |
+|           | transport.stats | Transport Stats    | Timeseries | IP SRC/DST, Bytes in/out     |
+|           |                 |                    |            |                              |
 
+#### Supported Stores
+| TYPE       |               |
+|------------|-----------------|
+| JSON       | Postgres, RethinkDB, MongoDB, Elasticsearch |
+| Timeseries | InfluxDB, Prometheus |
 
 ### Usage
 ```
