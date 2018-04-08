@@ -36,6 +36,8 @@ exports.processJson = function(data,socket) {
 	  if (data.type && data.event){
 	    // Janus Media Reports
 	    if (config.debug) log('%data:green JANUS REPORT [%s]',stringify(data) );
+	    /* Static SID from session_id */
+	    insert.sid = data.session_id;
 	    tags = { session: data.session_id, handle: data.handle_id };
 	    if (data.type) tags.type = data.type;
 
@@ -63,6 +65,8 @@ exports.processJson = function(data,socket) {
 
 	  } else if (data.event && data.event == 'producer.stats' &&  data.stats){
 		// MediaSoup Media Reports
+		/* Hybrid SID */
+		insert.sid = data.producerId+"_"+data.peerName;
 	        if (config.debug) log('%data:green MEDIASOUP PRODUCER REPORT [%s]',stringify(data) );
 		tags = { roomId: data.roomId, peerName: data.peerName, producerId: data.producerId, event: data.event };
 		    if (data.stats[0].mediaType) tags.media = data.stats[0].mediaType;
@@ -86,6 +90,8 @@ exports.processJson = function(data,socket) {
 
 	  } else if (data.event && data.event == 'transport.stats' &&  data.stats){
 		// MediaSoup Media Reports
+		/* Hybrid SID */
+		insert.sid = data.producerId+"_"+data.peerName;
 	        if (config.debug) log('%data:green MEDIASOUP TRANSPORT REPORT [%s]',stringify(data) );
 		tags = { roomId: data.roomId, peerName: data.peerName, producerId: data.producerId, event: data.event };
 		    if (data.stats[0].type) tags.type = data.stats[0].type;

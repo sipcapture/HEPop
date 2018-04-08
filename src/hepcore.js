@@ -31,10 +31,14 @@ exports.processHep = function processHep(data,socket) {
 	  try {
 		var decoded = hepjs.decapsulate(data);
 		//decoded = flatten(decoded);
-		var insert = { "protocol_header": decoded.rcinfo,
+		var insert = {
+				"protocol_header": decoded.rcinfo,
 				"data_header": {},
 				"raw": decoded.payload || ""
 		};
+		/* HEP Correlation ID as SID */
+		if (decoded.rcinfo.correlation_id) insert.sid = decoded.rcinfo.correlation_id;
+
 
 	  } catch(e) { log('%s:red',e); }
 
@@ -52,7 +56,11 @@ exports.processHep = function processHep(data,socket) {
 		  	insert.data_header.protocol = 'SIP';
 		  	if (sip && sip.headers) {
 				  var hdr = sip.headers;
-				  if (sip.call_id) insert.data_header.callid = sip.call_id;
+				  if (sip.call_id) {
+					insert.data_header.callid = sip.call_id;
+					/* SID for SIP is always Call-ID */
+					if (!insert.sid) insert.sid = sip.call_id;
+				  }
 				  if (sip.cseq) insert.data_header.cseq = sip.cseq;
 				  if (sip.from) {
 					if (sip.from.uri._user) insert.data_header.from_user = sip.from.uri._user;

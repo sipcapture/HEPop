@@ -41,8 +41,8 @@ if(!config.db.pgsql) {
 
 
 var createTable = function(tableName){
-    var doTable = "CREATE TABLE IF NOT EXISTS "+tableName+" " 
-		+ "(id BIGSERIAL NOT NULL, gid smallint DEFAULT '0', create_date timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,"
+    var doTable = "CREATE TABLE IF NOT EXISTS "+tableName+" "
+		+ "(id BIGSERIAL NOT NULL, gid smallint DEFAULT '0', sid varchar(256), create_date timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,"
  		+ "protocol_header json NOT NULL, data_header jsonb NOT NULL, raw varchar(2000) NOT NULL, PRIMARY KEY (id,create_date) );"
     prepare(doTable);
 }
@@ -62,7 +62,7 @@ try {
 
 
 if (!config.db.pgsql.schema){
-  var tableSchema = config.db.pgsql.schema || ['protocol_header','data_header','raw'];
+  var tableSchema = config.db.pgsql.schema || ['sid', 'protocol_header','data_header','raw'];
   var tableName = {table: config.tableName || 'homer_data' };
   cs = new pgp.helpers.ColumnSet(tableSchema, tableName);
 }
@@ -84,7 +84,7 @@ var tables = [];
 // => INSERT INTO "hepic"("col_a","col_b") VALUES('a1','b1'),('a2','b2')
 exports.insert = function(bulk,id){
 	if (id && !tables[id]) {
-	    var tableSchema = config.db.pgsql.schema || ['protocol_header','data_header','raw'];
+	    var tableSchema = config.db.pgsql.schema || ['sid', 'protocol_header','data_header','raw'];
 	    var tableName = {table: id };
 	    cs = new pgp.helpers.ColumnSet(tableSchema, tableName);
 	    tables[id] = cs;
