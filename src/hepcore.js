@@ -42,6 +42,7 @@ exports.processHep = function processHep(data,socket) {
 	  var key = insert.protocol_header.payloadType +"_"+ (insert.protocol_header.transactionType || "default");
 	  if (!buckets[key]) buckets[key] = require('./bucket').pgp_bucket;
 	  buckets[key].set_id("hep_proto_"+key);
+	  var iptags = { "ip": socket.address || "0.0.0.0" };
 
 	  switch(insert.protocol_header.payloadType) {
 		case 1:
@@ -71,18 +72,97 @@ exports.processHep = function processHep(data,socket) {
 					if (sip.status_code != sip.method) insert.data_header.method += ":"+ sip.status_code;
 					else insert.data_header.method = sip.status_code;
 				  }
-				  if(mm) metrics.increment(metrics.counter("method", { "ip": socket.address || "0.0.0.0" }, insert.data_header.method  ) );
+				  if(mm) metrics.increment(metrics.counter("method", iptags, insert.data_header.method  ) );
 
-				  if (hdr['User-Agent'][0]) {
+				  if (hdr['User-Agent'] && hdr['User-Agent'][0]) {
 					insert.data_header.uas = hdr['User-Agent'][0].raw;
-					if (mm) metrics.increment(metrics.counter("uac", { "ip": socket.address || "0.0.0.0" }, hdr['User-Agent'][0].raw ));
+					if (mm) metrics.increment(metrics.counter("uac", iptags, hdr['User-Agent'][0].raw ));
 				  }
+
+				  /* PUBLISH RTCPXR-VQ */
+				  try {
+				    if ((sip.headers['Content-Type'] && sip.headers['Content-Type'][0]) && sip.headers['Content-Type'][0].raw == 'application/vq-rtcpxr'){
+					var temp;
+					if (sip.headers.Packetloss){
+						temp=parsip.getVQ(sip.headers.Packetloss[0].raw)['NLR'];
+						if (mm) metrics.increment(metrics.counter("rtcpxr", iptags, 'NLR' ), temp );
+					}
+					if (sip.headers.Delay){
+						temp=parsip.getVQ(sip.headers.Delay[0].raw)['IAJ'];
+						if (mm) metrics.increment(metrics.counter("rtcpxr", iptags, 'IAJ' ), temp );
+					}
+					if (sip.headers.Qualityest){
+						temp=parsip.getVQ(sip.headers.Qualityest[0].raw)['MOSCQ'];
+						if (mm) metrics.increment(metrics.counter("rtcpxr", iptags, 'MOSCQ' ), temp );
+					}
+				    }
+				  } catch(e) { log('%s:red', e); }
+				  /* X-RTP-STAT */
+				  try {
+				    if (hdr['X-Rtp-Stat'] && hdr['X-Rtp-Stat'][0]) {
+					try {
+						var xrtp = parsip.getVQ(hdr['X-Rtp-Stat'][0].raw);
+						Object.keys(xrtp).forEach(function(key){
+							if (mm) metrics.increment(metrics.counter("xrtp", iptags, key ), xrtp[key] );
+						})
+					} catch(e) { log(e); }
+				    }
+				  } catch(e) { log('%s:red', e); }
+				  /* P-RTP-STATS */
+				  try {
+				    if (hdr['P-Rtp-Stats'] && hdr['P-Rtp-Stats'][0]) {
+					try {
+						var prtp = parsip.getVQ(hdr['P-Rtp-Stats'][0].raw);
+						Object.keys(prtp).forEach(function(key){
+							if (mm) metrics.increment(metrics.counter("xrtp", iptags, key ), prtp[key] );
+						})
+					} catch(e) { log(e); }
+				    }
+				  } catch(e) { log('%s:red', e); }
 			  }
 	  		  if (config.debug) {
 				log('%data:cyan HEP Type [%s:blue]', 'SIP' );
-			  	log('%data:cyan HEP Payload [%s:yellow]', stringify( insert.payload, null, 2) );
+			  	log('%data:cyan HEP Payload [%s:yellow]', stringify( insert.data_header, null, 2) );
 			  }
 		  } catch(e) { log("%data:red %s",e);}
+		  break;
+		case 5:
+		  /* RTCP */
+		  try {
+			  var rtcp = JSON.parse(insert.raw);
+			  if (config.debug){
+				log('%data:cyan HEP Type [%s:blue]', insert.protocol_header.payloadType );
+			  	log('%data:cyan HEP RTCP Payload [%s:yellow]', stringify( rtcp, null, 2) );
+			  }
+			  if (mm & rtcp.report_blocks.length){
+				var tags = { "ip": socket.address || "0.0.0.0" };
+				if (rtcp.type) tags.type = rtcp.type;
+				for(i=0;i<rtcp.report_blocks.length;i++){
+				  if (rtcp.report_blocks[i].fraction_lost) metrics.increment(metrics.counter("rtcp", tags, "fraction_lost" ), rtcp.report_blocks[i].fraction_lost);
+				  if (rtcp.report_blocks[i].packets_lost) metrics.increment(metrics.counter("rtcp", tags, "packets_lost" ), rtcp.report_blocks[i].packets_lost);
+				  if (rtcp.report_blocks[i].ia_jitter) metrics.increment(metrics.counter("rtcp", tags, "jitter" ), rtcp.report_blocks[i].ia_jitter);
+				  if (rtcp.report_blocks[i].dlsr) metrics.increment(metrics.counter("rtcp", tags, "dlsr" ), rtcp.report_blocks[i].dlsr);
+				}
+			  }
+		  } catch(e) { log("%data:red %s",e); }
+		  break;
+		case 34:
+		  /* RTPAGENT */
+		  try {
+			  var rtp = JSON.parse(insert.raw);
+			  if (config.debug){
+				log('%data:cyan HEP Type [%s:blue]', insert.protocol_header.payloadType );
+			  	log('%data:cyan HEP RTPAGENT Payload [%s:yellow]', stringify( rtp, null, 2) );
+			  }
+			  if (mm){
+				var tags = { "ip": socket.address || "0.0.0.0"};
+				if (rtp.TYPE) tags.type = rtp.TYPE;
+				if (rtp.CODEC_NAME) tags.codec = rtp.CODEC_NAME;
+				metrics.increment(metrics.counter("rtp", tags, "PACKET_LOSS" ), rtp.PACKET_LOSS);
+				metrics.increment(metrics.counter("rtp", tags, "JITTER" ), rtp.JITTER);
+				metrics.increment(metrics.counter("rtp", tags, "MOS" ), rtp.MOS);
+			  }
+		  } catch(e) { log("%data:red RTPAGENTSTATS ERROR: %s",e); }
 		  break;
 		default:
 	  	  if (config.debug) {
@@ -90,7 +170,7 @@ exports.processHep = function processHep(data,socket) {
 		  	log('%data:cyan HEP Payload [%s:yellow]', stringify(decoded.payload) );
 		  }
 	  }
-	  if (mm) metrics.increment(metrics.counter("hep", { "ip": socket.address || "0.0.0.0" }, insert.protocol_header.payloadType ));
+	  if (mm) metrics.increment(metrics.counter("hep", iptags, insert.protocol_header.payloadType ));
 
 	  if (pgp_bucket) buckets[key].push(insert);
 

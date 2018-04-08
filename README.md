@@ -9,19 +9,35 @@
 ## WARNING
 This is an **unstable prototype** under heavy development, please **do not use** for any purpose other than testing!
 
-### About
+### Features
 
-*HEPop* is a pure NodeJS Capture Server featuring native HEP3 decoding, bulking and experimental backend support
-
-- [x] Data
+- [x] HEP
+  - TYPES
+    - [x] 1: SIP, RTCP-XR, X-RTP, P-RTP-Stats
+    - [x] 5: RTCP Reports
+    - [x] 34: RTPAGent Reports
+    - [x] 100: JSON Logs
+- [x] RTC
+  - JANUS
+    - [x] 32: Media Statistics
+  - MEDIASOUP
+    - [x] producer.stats: Media Statistics
+  
+#### Backend
+- [x] Storage
   - SQL
-    - [x] PGSQL
+    - [x] PGSQL (JSON)
   - NOSQL
     - [x] MongoDB
     - [x] RethinkDB
     - [x] Elasticsearch
 - [x] Metrics
   - [x] InfluxDB
+    - [x] SIP methods, SIP responses
+    - [x] RTCP, RTCPXR, X-RTP-Stat
+    - [x] RTPAgent Stats
+    - [x] HEP Stats
+    - [x] RTC Stats
   - [ ] Prometheus
 
 
@@ -51,7 +67,7 @@ $ hepop -c ./myconfig.js
 
 #### Screenshots
 ##### homer7
-<img src="https://user-images.githubusercontent.com/1423657/38167363-37b30454-3534-11e8-9b18-e06564f3dd3a.png" width=500/>
+<img src="https://user-images.githubusercontent.com/1423657/38173155-4f88f73e-35b9-11e8-86e1-d1d2e3013759.png" width=500/>
 
 ##### influxdb
 <img src="https://user-images.githubusercontent.com/1423657/38167092-d89ebeb2-352f-11e8-8a67-7ada2fa1967e.png" width=500/>
