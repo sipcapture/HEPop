@@ -59,24 +59,49 @@ exports.processJson = function(data,socket) {
 		  }
 		break;
 	    }
+	    tags.source = "janus";
 
 	  } else if (data.event && data.event == 'producer.stats' &&  data.stats){
 		// MediaSoup Media Reports
-	        if (config.debug) log('%data:green MEDIASOUP REPORT [%s]',stringify(data) );
-		tags = { roomId: data.roomId, peerName: data.peerName, producerId: data.producerId };
+	        if (config.debug) log('%data:green MEDIASOUP PRODUCER REPORT [%s]',stringify(data) );
+		tags = { roomId: data.roomId, peerName: data.peerName, producerId: data.producerId, event: data.event };
 		    if (data.stats[0].mediaType) tags.media = data.stats[0].mediaType;
+		    if (data.stats[0].mediaType) tags.media = data.stats[0].mimeType;
 		    if (data.stats[0].type) tags.type = data.stats[0].type;
-		    metrics.increment(metrics.counter("mediasoup", tags, 'bitrate' ), data.stats[0]["bitrate"] );
-		    metrics.increment(metrics.counter("mediasoup", tags, 'byteCount' ), data.stats[0]["byteCount"] );
-		    metrics.increment(metrics.counter("mediasoup", tags, 'firCount' ), data.stats[0]["firCount"] );
-		    metrics.increment(metrics.counter("mediasoup", tags, 'fractionLost' ), data.stats[0]["fractionLost"] );
-		    metrics.increment(metrics.counter("mediasoup", tags, 'jitter' ), data.stats[0]["jitter"] );
-	            metrics.increment(metrics.counter("mediasoup", tags, 'nackCount' ), data.stats[0]["nackCount"] );
-		    metrics.increment(metrics.counter("mediasoup", tags, 'packetCount' ), data.stats[0]["packetCount"] );
-		    metrics.increment(metrics.counter("mediasoup", tags, 'packetsDiscarded' ), data.stats[0]["packetsDiscarded"] );
-		    metrics.increment(metrics.counter("mediasoup", tags, 'packetsLost' ), data.stats[0]["packetsLost"] );
-		    metrics.increment(metrics.counter("mediasoup", tags, 'packetsRepaired' ), data.stats[0]["packetsRepaired"] );
-		    metrics.increment(metrics.counter("mediasoup", tags, 'nacks-received' ), data.stats[0]["nacks-received"] );
+		    metrics.increment(metrics.counter("mediasoup_producer", tags, 'bitrate' ), data.stats[0]["bitrate"] );
+		    metrics.increment(metrics.counter("mediasoup_producer", tags, 'byteCount' ), data.stats[0]["byteCount"] );
+		    metrics.increment(metrics.counter("mediasoup_producer", tags, 'firCount' ), data.stats[0]["firCount"] );
+		    metrics.increment(metrics.counter("mediasoup_producer", tags, 'fractionLost' ), data.stats[0]["fractionLost"] );
+		    metrics.increment(metrics.counter("mediasoup_producer", tags, 'jitter' ), data.stats[0]["jitter"] );
+	            metrics.increment(metrics.counter("mediasoup_producer", tags, 'nackCount' ), data.stats[0]["nackCount"] );
+		    metrics.increment(metrics.counter("mediasoup_producer", tags, 'packetCount' ), data.stats[0]["packetCount"] );
+		    metrics.increment(metrics.counter("mediasoup_producer", tags, 'packetsDiscarded' ), data.stats[0]["packetsDiscarded"] );
+		    metrics.increment(metrics.counter("mediasoup_producer", tags, 'packetsLost' ), data.stats[0]["packetsLost"] );
+		    metrics.increment(metrics.counter("mediasoup_producer", tags, 'packetsRepaired' ), data.stats[0]["packetsRepaired"] );
+		    metrics.increment(metrics.counter("mediasoup_producer", tags, 'nacks-received' ), data.stats[0]["nacks-received"] );
+		    metrics.increment(metrics.counter("mediasoup_producer", tags, 'pliCount' ), data.stats[0]["pliCount"] );
+		    metrics.increment(metrics.counter("mediasoup_producer", tags, 'sliCount' ), data.stats[0]["sliCount"] );
+		/* Custom Fields */
+		if (data.transportId) tags.transportId = data.transportId;
+
+	  } else if (data.event && data.event == 'transport.stats' &&  data.stats){
+		// MediaSoup Media Reports
+	        if (config.debug) log('%data:green MEDIASOUP TRANSPORT REPORT [%s]',stringify(data) );
+		tags = { roomId: data.roomId, peerName: data.peerName, producerId: data.producerId, event: data.event };
+		    if (data.stats[0].type) tags.type = data.stats[0].type;
+		    /* IP Fields */
+	            if (data.stats[0].iceSelectedTuple) {
+			/* correlate to stats via LRU? */
+			insert.proto_header = data.stats[0].iceSelectedTuple;
+		        //tags.source_ = data.stats[0].iceSelectedTuple.localIP+":"+data.stats[0].iceSelectedTuple.localPort;
+		        //tags.source = data.stats[0].iceSelectedTuple.remoteIP+":"+data.stats[0].iceSelectedTuple.remotePort;
+		    }
+		    metrics.increment(metrics.counter("mediasoup_transport", tags, 'bytesReceived' ), data.stats[0]["bytesReceived"] );
+		    metrics.increment(metrics.counter("mediasoup_transport", tags, 'bytesSent' ), data.stats[0]["bytesSent"] );
+
+		/* Custom Fields */
+	        if (data.stats[0].dtlsState) tags.media = data.stats[0].dtlsState;
+	        tags.source = "mediasoup";
 	  }
 
 	  // Use Tags for Protocol Search
