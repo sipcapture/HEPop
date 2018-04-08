@@ -1,7 +1,7 @@
 
 # <img src="https://user-images.githubusercontent.com/1423657/38167420-070b1a0c-3535-11e8-8d25-be0f38779b7b.png"/>
 
-**HEPop** is a stand-alone [HEP](https://github.com/sipcapture/hep) Capture Server developed in NodeJS, designed to prototype different backends for [HOMER7](https://github.com/sipcapture/homer) and emitting Metrics to external backends such as InfluxDB and Prometheus.
+**HEPop** is a prototype stand-alone [HEP](https://github.com/sipcapture/hep) Capture Server designed for [HOMER7](https://github.com/sipcapture/homer) capable of emitting indexed datasets and tagged timeseries to multiple backends in bulks. HEPop is developed using `NodeJS` and distributed using `npm`.
 
 *TLDR; instant, stand-alone, minimal HOMER Server without Kamailio or OpenSIPS dependency/options.*
 
