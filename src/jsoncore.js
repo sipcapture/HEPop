@@ -1,10 +1,11 @@
 const log = require('./logger');
-const r_bucket = require('./bucket').bucket;
-const pgp_bucket = require('./bucket').pgp_bucket;
-const r = require('./bucket').r;
 const stringify = require('safe-stable-stringify');
 const flatten = require('flat')
 const config = require('./config').getConfig();
+
+if (config.db.pgsql) { const pgp_bucket = require('./bucket').pgp_bucket; }
+if (config.db.rethink) { const r_bucket = require('./bucket').bucket; const r = require('./bucket').r; }
+
 
 const metrics = require('./metrics').metrics;
 var mm = true;
@@ -22,22 +23,26 @@ exports.processJson = function(data,socket) {
 	try {
   	  //if (config.debug) log('%data:cyan JSON Net [%s:blue][%s:green]', stringify(socket) );
 	  if (!data) return;
-	  data = JSON.parse(data.toString());		
+	  data = JSON.parse(data.toString());
   	  if (config.debug) log('%data:cyan JSON Data [%s:blue][%s:green]', stringify(data) );
 	  // DB Schema
 	  var insert = { "protocol_header": socket,
 			 "data_header": {},
 			 "raw": data || ""
-		};	
+		};
+	  var tags = {};
 	  // Create protocol bucket
-	  var key = 127 + "_"+ (insert.protocol_header.type || "default");
-	  if (!buckets[key]) buckets[key] = require('./bucket').pgp_bucket;
-	  buckets[key].set_id("hep_proto_"+key);	
-		
-	  if (data.type && data.event){	
+	  var key = 1000 + "_"+ (insert.protocol_header.type || "default");
+	  if (config.db.pgsql && !buckets[key] ) { buckets[key] = require('./bucket').pgp_bucket; }
+	  // else if (config.db.rethink &&!buckets[key]) { const r_bucket = require('./bucket').bucket; const r = require('./bucket').r; }
+	  buckets[key].set_id("hep_proto_"+key);
+
+	  if (data.type && data.event){
 	    // Janus Media Reports
 	    if (config.debug) log('%data:green JANUS REPORT [%s]',stringify(data) );
-	    var tags = { session: data.session_id, handle: data.handle_id };
+	    tags = { session: data.session_id, handle: data.handle_id };
+	    if (data.type) tags.type = data.type;
+
 	    switch(data.type) {
 		case 32:
 		  if (data.event.media) tags.medium = data.event.media;
@@ -58,12 +63,13 @@ exports.processJson = function(data,socket) {
 		  }
 		break;
 	    }
-		  
-	  } else if (data.event && data.event == 'producer.stats' &&  data.stats){	
+
+	  } else if (data.event && data.event == 'producer.stats' &&  data.stats){
 		// MediaSoup Media Reports
-		var tags = { roomId: data.roomId, peerName: data.peerName, producerId: data.producerId };
+	        if (config.debug) log('%data:green MEDIASOUP REPORT [%s]',stringify(data) );
+		tags = { roomId: data.roomId, peerName: data.peerName, producerId: data.producerId };
 		    if (data.stats[0].mediaType) tags.media = data.stats[0].mediaType;
-		    if (data.stats[0].type) tags.media = data.stats[0].type;
+		    if (data.stats[0].type) tags.type = data.stats[0].type;
 		    metrics.increment(metrics.counter("mediasoup", tags, 'bitrate' ), data.stats[0]["bitrate"] );
 		    metrics.increment(metrics.counter("mediasoup", tags, 'byteCount' ), data.stats[0]["byteCount"] );
 		    metrics.increment(metrics.counter("mediasoup", tags, 'firCount' ), data.stats[0]["firCount"] );
@@ -76,9 +82,13 @@ exports.processJson = function(data,socket) {
 		    metrics.increment(metrics.counter("mediasoup", tags, 'packetsRepaired' ), data.stats[0]["packetsRepaired"] );
 		    metrics.increment(metrics.counter("mediasoup", tags, 'nacks-received' ), data.stats[0]["nacks-received"] );
 	  }
-			  
+
+	  // Use Tags for Protocol Search
+	  insert.data_header = tags;
+
 	  //if (r_bucket) r_bucket.push(JSON.parse(dec));
-	  //if (pgp_bucket) pgp_bucket.push(dec);
+	  if (pgp_bucket) buckets[key].push(insert);
+
 
 	} catch(err) { log('%error:red %s', err.toString() ) }
 };
