@@ -1,5 +1,5 @@
 {
-  "name": "HEPop",
+  "name": "hepop",
   "version": "1.0.8",
   "description": "HEP Packet Server & Switch",
   "main": "hepop.js",
