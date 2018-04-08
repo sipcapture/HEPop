@@ -21,7 +21,8 @@ This is an **unstable prototype** under heavy development, please **do not use**
   - JANUS
     - [x] 32: Media Statistics
   - MEDIASOUP
-    - [x] producer.stats: Media Statistics
+    - [x] producer.stats
+    - [x] transport.stats
   
 #### Backend
 - [x] Storage
