@@ -15,7 +15,15 @@ if(!config.metrics || !config.metrics.influx){
 
 var buckets = [];
 
-exports.processJson = function(data,socket) {
+const processJson = function(data,socket) {
+	/* Grouped Objects Array */
+	if (data instanceof Array) {
+		data.forEach(function(item){
+		    processJson(item);
+		}
+		return;
+	}
+	/* Plain Objects */
 	try {
   	  //if (config.debug) log('%data:cyan JSON Net [%s:blue][%s:green]', stringify(socket) );
 	  if (!data) return;
@@ -126,3 +134,5 @@ exports.processJson = function(data,socket) {
 
 	} catch(err) { log('%error:red %s', err.toString() ) }
 };
+
+exports.processJson = processJson;
