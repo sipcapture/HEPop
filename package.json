@@ -1,6 +1,6 @@
 {
   "name": "hepop",
-  "version": "1.0.9",
+  "version": "1.0.10",
   "description": "HEP Packet Server & Switch",
   "main": "hepop.js",
   "bin": {
@@ -50,6 +50,7 @@
     "oh-my-log": "^5.0.1",
     "optimist": "^0.6.1",
     "parsip": "1.0.5",
+    "perf_hooks": "0.0.1",
     "pg-promise": "^8.2.1",
     "rethinkdbdash": "^2.3.31",
     "safe-stable-stringify": "^1.0.1",

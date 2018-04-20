@@ -33,7 +33,7 @@ exports.processJson = function(data,socket) {
 	  // else if (config.db.rethink &&!buckets[key]) { const r_bucket = require('./bucket').bucket; const r = require('./bucket').r; }
 	  buckets[key].set_id("hep_proto_"+key);
 
-	  if (data.type && data.event){
+	  if (data.type && data.event && data.session_id){
 	    // Janus Media Reports
 	    if (config.debug) log('%data:green JANUS REPORT [%s]',stringify(data) );
 	    /* Static SID from session_id */
@@ -42,6 +42,8 @@ exports.processJson = function(data,socket) {
 	    if (data.type) tags.type = data.type;
 
 	    switch(data.type) {
+		case 256:
+		  break;
 		case 32:
 		  if (data.event.media) tags.medium = data.event.media;
 		  if(data.event.receiving) {
@@ -59,9 +61,12 @@ exports.processJson = function(data,socket) {
 		    metrics.increment(metrics.counter("janus", tags, 'nacks-sent' ), data.event["nacks-sent"] || 0);
 		    metrics.increment(metrics.counter("janus", tags, 'nacks-received' ), data.event["nacks-received"] || 0);
 		  }
-		break;
+		  break;
 	    }
 	    tags.source = "janus";
+	  } else if (data.type && data.event && !data.session_id){
+		
+		console.log('JANUS CONFIG');
 
 	  } else if (data.event && data.event == 'producer.stats' &&  data.stats){
 		// MediaSoup Media Reports

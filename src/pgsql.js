@@ -109,7 +109,7 @@ exports.insert = function(bulk,id){
 	    .catch(error => {
 	        // error;
 		if (config.debug) log('PGP ERR: %s',error);
-		if (error.indexOf('does not exist') !== -1) {
+		if (error.toString().indexOf('does not exist') !== -1) {
 			createTable(id);
 		}
 		return error;
