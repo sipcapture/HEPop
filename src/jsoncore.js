@@ -37,7 +37,7 @@ exports.processJson = function(data,socket) {
 	    // Janus Media Reports
 	    if (config.debug) log('%data:green JANUS REPORT [%s]',stringify(data) );
 	    /* Static SID from session_id */
-	    insert.sid = data.session_id;
+	    insert.sid = data.session_id || '000000000000';
 	    tags = { session: data.session_id, handle: data.handle_id };
 	    if (data.opaque_id) tags.opaque_id = data.opaque_id;
 	    if (data.type) tags.type = data.type;
