@@ -12,15 +12,15 @@ const getFuncs = function(){
 	processHep: hep.processHep,
 	processJson: jsoncore.processJson,
  	processIpfix: sipfix.processIpfix
-  }
-}
+  };
+};
 
 var self = module.exports = {
 
 	getFuncs: getFuncs,
 
 	headerFormat: function(headers) {
-	  return Object.keys(headers).map(() => '%s:cyan: %s:yellow').join(' ')
+	  return Object.keys(headers).map(() => '%s:cyan: %s:yellow').join(' ');
 	},
 
 	select: function(config){
@@ -29,20 +29,19 @@ var self = module.exports = {
 
 	tcp: function({ port = undefined, address = '127.0.0.1' } = { address: '127.0.0.1' }) {
 	  let funcs = self.getFuncs();
-	  let server = net.createServer()
+	  let server = net.createServer();
 
-	  server.on('error', (err) => log('%error:red %s', err.toString()))
-	  server.on('listening', () => log('%start:green TCP %s:gray %d:yellow', server.address().address, server.address().port))
-	  server.on('close', () => log('%stop:red %s:gray %d:yellow', server.address().address, server.address().port))
+	  server.on('error', (err) => log('%error:red %s', err.toString()));
+	  server.on('listening', () => log('%start:green TCP %s:gray %d:yellow', server.address().address, server.address().port));
+	  server.on('close', () => log('%stop:red %s:gray %d:yellow', server.address().address, server.address().port));
 	  server.on('connection', (socket) => {
 	    log('%connect:green (%s:italic:dim %d:italic:gray)', socket.remoteAddress, socket.remotePort)
-
-	    socket.on('data', (data) => funcs.processHep(data,socket))
-	    socket.on('error', (err) => log('%error:red (%s:italic:dim %d:italic:gray) %s', socket.remoteAddress, socket.remotePort, err.toString()))
-	    socket.on('end', () => log('%disconnect:red️ (%s:italic:dim %d:italic:gray)', socket.remoteAddress, socket.remotePort))
-	 // socket.pipe(socket)
+	    socket.on('data', (data) => funcs.processHep(data,socket));
+	    socket.on('error', (err) => log('%error:red (%s:italic:dim %d:italic:gray) %s', socket.remoteAddress, socket.remotePort, err.toString()));
+	    socket.on('end', () => log('%disconnect:red️ (%s:italic:dim %d:italic:gray)', socket.remoteAddress, socket.remotePort));
+	 // socket.pipe(socket);
 	  })
-	  server.listen(port, address)
+	  server.listen(port, address);
 	},
 
         udp: function({ port = undefined, address = '127.0.0.1' } = { address: '127.0.0.1' }) {
@@ -91,8 +90,14 @@ var self = module.exports = {
 	    response.writeHead(200, { 'Content-Type': request.headers['content-type'] || 'text/plain' })
 
 	    request.on('data', (data) => {
-	      funcs.processJson(data,request.socket);
-	      // response.write(data)
+		if (data instanceof Array) {
+        	        data.forEach(function(subdata){
+		            funcs.processJson(subdata,request.socket);
+        	        });
+	        } else {
+		            funcs.processJson(data,request.socket);
+		}
+	        // response.write(data)
 	    })
 
 	    if (request.rawTrailers.length > 0) {
