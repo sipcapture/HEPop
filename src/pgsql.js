@@ -40,10 +40,11 @@ if(!config.db.pgsql) {
   }
 
 
+var rawSize = config.db.rawSize || 8000;
 var createTable = function(tableName){
     var doTable = "CREATE TABLE IF NOT EXISTS "+tableName+" "
 		+ "(id BIGSERIAL NOT NULL, gid smallint DEFAULT '0', sid varchar(256), create_date timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,"
- 		+ "protocol_header json NOT NULL, data_header jsonb NOT NULL, raw varchar(2000) NOT NULL, PRIMARY KEY (id,create_date) );"
+ 		+ "protocol_header json NOT NULL, data_header jsonb NOT NULL, raw varchar("+rawSize+") NOT NULL, PRIMARY KEY (id,create_date) );"
     prepare(doTable);
 }
 

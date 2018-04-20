@@ -11,6 +11,7 @@
   "dbName": "hepic",
   "tableName": "hep",
   "db": {
+	"rawSize": 8000,
   	"pgsql":{
   	  "host": "localhost",
   	  "port": 5432,
