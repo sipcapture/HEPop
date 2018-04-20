@@ -68,7 +68,7 @@ exports.processJson = function(data,socket) {
 	  } else if (data.type && data.event && !data.session_id){
 		
 		console.log('JANUS CONFIG', data);
-		return;
+		insert.sid = "JANUS_CORE";
 
 	  } else if (data.event && data.event == 'producer.stats' &&  data.stats){
 		// MediaSoup Media Reports
