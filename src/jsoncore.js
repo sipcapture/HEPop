@@ -20,7 +20,7 @@ const processJson = function(data,socket) {
 	if (data instanceof Array) {
 		data.forEach(function(item){
 		    processJson(item);
-		}
+		});
 		return;
 	}
 	/* Plain Objects */
