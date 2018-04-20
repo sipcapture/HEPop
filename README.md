@@ -18,7 +18,7 @@ This is an **unstable prototype** under heavy development, please **do not use**
 |           | 34              | RTP Agent Report   | Timeseries | RTP, RTCP Stats              |
 |           | 100             | JSON Logs          | JSON       | String, JSON Object          |
 |           | 1000+           | Dynamic Types      | JSON       |                              |
-| JANUS     | any             | Custom JSON Fields | JSON       | session_id, handle_id, event |
+| JANUS     | any             | Custom JSON Fields | JSON       | session_id, handle_id, opaque_id, event |
 |           | 34              | Media Stats        | Timeseries | RTCP Statistics              |
 | MEDIASOUP | any             | Custom JSON Fields | JSON       | roomId, peerName, producerId |
 |           | producer.stats  | Media Stats        | Timeseries | RTCP Statistics              |

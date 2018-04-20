@@ -39,6 +39,7 @@ exports.processJson = function(data,socket) {
 	    /* Static SID from session_id */
 	    insert.sid = data.session_id;
 	    tags = { session: data.session_id, handle: data.handle_id };
+	    if (data.opaque_id) tags.opaque_id = data.opaque_id;
 	    if (data.type) tags.type = data.type;
 
 	    switch(data.type) {
