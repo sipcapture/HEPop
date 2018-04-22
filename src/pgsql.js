@@ -85,6 +85,7 @@ var tables = [];
 // => INSERT INTO "hepic"("col_a","col_b") VALUES('a1','b1'),('a2','b2')
 exports.insert = function(bulk,id){
 	if (id && !tables[id]) {
+	    if(config.debug) log('Create new tables for id: %s', id);
 	    var tableSchema = config.db.pgsql.schema || ['sid', 'protocol_header','data_header','raw'];
 	    var tableName = {table: id };
 	    cs = new pgp.helpers.ColumnSet(tableSchema, tableName);

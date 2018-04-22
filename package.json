@@ -1,6 +1,6 @@
 {
   "name": "hepop",
-  "version": "1.0.12",
+  "version": "1.0.13",
   "description": "HEP Packet Server & Switch",
   "main": "hepop.js",
   "bin": {

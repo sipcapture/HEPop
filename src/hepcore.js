@@ -174,7 +174,7 @@ exports.processHep = function processHep(data,socket) {
 		  break;
 		default:
 	  	  if (config.debug) {
-			log('%data:cyan HEP Type [%s:blue]', decoded.payloadType );
+			log('%data:cyan HEP Type [%s:blue]', insert.protocol_header.payloadType );
 		  	log('%data:cyan HEP Payload [%s:yellow]', stringify(decoded.payload) );
 		  }
 	  }
