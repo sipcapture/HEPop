@@ -48,8 +48,10 @@ const processJson = function(data,socket) {
 	    if (data.type) tags.type = data.type;
 
 	    /* Direction? */
-	    insert.protocol_header.srcIp = data.event.emitter;
-	    insert.protocol_header.dstIp = data.event.session_id;
+	    if (data.event){
+		if (data.event.emitter) insert.protocol_header.srcIp = data.event.emitter;
+	    	if (data.event.session_id) insert.protocol_header.dstIp = data.event.session_id;
+	    }
 
 	    switch(data.type) {
 		case 1:
@@ -163,7 +165,7 @@ const processJson = function(data,socket) {
 
 	  // Use Tags for Protocol Search
 	  // insert.data_header = tags;
-	  insert.data_header = insert.data_header.concat(tags);
+	  insert.data_header = Object.assign(insert.data_header, tags);
 
 	  //if (r_bucket) r_bucket.push(JSON.parse(dec));
 	  if (buckets[key]) buckets[key].push(insert);
