@@ -3,6 +3,10 @@ const stringify = require('safe-stable-stringify');
 const flatten = require('flat')
 const config = require('./config').getConfig();
 
+var Receptacle = require('receptacle');
+var db = new Receptacle({ max: 1024 });
+const ttl = { ttl: 600000 };
+
 const metrics = require('./metrics').metrics;
 var mm = true;
 
@@ -35,21 +39,60 @@ const processJson = function(data,socket) {
 	  buckets[key].set_id("hep_proto_"+key);
 
 	  if (data.type && data.event && data.session_id){
-	    // Janus Media Reports
+	    // Janus Events
 	    if (config.debug) log('%data:green JANUS REPORT [%s]',stringify(data) );
 	    /* Static SID from session_id */
 	    insert.sid = data.session_id || '000000000000';
 	    tags = { session: data.session_id, handle: data.handle_id };
-	    if (data.opaque_id) tags.opaque_id = data.opaque_id;
+	    if (data.event && data.event.opaque_id) tags.opaque_id = data.event.opaque_id;
 	    if (data.type) tags.type = data.type;
 
+	    /* Direction? */
+	    insert.protocol_header.srcIp = data.event.emitter;
+	    insert.protocol_header.dstIp = data.event.session_id;
+
 	    switch(data.type) {
+		case 1:
+		  /* Transport Event */
+		  if (data.event.transport && data.event.transport.id) {
+			insert.data_header.event = data.event.name;
+			insert.data_header.transport_id = data.event.transport.id;
+			// db.set(data.session_id, {transport: data.event.transport.id }, tll);
+		  }
+		  break;
+		case 2:
+		  /* Handle Event */
+		  if (data.event.transport && data.event.transport.id) {
+			insert.data_header.event = data.event.name;
+			// db.set(data.session_id, {transport: data.event.transport.id }, tll);
+		  }
+		  break;
+		case 16:
+		  /* PeerConnection Event */
+		  if (data.event.connection) {
+			insert.data_header.event = data.event.connection;
+			insert.data_header.reason = data.event.reason;
+		  } else if (data.event.ice) {
+			insert.data_header.event = data.event.ice;
+		  } else if (data.event.dtls) {
+			insert.data_header.event = data.event.dtls;
+		  } else if (data.event.candidates) {
+			insert.data_header.event = 'peerConnection';
+			insert.data_header.localType = data.event.candidates.local.type;
+			insert.data_header.remoteType = data.event.candidates.remote.type;
+		  }
+		  break;
 		case 256:
 		  break;
+		case 64:
+		  /* SIP correlation */
+		  // if(data.event && data.event.data['call-id']) db.set(data.handle_id, {cid: data.event.data['call-id']}, tll);
+		  break;
 		case 32:
+		  /* Media Report */
 		  if (data.event.media) tags.medium = data.event.media;
-		  if(data.event.receiving) {
-		    metrics.increment(metrics.counter("janus", tags, 'Receiving') );
+		  if(typeof data.event.receiving !== 'undefined') {
+			insert.data_header.receiving = data.event.receiving;
 		  } else if(data.event.base) {
 		    metrics.increment(metrics.counter("janus", tags, 'LSR' ), data.event["lsr"] );
 		    metrics.increment(metrics.counter("janus", tags, 'lost' ), data.event["lost"] || 0 );
@@ -119,7 +162,8 @@ const processJson = function(data,socket) {
 	  }
 
 	  // Use Tags for Protocol Search
-	  insert.data_header = tags;
+	  // insert.data_header = tags;
+	  insert.data_header = insert.data_header.concat(tags);
 
 	  //if (r_bucket) r_bucket.push(JSON.parse(dec));
 	  if (buckets[key]) buckets[key].push(insert);
