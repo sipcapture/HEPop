@@ -2,6 +2,7 @@ const log = require('./logger');
 const stringify = require('safe-stable-stringify');
 const flatten = require('flat')
 const config = require('./config').getConfig();
+const sipdec = require('parsip');
 
 var Receptacle = require('receptacle');
 var db = new Receptacle({ max: 1024 });
@@ -87,6 +88,21 @@ const processJson = function(data,socket) {
 		case 8:
 		  /* JSEP SDP TODO: extract SDP and map to Session participants */
 			insert.data_header.event = "SDP " + (data.event.owner || "");
+			if (data.event.jsep){
+			   insert.data_header.event += " "+ data.event.jsep.type;
+			   try {
+				var sdp = sipdec.getSDP(data.event.jsep.sdp);
+				db.set("sdp_"+data.handle_id,sdp);
+				insert.data_header.room = sdp.name || "";
+				if (data.event.jsep.type == 'offer'){
+					insert.protocol_header.srcIp = sdp.origin.address;
+					insert.protocol_header.srcPort = sdp.media[0].port || 0;
+				} else if (data.event.jsep.type == 'answer') {
+					insert.protocol_header.dstIp = sdp.media[0].connection.ip || sdp.origin.address;
+					insert.protocol_header.dstPort = sdp.media[0].port || 0;
+				}
+			   } catch(e) { log(e); }
+			}
 		  break;
 
 		case 16:
