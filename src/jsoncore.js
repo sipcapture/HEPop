@@ -209,7 +209,7 @@ const processJson = function(data,socket) {
 		  }
 		  /* Streaming */
 		  if (data.event.plugin == "janus.plugin.streaming"){
-			  insert.data_header.stream = "streaming-mp-" + data.event.data.id);
+			  insert.data_header.stream = "streaming-mp-" + data.event.data.id;
 		  }
 		  /* AudioBridge */
 		  if (data.event.plugin == "janus.plugin.audiobridge"){
