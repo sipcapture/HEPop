@@ -164,6 +164,7 @@ const processJson = function(data,socket) {
 		  if(data.event && data.event.data['call-id']) {
 			db.set(data.handle_id, {cid: data.event.data['call-id']}, tll);
 			insert.protocol_header.correlation_id = data.event.data['call-id'];
+			insert.data_header.event = data.event.plugin || data.event.data.event;	
 		  }
 		  /* Videoroom */
 		  if (data.event.plugin == "janus.plugin.videoroom"){
