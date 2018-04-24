@@ -44,31 +44,51 @@ const processJson = function(data,socket) {
 	    /* Static SID from session_id */
 	    insert.sid = data.session_id || '000000000000';
 	    tags = { session: data.session_id, handle: data.handle_id };
-	    if (data.event && data.event.opaque_id) tags.opaque_id = data.event.opaque_id;
+
+	    if (data.event && data.event.opaque_id) {
+		tags.opaque_id = data.event.opaque_id;
+		insert.protocol_header.correlation_id = data.event.opaque_id;
+	    }
 	    if (data.type) tags.type = data.type;
 
 	    /* Direction? */
-	    if (data.event){
-		if (data.event.emitter) insert.protocol_header.srcIp = data.event.emitter;
-	    	if (data.event.session_id) insert.protocol_header.dstIp = data.event.session_id;
-	    }
+		if (data.emitter) insert.protocol_header.srcIp = data.emitter || insert.protocol_header.address || "Janus";
+	    	if (data.session_id) insert.protocol_header.dstIp = data.session_id;
+	    	if (data.handle_id) insert.protocol_header.srcIp = data.handle_id;
 
 	    switch(data.type) {
+
 		case 1:
 		  /* Transport Event */
+		  if (data.event.name) insert.data_header.event = data.event.name;
 		  if (data.event.transport && data.event.transport.id) {
 			insert.data_header.event = data.event.name;
 			insert.data_header.transport_id = data.event.transport.id;
-			// db.set(data.session_id, {transport: data.event.transport.id }, tll);
+			db.set(data.session_id, {transport: data.event.transport.id }, tll);
+			var ip = db.get(data.event.transport.id);
+			if (ip) {
+				insert.protocol_header.dstIp = ip.ip;
+				insert.protocol_header.dstPort = ip.port;
+			}
 		  }
 		  break;
+
 		case 2:
 		  /* Handle Event */
 		  if (data.event.transport && data.event.transport.id) {
 			insert.data_header.event = data.event.name;
 			// db.set(data.session_id, {transport: data.event.transport.id }, tll);
+		  } else {
+			insert.data_header.event = data.event.name;
+			insert.data_header.dstIp = data.event.plugin;
 		  }
 		  break;
+
+		case 8:
+		  /* JSEP SDP TODO: extract SDP and map to Session participants */
+			insert.data_header.event = "SDP " + (data.event.owner || "");
+		  break;
+
 		case 16:
 		  /* PeerConnection Event */
 		  if (data.event.connection) {
@@ -82,17 +102,17 @@ const processJson = function(data,socket) {
 			insert.data_header.event = 'peerConnection';
 			insert.data_header.localType = data.event.candidates.local.type;
 			insert.data_header.remoteType = data.event.candidates.remote.type;
+		  } else if (data.event['selected-pair']) {
+			insert.data_header.event = 'peerConnection';
 		  }
 		  break;
-		case 256:
-		  break;
-		case 64:
-		  /* SIP correlation */
-		  // if(data.event && data.event.data['call-id']) db.set(data.handle_id, {cid: data.event.data['call-id']}, tll);
-		  break;
+
 		case 32:
 		  /* Media Report */
-		  if (data.event.media) tags.medium = data.event.media;
+		  if (data.event.media) {
+			tags.medium = data.event.media;
+			insert.data_header.event = data.event.media + "_report";
+		  }
 		  if(typeof data.event.receiving !== 'undefined') {
 			insert.data_header.receiving = data.event.receiving;
 		  } else if(data.event.base) {
@@ -109,8 +129,60 @@ const processJson = function(data,socket) {
 		    metrics.increment(metrics.counter("janus", tags, 'nacks-received' ), data.event["nacks-received"] || 0);
 		  }
 		  break;
+
+		case 64:
+		  /* SIP correlation */
+		  if(data.event && data.event.data['call-id']) {
+			db.set(data.handle_id, {cid: data.event.data['call-id']}, tll);
+			insert.protocol_header.correlation_id = data.event.data['call-id'];
+		  }
+		  /* Videoroom */
+		  if (data.event.plugin == "janus.plugin.videoroom"){
+
+			insert.data_header.event = data.event.data.event;
+			insert.data_header.user = data.event.data.display;
+			insert.data_header.room = data.event.data.room;
+
+			if (data.event.data.event == 'joined') {
+				db.set(data.event.data.private_id, data.event.data.display);
+				db.set(data.event.data.id, data.event.data.display);
+			} else if (data.event.data.event == 'published') {
+				if (db.get(data.event.data.id)) insert.data_header.user = db.get(data.event.data.id);
+			} 
+			if (data.event.data.event == 'subscribing') {
+				db.set(data.event.data.private_id, data.event.data.display);
+				if (db.get(data.event.data.private_id)) insert.data_header.user = db.get(data.event.data.private_id);
+			}
+
+			/* Directionality */
+			insert.protocol_header.srcIp = data.event.plugin;
+			insert.protocol_header.dstIp = "ROOM_"+data.event.data.room;
+		  }
+		  break;
+
+		case 128:
+		  /* Transport Event */
+		  if (data.event.transport && data.event.data) {
+			insert.data_header.event = data.event.transport;
+			insert.data_header.transport_id = data.event.transport.id;
+			db.set(data.event.transport_id, {ip: data.event.data.ip, port: data.event.data.port }, tll * 2);
+			db.set('ip_'+data.session_id, {ip: data.event.data.ip, port: data.event.data.port }, tll * 2);
+		  }
+		  break;
+
+		case 256:
+		  break;
 	    }
+
+	    /* Lookup IP Correlation (beta) */
+	    var ip = db.get(data.session_id);
+	    if (ip) {
+		insert.protocol_header.dstIp = ip.ip;
+		insert.protocol_header.dstPort = ip.port;
+	    }
+
 	    tags.source = "janus";
+
 	  } else if (data.type && data.event && !data.session_id){
 		
 		console.log('JANUS CONFIG', data);
