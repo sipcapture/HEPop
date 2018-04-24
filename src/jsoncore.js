@@ -89,9 +89,8 @@ const processJson = function(data,socket) {
 
 		case 2:
 		  /* Handle Event */
-		  if (data.event.transport && data.event.transport.id) {
+		  if (data.event.name === "detached") {
 			insert.data_header.event = data.event.name;
-			// db.set(data.session_id, {transport: data.event.transport.id }, tll);
 		  } else {
 			insert.data_header.event = data.event.name;
 			insert.data_header.dstIp = data.event.plugin;
@@ -108,6 +107,9 @@ const processJson = function(data,socket) {
 				db.set("sdp_"+data.handle_id,sdp);
 				insert.data_header.room = sdp.name || "";
 				if (data.event.jsep.type == 'offer'){
+					// NOTE: in Janus, neither the o= nor the m-line c= addresses
+					// can be trusted (127.0.0.1, 0.0.0.0, etc.), you need the
+					// candidates (inline or trickled) for the actual address
 					insert.protocol_header.srcIp = sdp.origin.address;
 					insert.protocol_header.srcPort = sdp.media[0].port || 0;
 				} else if (data.event.jsep.type == 'answer') {
@@ -147,12 +149,16 @@ const processJson = function(data,socket) {
 		  if(typeof data.event.receiving !== 'undefined') {
 			insert.data_header.receiving = data.event.receiving;
 		  } else if(data.event.base) {
-		    metrics.increment(metrics.counter("janus", tags, 'LSR' ), data.event["lsr"] );
+		    metrics.increment(metrics.counter("janus", tags, 'rtt' ), data.event["rtt"] || 0 );
 		    metrics.increment(metrics.counter("janus", tags, 'lost' ), data.event["lost"] || 0 );
 		    metrics.increment(metrics.counter("janus", tags, 'lost-by-remote' ), data.event["lost-by-remote"] || 0 );
 		    metrics.increment(metrics.counter("janus", tags, 'jitter-local' ), data.event["jitter-local"] || 0 );
 		    metrics.increment(metrics.counter("janus", tags, 'jitter-remote' ), data.event["jitter-remote"] || 0);
-	            metrics.increment(metrics.counter("janus", tags, 'packets-sent' ), data.event["packets-sent"] || 0);
+	        metrics.increment(metrics.counter("janus", tags, 'in-link-quality' ), data.event["in-link-quality"] || 0);
+	        metrics.increment(metrics.counter("janus", tags, 'in-media-link-quality' ), data.event["in-media-link-quality"] || 0);
+	        metrics.increment(metrics.counter("janus", tags, 'out-link-quality' ), data.event["out-link-quality"] || 0);
+	        metrics.increment(metrics.counter("janus", tags, 'out-media-link-quality' ), data.event["out-media-link-quality"] || 0);
+	        metrics.increment(metrics.counter("janus", tags, 'packets-sent' ), data.event["packets-sent"] || 0);
 		    metrics.increment(metrics.counter("janus", tags, 'packets-received' ), data.event["packets-sent"] || 0);
 		    metrics.increment(metrics.counter("janus", tags, 'bytes-sent' ), data.event["bytes-sent"] || 0);
 		    metrics.increment(metrics.counter("janus", tags, 'bytes-received' ), data.event["bytes-received"]|| 0 );
@@ -172,18 +178,53 @@ const processJson = function(data,socket) {
 		  if (data.event.plugin == "janus.plugin.videoroom"){
 
 			insert.data_header.event = data.event.data.event;
-			insert.data_header.user = data.event.data.display;
+			insert.data_header.user = data.event.data.id;
 			insert.data_header.room = data.event.data.room;
 
 			if (data.event.data.event == 'joined') {
-				db.set(data.event.data.private_id, data.event.data.display);
-				db.set(data.event.data.id, data.event.data.display);
+				db.set("videoroom-" + data.event.data.room +  "-pub-" + data.event.data.id, {
+					id: data.event.data.id,
+					room: data.event.data.room,
+					display: data.event.data.display,
+					pvtid: data.event.data.private_id
+				});
+				db.set("videoroom-" + data.event.data.room +  "-pvt-" + data.event.data.private_id, "videoroom-pub-" + data.event.data.id);
 			} else if (data.event.data.event == 'published') {
-				if (db.get(data.event.data.id)) insert.data_header.user = db.get(data.event.data.id);
+				if (db.get("videoroom-" + data.event.data.room +  "-pub-" + data.event.data.id))
+					insert.data_header.user = db.get("videoroom-" + data.event.data.room +  "-pub-" + data.event.data.id);
 			} 
 			if (data.event.data.event == 'subscribing') {
-				db.set(data.event.data.private_id, data.event.data.display);
-				if (db.get(data.event.data.private_id)) insert.data_header.user = db.get(data.event.data.private_id);
+				if (db.get("videoroom-" + data.event.data.room +  "-pub-" + data.event.data.feed))
+					insert.data_header.user = db.get("videoroom-" + data.event.data.room +  "-pub-" + data.event.data.feed);
+				if (data.event.data.private_id && db.get("videoroom-" + data.event.data.room +  "-pvt-" + data.event.data.private_id)) {
+					var ownerId = db.get("videoroom-" + data.event.data.room +  "-pvt-" + data.event.data.private_id);
+					if (db.get("videoroom-" + data.event.data.room +  "-pub-" + ownerId))
+						insert.data_header.owner = db.get("videoroom-" + data.event.data.room +  "-pub-" + ownerId);
+				}
+			}
+
+			/* Directionality */
+			insert.protocol_header.srcIp = data.event.plugin;
+			insert.protocol_header.dstIp = "ROOM_"+data.event.data.room;
+		  }
+		  /* Streaming */
+		  if (data.event.plugin == "janus.plugin.streaming"){
+			  insert.data_header.stream = "streaming-mp-" + data.event.data.id);
+		  }
+		  /* AudioBridge */
+		  if (data.event.plugin == "janus.plugin.audiobridge"){
+
+			insert.data_header.event = data.event.data.event;
+			insert.data_header.user = data.event.data.id;
+			insert.data_header.room = data.event.data.room;
+
+			if (data.event.data.event == 'joined') {
+				db.set("audiobridge-" + data.event.data.room +  "-" + data.event.data.id, {
+					id: data.event.data.id,
+					room: data.event.data.room,
+					display: data.event.data.display
+				});
+				insert.data_header.user = db.get("audiobridge-" + data.event.data.room +  "-" + data.event.data.id);
 			}
 
 			/* Directionality */
