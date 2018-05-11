@@ -4,9 +4,9 @@
   "port": 9060,
   "address": "127.0.0.1",
   "queue": {
-    "timeout": 2000, //if there's no data input until timeout, emit data forcefully.
-    "maxSize": 1000, //data emitted count
-    "useInterval": true //if this value is true, data event is emitted even If new data is pushed.
+    "timeout": 2000, // if there's no data input until timeout, emit data forcefully.
+    "maxSize": 1000, // data emitted count
+    "useInterval": true // enforce timeout expiration for sending
   },
   "dbName": "hepic",
   "tableName": "hep",
@@ -27,13 +27,10 @@
 		"hostname": "localhost:8086"
 	}
   },
-  "db_off": {
+  "db_off": { // disabled  backends for reference
 	"rethink" : {
 	  "servers":[
-	    {
-		"host": "127.0.0.1",
-		"port":28015
-	    }
+	    { "host": "127.0.0.1", "port":28015 }
   	  ]
 	},
   	"mongodb":{
