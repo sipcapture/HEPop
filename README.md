@@ -7,7 +7,7 @@
 
 
 ## WARNING
-This is an **unstable prototype** under heavy development, please **do not use** for any purpose other than testing!
+This is a **prototype** under heavy development, please **use it with caution** and kindly report bugs!
 
 ### Features
 
