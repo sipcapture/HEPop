@@ -8,6 +8,7 @@ const r = require('./bucket').r;
 const stringify = require('safe-stable-stringify');
 const flatten = require('flat')
 const config = require('./config').getConfig();
+const importFresh = require('import-fresh');
 
 exports.encapsulate = hepjs.encapsulate;
 exports.decapsulate = hepjs.decapsulate;
@@ -30,6 +31,13 @@ exports.processHep = function processHep(data,socket) {
   	  if (config.debug) log('%data:cyan HEP Net [%s:blue]', JSON.stringify(socket) );
 	  try {
 		var decoded = hepjs.decapsulate(data);
+		if (decoded.payload && typeof decoded.payload != "object") {
+		  try {
+			const tmp = JSON.parse( "{"+ decoded.payload.split('{').pop().split('}').shift() + "}" );
+			if (tmp.payload) decoded.payload = tmp.payload;
+			else if (tmp) decoded.payload = tmp;
+		  } catch(e) { log('PAYLOAD RAW ERROR, NON CRITICAL',e); }
+		}
 		//decoded = flatten(decoded);
 		var insert = {
 				"protocol_header": decoded.rcinfo,
@@ -43,9 +51,10 @@ exports.processHep = function processHep(data,socket) {
 	  } catch(e) { log('%s:red',e); }
 
 	  // Create protocol bucket
-	  var key = insert.protocol_header.payloadType +"_"+ (insert.protocol_header.transactionType || "default");
-	  if (!buckets[key]) buckets[key] = require('./bucket').pgp_bucket;
-	  buckets[key].set_id("hep_proto_"+key);
+	  const ukey = insert.protocol_header.payloadType +"_"+ (insert.protocol_header.transactionType || "default");
+	  // if (!buckets[ukey]) buckets[ukey] = require('./bucket').pgp_bucket;
+	  if (!buckets[ukey]) buckets[ukey] = importFresh('./bucket').pgp_bucket;
+	  buckets[ukey].set_id("hep_proto_"+ukey);
 	  var iptags = { "ip": socket.address || "0.0.0.0" };
 
 	  switch(insert.protocol_header.payloadType) {
@@ -172,6 +181,24 @@ exports.processHep = function processHep(data,socket) {
 			  }
 		  } catch(e) { log("%data:red RTPAGENTSTATS ERROR: %s",e); }
 		  break;
+		case 86:
+		  /* OpenSIPS Event */
+	  	  if (config.debug) {
+			log('%data:cyan HEP OpenSIPS Type [%s:blue]', insert.protocol_header.payloadType );
+		  	log('%data:cyan HEP OpenSIPS Payload [%s:yellow]', stringify(decoded.payload) );
+		  }
+		  if (insert.raw && insert.raw.event) insert.data_header.event = insert.raw.event;
+		  if (insert.raw && insert.raw.text) insert.data_header.text = insert.raw.text;
+
+		case 81:
+		  /* OpenSIPS CDR */
+	  	  if (config.debug) {
+			log('%data:cyan HEP OpenSIPS Type [%s:blue]', insert.protocol_header.payloadType );
+		  	log('%data:cyan HEP OpenSIPS Payload [%s:yellow]', stringify(decoded.payload) );
+		  }
+		  if (decoded.payload && decoded.payload.call_id) insert.sid = decoded.payload.call_id;
+		  if (decoded.payload) insert.data_header = decoded.payload;
+
 		default:
 	  	  if (config.debug) {
 			log('%data:cyan HEP Type [%s:blue]', insert.protocol_header.payloadType );
@@ -180,7 +207,7 @@ exports.processHep = function processHep(data,socket) {
 	  }
 	  if (mm) metrics.increment(metrics.counter("hep", iptags, insert.protocol_header.payloadType ));
 
-	  if (pgp_bucket) buckets[key].push(insert);
+	  if (pgp_bucket) buckets[ukey].push(insert);
 
 	  if (r_bucket) {
 	     if(decoded['rcinfo.timeSeconds']) decoded['rcinfo.ts'] = r.epochTime(decoded['rcinfo.timeSeconds']);
