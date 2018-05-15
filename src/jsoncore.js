@@ -30,7 +30,8 @@ const processJson = function(data,socket) {
 	  // DB Schema
 	  var insert = { "protocol_header": socket._peername || {},
 			 "data_header": {},
-			 "raw": data || ""
+			 "raw": data || "",
+			 "create_date": new Date().getTime()
 		};
 	  var tags = {};
 	  // Create protocol bucket
@@ -51,6 +52,7 @@ const processJson = function(data,socket) {
 		var ts = data.timestamp/1000;
 		insert.protocol_header.time_sec = Math.floor(ts);
 		insert.protocol_header.time_usec = parseInt( (ts - insert.protocol_header.time_sec ) * 1000);
+		insert.create_date = data.timestamp;
 	    }
 
 	    /* Opaque Ids */

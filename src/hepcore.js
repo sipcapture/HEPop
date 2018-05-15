@@ -26,26 +26,34 @@ if(!config.metrics || !config.metrics.influx){
 
 var buckets = [];
 
-exports.processHep = function processHep(data,socket) {
-	try {
-  	  if (config.debug) log('%data:cyan HEP Net [%s:blue]', JSON.stringify(socket) );
-	  try {
-		var decoded = hepjs.decapsulate(data);
+var forceJSON = function(decoded){
 		if (decoded.payload && typeof decoded.payload != "object") {
 		  try {
 			const tmp = JSON.parse( "{"+ decoded.payload.split('{').pop().split('}').shift() + "}" );
 			if (tmp.payload) decoded.payload = tmp.payload;
 			else if (tmp) decoded.payload = tmp;
-		  } catch(e) { log('PAYLOAD RAW ERROR, NON CRITICAL',e); }
+			return decoded;
+		  } catch(e) { log('PAYLOAD RAW ERROR, NON CRITICAL',e); return decoded; }
 		}
+}
+
+exports.processHep = function processHep(data,socket) {
+	try {
+  	  if (config.debug) log('%data:cyan HEP Net [%s:blue]', JSON.stringify(socket) );
+	  try {
+		var decoded = hepjs.decapsulate(data);
 		//decoded = flatten(decoded);
 		var insert = {
 				"protocol_header": decoded.rcinfo,
 				"data_header": {},
-				"raw": decoded.payload || ""
+				"raw": decoded.payload || "",
+				"create_date": new Date().getTime()
 		};
 		/* HEP Correlation ID as SID */
 		if (decoded.rcinfo.correlation_id) insert.sid = decoded.rcinfo.correlation_id;
+
+		/* HEP Timestamps concat as CREATE_DATE */
+		if (decoded.rcinfo.time_sec && decoded.rcinfo.time_usec) insert.create_date = decoded.rcinfo.time_sec + "" + decoded.rcinfo.time_usec;
 
 
 	  } catch(e) { log('%s:red',e); }
@@ -196,6 +204,7 @@ exports.processHep = function processHep(data,socket) {
 			log('%data:cyan HEP OpenSIPS Type [%s:blue]', insert.protocol_header.payloadType );
 		  	log('%data:cyan HEP OpenSIPS Payload [%s:yellow]', stringify(decoded.payload) );
 		  }
+		  decoded = forceJSON(decoded);
 		  if (decoded.payload && decoded.payload.call_id) insert.sid = decoded.payload.call_id;
 		  if (decoded.payload) insert.data_header = decoded.payload;
 

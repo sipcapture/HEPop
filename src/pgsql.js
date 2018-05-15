@@ -53,7 +53,6 @@ try {
     db.connect();
     exports.pgp = db;
     log('%start:cyan Initializing PGSql driver [%s:blue]', stringify(config.db.pgsql));
-    //var doDb = "CREATE DATABASE "+config.dbName;
     //prepare(doDb);
 } catch(err){
     log('%stop:red Failed Initializing PGsql driver [%s:blue]',err);
@@ -63,7 +62,7 @@ try {
 
 
 if (!config.db.pgsql.schema){
-  var tableSchema = config.db.pgsql.schema || ['sid', 'protocol_header','data_header','raw'];
+  var tableSchema = config.db.pgsql.schema || ['sid', 'protocol_header','data_header','raw', 'create_date'];
   var tableName = {table: config.tableName || 'homer_data' };
   cs = new pgp.helpers.ColumnSet(tableSchema, tableName);
 }
@@ -86,7 +85,7 @@ var tables = [];
 exports.insert = function(bulk,id){
 	if (id && !tables[id]) {
 	    if(config.debug) log('Create new tables for id: %s', id);
-	    var tableSchema = config.db.pgsql.schema || ['sid', 'protocol_header','data_header','raw'];
+	    var tableSchema = config.db.pgsql.schema || ['sid', 'protocol_header','data_header','raw', 'create_date'];
 	    var tableName = {table: id };
 	    cs = new pgp.helpers.ColumnSet(tableSchema, tableName);
 	    tables[id] = cs;
