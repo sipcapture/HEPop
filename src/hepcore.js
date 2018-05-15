@@ -46,15 +46,14 @@ exports.processHep = function processHep(data,socket) {
 		var insert = {
 				"protocol_header": decoded.rcinfo,
 				"data_header": {},
-				"raw": decoded.payload || "",
-				"create_date": new Date().getTime()
+				"create_date": new Date(),
+				"raw": decoded.payload || ""
 		};
 		/* HEP Correlation ID as SID */
 		if (decoded.rcinfo.correlation_id) insert.sid = decoded.rcinfo.correlation_id;
 
 		/* HEP Timestamps concat as CREATE_DATE */
-		if (decoded.rcinfo.time_sec && decoded.rcinfo.time_usec) insert.create_date = decoded.rcinfo.time_sec + "" + decoded.rcinfo.time_usec;
-
+		if (decoded.rcinfo.timeSeconds && decoded.rcinfo.timeUseconds) insert.create_date = new Date( (decoded.rcinfo.timeSeconds * 1000 )+(((100000+decoded.rcinfo.timeUseconds)/1000)-100));
 
 	  } catch(e) { log('%s:red',e); }
 
