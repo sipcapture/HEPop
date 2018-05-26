@@ -11,29 +11,30 @@ This is a **prototype** under heavy development, please **use it with caution** 
 
 ### Features
 
-The core of `hepop` follows the latest `homer` data design and splits indexed data and timeseries, providing multiple backend options to choose from when prototype a custom capture solution. By default `postgres` and `influxdb` are used by `homer`
+The core of `hepop` follows the latest `homer` data design and splits indexed data and timeseries, providing multiple backend options to choose from when prototype a custom capture solution.
 
 #### Supported Stores
 | TYPE       |               |
 |------------|-----------------|
-| JSON       | Postgres, RethinkDB, MongoDB, Elasticsearch |
-| Timeseries | InfluxDB, Prometheus |
+| JSON       | Postgres (default), RethinkDB, MongoDB, Elasticsearch |
+| Timeseries | InfluxDB (default), Prometheus |
 
 #### Supported Sources
 
-| PROTO     | ID              | DESCRIPTION        | STORE      | STATS                        |
-|-----------|-----------------|--------------------|------------|------------------------------|
-| HEP       | 1               | SIP                | JSON       | SIP methods, SIP responses   |
-|           | 5               | RTCP Reports       | Timeseries | RTCP, RTCPXR, X-RTP-Stat     |
-|           | 34              | RTP Agent Report   | Timeseries | RTP, RTCP Stats              |
-|           | 100             | JSON Logs          | JSON       | String, JSON Object          |
-|           | 1000+           | Dynamic Types      | JSON       |                              |
-| JANUS     | any             | Custom JSON Fields | JSON       | session_id, handle_id, opaque_id, event |
-|           | 34              | Media Stats        | Timeseries | RTCP Statistics              |
-| MEDIASOUP | any             | Custom JSON Fields | JSON       | roomId, peerName, producerId |
-|           | producer.stats  | Media Stats        | Timeseries | RTCP Statistics              |
-|           | transport.stats | Transport Stats    | Timeseries | IP SRC/DST, Bytes in/out     |
-|           |                 |                    |            |                              |
+| SOCKET    | PROTO      | TYPE/ID         | DESCRIPTION        | STORE      | STATS                        |
+|-----------|------------|-----------------|--------------------|------------|------------------------------|
+| HEP       | HEP        | 1               | SIP                | JSON + TS  | SIP methods, SIP responses   |
+|           |            | 5               | RTCP Reports       | Timeseries | RTCP, RTCPXR, X-RTP-Stat     |
+|           |            | 34              | RTP Agent Report   | Timeseries | RTP, RTCP Stats              |
+|           |            | 100             | JSON Logs          | JSON       | String, JSON Object          |
+|           |            | 1000+           | Dynamic Types      | JSON       |                              |
+| HTTP      | JANUS      | any             | Custom JSON Fields | JSON       | session_id, handle_id, opaque_id, event |
+|           |            | 34              | Media Stats        | Timeseries | RTCP Statistics              |
+| HTTP      | MEDIASOUP  | any             | Custom JSON Fields | JSON       | roomId, peerName, producerId |
+|           |            | producer.stats  | Media Stats        | Timeseries | RTCP Statistics              |
+|           |            | transport.stats | Transport Stats    | Timeseries | IP SRC/DST, Bytes in/out     |
+| SIPFIX    | ORACLE SBC | SIP (tcp/udp)   | SIP comm-monitor   | JSON + TS  | SIP methods, SIP responses   |
+|           |            | RTP QOS (stats) | RTP Media stats    | Timeseries | RTP, RTCP Stats              |
 
 
 
