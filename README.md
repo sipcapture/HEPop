@@ -11,6 +11,16 @@ This is a **prototype** under heavy development, please **use it with caution** 
 
 ### Features
 
+The core of `hepop` follows the latest `homer` data design and splits indexed data and timeseries, providing multiple backend options to choose from when prototype a custom capture solution. By default `postgres` and `influxdb` are used by `homer`
+
+#### Supported Stores
+| TYPE       |               |
+|------------|-----------------|
+| JSON       | Postgres, RethinkDB, MongoDB, Elasticsearch |
+| Timeseries | InfluxDB, Prometheus |
+
+#### Supported Sources
+
 | PROTO     | ID              | DESCRIPTION        | STORE      | STATS                        |
 |-----------|-----------------|--------------------|------------|------------------------------|
 | HEP       | 1               | SIP                | JSON       | SIP methods, SIP responses   |
@@ -25,16 +35,16 @@ This is a **prototype** under heavy development, please **use it with caution** 
 |           | transport.stats | Transport Stats    | Timeseries | IP SRC/DST, Bytes in/out     |
 |           |                 |                    |            |                              |
 
-#### Supported Stores
-| TYPE       |               |
-|------------|-----------------|
-| JSON       | Postgres, RethinkDB, MongoDB, Elasticsearch |
-| Timeseries | InfluxDB, Prometheus |
+
 
 ### Usage
+Launch a dedicated instance of `hepop` per protocol using a custom configuration:
 ```
-  hepop [options]
+$ hepop -c ./myconfig.js
 ```
+
+#### Config
+See [myconfig.js](https://github.com/sipcapture/HEPop/blob/master/myconfig.js) for an example configuration
 
 #### Options:
 ```
@@ -46,14 +56,9 @@ This is a **prototype** under heavy development, please **use it with caution** 
     -c, --configfile <configfile>  configuration file
     -s, --socket <socket>          socket service (udp,tcp,http,sipfix) (default: udp)
 ```
-#### Config
-See [myconfig.js](https://github.com/sipcapture/HEPop/blob/master/myconfig.js) for an example configuration
 
 
-##### Using Configuration file
-```
-$ hepop -c ./myconfig.js
-```
+
 
 #### Screenshots
 ##### homer7
