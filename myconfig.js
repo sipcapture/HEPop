@@ -35,7 +35,13 @@
 	},
   	"mongodb":{
 	  "url": "mongodb://localhost:27017/homer"
-	}
+	},
+	"elastic" : {
+     	  "target": "http://localhost:9200",
+     	  "max_bulk_qtty": 1000,
+     	  "max_request_num": 20, 
+     	  "index": "hep"
+       }
   },
   "debug": false
 }
