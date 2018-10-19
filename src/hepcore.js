@@ -59,6 +59,7 @@ exports.processHep = function processHep(data,socket) {
 
 	  // Create protocol bucket
 	  var ukey = insert.protocol_header.payloadType +"_"+ (insert.protocol_header.transactionType || "default");
+	  if (insert.protocol_header.payloadType == 1) ukey = insert.protocol_header.payloadType +"_"+ "call";
 	  // if (!buckets[ukey]) buckets[ukey] = require('./bucket').pgp_bucket;
 	  if (!buckets[ukey]) buckets[ukey] = importFresh('./bucket').pgp_bucket;
 	  buckets[ukey].set_id("hep_proto_"+ukey);
@@ -68,7 +69,6 @@ exports.processHep = function processHep(data,socket) {
 		case 1:
 		  // todo: move to modular function!
 		  try { var sip = sipdec.getSIP(insert.raw);
-		        ukey = insert.protocol_header.payloadType +"_"+ "call";
 			if (config.debug) log('%stop:red %s',stringify(sip));
 		  	insert.data_header.protocol = 'SIP';
 		  	if (sip && sip.headers) {
