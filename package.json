@@ -8,7 +8,7 @@
   },
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "start": "node hepop.js -c ./myconfig.js"
+    "start": "node hepop.js -c /app/myconfig.js"
   },
   "repository": {
     "type": "git",
