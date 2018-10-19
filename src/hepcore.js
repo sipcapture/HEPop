@@ -58,7 +58,7 @@ exports.processHep = function processHep(data,socket) {
 	  } catch(e) { log('%s:red',e); }
 
 	  // Create protocol bucket
-	  const ukey = insert.protocol_header.payloadType +"_"+ (insert.protocol_header.transactionType || "default");
+	  var ukey = insert.protocol_header.payloadType +"_"+ (insert.protocol_header.transactionType || "default");
 	  // if (!buckets[ukey]) buckets[ukey] = require('./bucket').pgp_bucket;
 	  if (!buckets[ukey]) buckets[ukey] = importFresh('./bucket').pgp_bucket;
 	  buckets[ukey].set_id("hep_proto_"+ukey);
@@ -68,6 +68,7 @@ exports.processHep = function processHep(data,socket) {
 		case 1:
 		  // todo: move to modular function!
 		  try { var sip = sipdec.getSIP(insert.raw);
+		        ukey = insert.protocol_header.payloadType +"_"+ "call";
 			if (config.debug) log('%stop:red %s',stringify(sip));
 		  	insert.data_header.protocol = 'SIP';
 		  	if (sip && sip.headers) {
@@ -108,15 +109,15 @@ exports.processHep = function processHep(data,socket) {
 				    if ((sip.headers['Content-Type'] && sip.headers['Content-Type'][0]) && sip.headers['Content-Type'][0].raw == 'application/vq-rtcpxr'){
 					var temp;
 					if (sip.headers.Packetloss){
-						temp=parsip.getVQ(sip.headers.Packetloss[0].raw)['NLR'];
+						temp=sipdec.getVQ(sip.headers.Packetloss[0].raw)['NLR'];
 						if (mm) metrics.increment(metrics.counter("rtcpxr", iptags, 'NLR' ), temp );
 					}
 					if (sip.headers.Delay){
-						temp=parsip.getVQ(sip.headers.Delay[0].raw)['IAJ'];
+						temp=sipdec.getVQ(sip.headers.Delay[0].raw)['IAJ'];
 						if (mm) metrics.increment(metrics.counter("rtcpxr", iptags, 'IAJ' ), temp );
 					}
 					if (sip.headers.Qualityest){
-						temp=parsip.getVQ(sip.headers.Qualityest[0].raw)['MOSCQ'];
+						temp=sipdec.getVQ(sip.headers.Qualityest[0].raw)['MOSCQ'];
 						if (mm) metrics.increment(metrics.counter("rtcpxr", iptags, 'MOSCQ' ), temp );
 					}
 				    }
@@ -125,7 +126,7 @@ exports.processHep = function processHep(data,socket) {
 				  try {
 				    if (hdr['X-Rtp-Stat'] && hdr['X-Rtp-Stat'][0]) {
 					try {
-						var xrtp = parsip.getVQ(hdr['X-Rtp-Stat'][0].raw);
+						var xrtp = sipdec.getVQ(hdr['X-Rtp-Stat'][0].raw);
 						Object.keys(xrtp).forEach(function(key){
 							if (mm) metrics.increment(metrics.counter("xrtp", iptags, key ), xrtp[key] );
 						})
@@ -136,7 +137,7 @@ exports.processHep = function processHep(data,socket) {
 				  try {
 				    if (hdr['P-Rtp-Stats'] && hdr['P-Rtp-Stats'][0]) {
 					try {
-						var prtp = parsip.getVQ(hdr['P-Rtp-Stats'][0].raw);
+						var prtp = sipdec.getVQ(hdr['P-Rtp-Stats'][0].raw);
 						Object.keys(prtp).forEach(function(key){
 							if (mm) metrics.increment(metrics.counter("xrtp", iptags, key ), prtp[key] );
 						})
