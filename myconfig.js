@@ -1,12 +1,12 @@
 {
   "id" : "HEPop101",
-  "socket": "udp", // udp, tcp, http, sipfix
+  "socket": "udp", 
   "port": 9060,
   "address": "127.0.0.1",
   "queue": {
-    "timeout": 2000, // if there's no data input until timeout, emit data forcefully.
-    "maxSize": 1000, // data emitted count
-    "useInterval": true // enforce timeout expiration for sending
+    "timeout": 2000, 
+    "maxSize": 1000, 
+    "useInterval": true 
   },
   "dbName": "hepic",
   "tableName": "hep",
@@ -27,7 +27,7 @@
 		"hostname": "localhost:8086"
 	}
   },
-  "db_off": { // disabled  backends for reference
+  "db_off": { 
 	"rethink" : {
 	  "servers":[
 	    { "host": "127.0.0.1", "port":28015 }
@@ -41,7 +41,7 @@
      	  "max_bulk_qtty": 1000,
      	  "max_request_num": 20, 
      	  "index": "hep"
-       }
+        }
   },
   "debug": false
 }
