@@ -23,7 +23,7 @@
 	"influx":{
 		"period": 30000,
 		"expire": 300000, 
-		"dbName": "hep",
+		"dbName": "homer",
 		"hostname": "localhost:8086"
 	}
   },
