@@ -10,7 +10,7 @@ const pgp = require('pg-promise')({
     capSQL: true, // capitalize all generated SQL
     connect(client, dc, isFresh) {
         const cp = client.connectionParameters;
-        log('%start:green Connected to PGsql database:', cp.database);
+        log('%start:green Connected to PGsql database:', cp);
     },
     error(err, e) {
         log('%stop:red Caught PGsql error:', err,e);
@@ -28,7 +28,7 @@ var prepare = function(query){
 	    })
 	    .catch(error => {
 	        // error;
-		if (config.debug) log('ERR: %s',error);
+		if (config.debug) log('PREPARE ERR: %s',error);
 		return false;
 	    });
 }

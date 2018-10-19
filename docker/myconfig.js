@@ -16,6 +16,7 @@
   	  "host": "PGSQL_HOST",
   	  "port": PGSQL_PORT,
   	  "user": "PGSQL_USER",
+  	  "database": "PGSQL_DBNAME",
   	  "password": "PGSQL_PASSWORD"
   	}
   },
