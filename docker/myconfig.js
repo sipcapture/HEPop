@@ -22,10 +22,10 @@
   },
   "metrics": {
 	"influx":{
-		"period": 30000,
-		"expire": 300000, 
-		"dbName": "INFLUXDB_DB",
-		"hostname": "INFLUXDB_HOST:INFLUXDB_PORT"
+	  "period": 30000,
+	  "expire": 300000, 
+	  "dbName": "INFLUXDB_DB",
+	  "hostname": "INFLUXDB_HOST:INFLUXDB_PORT"
 	}
   },
   "db_off": { 
