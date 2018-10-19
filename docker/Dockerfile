@@ -13,7 +13,7 @@ RUN npm install
 EXPOSE 9060
 
 # Configure entrypoint
-COPY ./config.js /app/config.js
+COPY /myconfig.js /app/myconfig.js
 COPY /docker-entrypoint.sh /
 COPY /docker-entrypoint.d/* /docker-entrypoint.d/
 RUN chmod +x /docker-entrypoint.d/* /docker-entrypoint.sh
