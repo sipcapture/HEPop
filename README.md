@@ -43,6 +43,8 @@ Launch a dedicated instance of `hepop` per protocol using a custom configuration
 ```
 $ hepop -c ./myconfig.js
 ```
+#### Docker
+Try the bundled [https://github.com/sipcapture/homer-docker/tree/master/hepop/hom7-hep-influx](Docker Compose)
 
 #### Config
 See [myconfig.js](https://github.com/sipcapture/HEPop/blob/master/myconfig.js) for an example configuration
