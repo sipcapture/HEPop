@@ -14,7 +14,7 @@
 	"rawSize": 8000,
   	"pgsql":{
   	  "host": "PGSQL_HOST",
-  	  "port": PGSQL_HOST,
+  	  "port": PGSQL_PORT,
   	  "user": "PGSQL_USER",
   	  "password": "PGSQL_PASSWORD"
   	}
