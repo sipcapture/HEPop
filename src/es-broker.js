@@ -147,19 +147,24 @@ var broker = function (opts)
           log('%stop:red Parse Error [%s:red] %s', err, line );
 					return;
 				}
-				var index_id = Object.assign({}, index)
+				var index_id = {
+					"index": {
+						"_index": _index,
+						"_type": 'hep'
+					}
+				};
 				var dt = new Date();
 				index_id.index._index += "-" + dt.getFullYear() + "." + (dt.getMonth() + 1) + "." + dt.getDate();
 				
 				if (util.isArray(parsed_data)) {
 					var len = parsed_data.length;
 					for (var i=0; i<len; i++) {
-						bucket.push(index);
+						bucket.push(index_id);
 						bucket.push(parsed_data[i]);
 					}
 
 				} else {
-					bucket.push(index);
+					bucket.push(index_id);
 					bucket.push(parsed_data);						
 				}
 			});
