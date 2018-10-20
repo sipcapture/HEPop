@@ -90,11 +90,12 @@ exports.mdb_bucket = m_bucket;
 if (config.db.elastic){
  try {
   var EsBroker = require('./es-broker');
-  var es = EsBroker.create(config.db.elastic);
-  exports.e_bucket = es;
+  e_bucket = EsBroker.create(config.db.elastic);
+  
  } catch(e){ log('%stop:red Failed to Initialize Elastic driver/queue',e); return; }
 }
 
+exports.e_bucket = e_bucket;
 
 process.on('beforeExit', function() {
   bucket.close(function(leftData) {
