@@ -36,7 +36,7 @@ During testing, HEPop bulking clocked about 10-15k/PPS per shared core on a Xeon
 | HTTP      | MEDIASOUP  | any             | Custom JSON Fields | JSON       | roomId, peerName, producerId |
 |           |            | producer.stats  | Media Stats        | Timeseries | RTCP Statistics              |
 |           |            | transport.stats | Transport Stats    | Timeseries | IP SRC/DST, Bytes in/out     |
-| SIPFIX    | ORACLE SBC | SIP (tcp/udp)   | SIP comm-monitor   | JSON + TS  | SIP methods, SIP responses   |
+| SIPFIX    |            | SIP (tcp/udp)   | SIP comm-monitor   | JSON + TS  | SIP methods, SIP responses   |
 |           |            | RTP QOS (stats) | RTP Media stats    | Timeseries | RTP, RTCP Stats              |
 
 
