@@ -105,13 +105,13 @@ var broker = function (opts)
 	var index = {
 		"index": {
 			"_index": _index,
-			"_type": 'error'
+			"_type": 'hep'
 		}
 	};
 
 	var bucket = bucket_emitter.create({
-		timeout: 10000,
-		use_interval: false,
+		timeout: 5000,
+		use_interval: true,
 		maxSize: _max_bulk_qtty * 2
 	});
 
@@ -147,7 +147,10 @@ var broker = function (opts)
           log('%stop:red Parse Error [%s:red] %s', err, line );
 					return;
 				}
-
+				var index_id = index;
+				var dt = new Date();
+				index_id.index._index += "-" + dt.getFullYear() + "." + (dt.getMonth() + 1) + "." + dt.getDate();
+				
 				if (util.isArray(parsed_data)) {
 					var len = parsed_data.length;
 					for (var i=0; i<len; i++) {
