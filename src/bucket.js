@@ -91,8 +91,9 @@ if (config.db.elastic){
  try {
   var EsBroker = require('./es-broker');
   e_bucket = EsBroker.create(config.db.elastic);
-  
- } catch(e){ log('%stop:red Failed to Initialize Elastic driver/queue',e); return; }
+  e_bucket.set_id = function(id){ return; }
+ } catch(e){ log('%stop:red Failed to Initialize Elastic Bulk driver/queue',e); return; }
+
 }
 
 exports.e_bucket = e_bucket;
