@@ -14,7 +14,7 @@ This is a **prototype** under heavy development, please **use it with caution** 
 The core of `hepop` follows the latest `homer` data design and splits indexed data and timeseries, providing multiple backend options to choose from when prototype a custom capture solution.
 
 ### Performance
-During testing, HEPop bulking clocked about 10-15k/PPS per core on an Intel(R) Xeon(R) CPU E5-2660 v3 @ 2.60GHz
+During testing, HEPop bulking clocked about 10-15k/PPS per shared core on a Xeon(R) CPU E5-2660 v3 @ 2.60GHz
 
 #### Supported Stores
 | TYPE       |               |
