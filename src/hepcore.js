@@ -4,6 +4,7 @@ const sipdec = require('parsip');
 const r_bucket = require('./bucket').bucket;
 const pgp_bucket = require('./bucket').pgp_bucket;
 const mdb_bucket = require('./bucket').mdb_bucket;
+const e_bucket = require('./bucket').e_bucket;
 const r = require('./bucket').r;
 const stringify = require('safe-stable-stringify');
 const flatten = require('flat')
@@ -222,7 +223,12 @@ exports.processHep = function processHep(data,socket) {
 	     if(decoded['rcinfo.timeSeconds']) decoded['rcinfo.ts'] = r.epochTime(decoded['rcinfo.timeSeconds']);
 	     r_bucket.push(decoded);
 	  }
+	
 	  if (mdb_bucket) mdb_bucket.push(decoded);
-
+		
+	  if (e_bucket)	{
+		  if(decoded['rcinfo.timeSeconds']) decoded['@timestamp'] = r.epochTime(decoded['rcinfo.timeSeconds']);
+		  e_bucket.push(decoded);
+	  }
 	} catch(err) { log('%error:red %s', err.toString() ) }
 };
