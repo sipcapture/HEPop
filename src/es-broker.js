@@ -147,7 +147,7 @@ var broker = function (opts)
           log('%stop:red Parse Error [%s:red] %s', err, line );
 					return;
 				}
-				var index_id = index;
+				var index_id = Object.assign({}, index)
 				var dt = new Date();
 				index_id.index._index += "-" + dt.getFullYear() + "." + (dt.getMonth() + 1) + "." + dt.getDate();
 				
