@@ -50,7 +50,6 @@ var createTable = function(tableName){
 
 try {
     db = pgp(config.db.pgsql);
-    db.connect();
     exports.pgp = db;
     log('%start:cyan Initializing PGSql driver [%s:blue]', stringify(config.db.pgsql));
     //prepare(doDb);
