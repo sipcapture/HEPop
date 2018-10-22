@@ -3,6 +3,7 @@ const _http = require('http');
 const dgram = require('dgram');
 const net = require('net');
 const log = require('./logger');
+const config = require('./config').getConfig();
 
 const getFuncs = function(){
   const hep = require('./hepcore');
