@@ -53,7 +53,7 @@ const processJson = function(data,socket) {
 		var ts = data.timestamp/1000;
 		insert.protocol_header.time_sec = Math.floor(ts);
 		insert.protocol_header.time_usec = parseInt( (ts - insert.protocol_header.time_sec ) * 1000);
-		insert.create_date = new Date(data.timestamp);
+		insert.original_date = new Date(ts);
 	    }
 
 	    /* Opaque Ids */
