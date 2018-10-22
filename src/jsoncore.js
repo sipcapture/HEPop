@@ -81,7 +81,7 @@ const processJson = function(data,socket) {
 		  if (data.event.transport && data.event.transport.id) {
 			insert.data_header.event = data.event.name;
 			insert.data_header.transport_id = data.event.transport.id;
-			db.set(data.session_id, {transport: data.event.transport.id }, tll);
+			db.set(data.session_id, {transport: data.event.transport.id }, ttl);
 			var ip = db.get(data.event.transport.id);
 			if (ip) {
 				insert.protocol_header.dstIp = ip.ip;
@@ -174,7 +174,7 @@ const processJson = function(data,socket) {
 		  insert.data_header.event = data.event.plugin || data.event.data.event;	
 		  /* SIP correlation */
 		  if(data.event && data.event.data['call-id']) {
-			db.set(data.handle_id, {cid: data.event.data['call-id']}, tll);
+			db.set(data.handle_id, {cid: data.event.data['call-id']}, ttl);
 			insert.protocol_header.correlation_id = data.event.data['call-id'];
 		  }
 		  /* Videoroom */
@@ -241,8 +241,8 @@ const processJson = function(data,socket) {
 		  if (data.event.transport && data.event.data) {
 			insert.data_header.event = data.event.transport;
 			insert.data_header.transport_id = data.event.transport.id;
-			db.set(data.event.transport_id, {ip: data.event.data.ip, port: data.event.data.port }, tll * 2);
-			db.set('ip_'+data.session_id, {ip: data.event.data.ip, port: data.event.data.port }, tll * 2);
+			db.set(data.event.transport_id, {ip: data.event.data.ip, port: data.event.data.port }, ttl * 2);
+			db.set('ip_'+data.session_id, {ip: data.event.data.ip, port: data.event.data.port }, ttl * 2);
 		  }
 		  break;
 
