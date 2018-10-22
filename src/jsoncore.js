@@ -70,8 +70,8 @@ const processJson = function(data,socket) {
 
 	    /* Direction? */
 		if (data.emitter) insert.protocol_header.srcIp = data.emitter || insert.protocol_header.address || "Janus";
-	    	if (data.session_id) insert.protocol_header.dstIp = data.session_id;
-	    	if (data.handle_id) insert.protocol_header.srcIp = data.handle_id;
+	    	if (data.session_id) insert.protocol_header.dstIp = "S_" + data.session_id;
+	    	if (data.handle_id) insert.protocol_header.srcIp = "H_" + data.handle_id;
 
 	    switch(data.type) {
 
@@ -262,7 +262,7 @@ const processJson = function(data,socket) {
 	  } else if (data.type && data.event && !data.session_id){
 		
 		if (config.debug) log('%data:cyan JANUS CONFIG [%s:blue][%s:green]', stringify(data) );
-		insert.sid = "JANUS_CORE";
+		insert.sid = "0";
 
 	  } else if (data.event && data.event == 'producer.stats' &&  data.stats){
 		// MediaSoup Media Reports

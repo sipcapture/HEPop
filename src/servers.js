@@ -35,7 +35,7 @@ var self = module.exports = {
 	  server.on('listening', () => log('%start:green TCP %s:gray %d:yellow', server.address().address, server.address().port));
 	  server.on('close', () => log('%stop:red %s:gray %d:yellow', server.address().address, server.address().port));
 	  server.on('connection', (socket) => {
-	    log('%connect:green (%s:italic:dim %d:italic:gray)', socket.remoteAddress, socket.remotePort)
+	    if (config.debug) log('%connect:green (%s:italic:dim %d:italic:gray)', socket.remoteAddress, socket.remotePort)
 	    socket.on('data', (data) => funcs.processHep(data,socket));
 	    socket.on('error', (err) => log('%error:red (%s:italic:dim %d:italic:gray) %s', socket.remoteAddress, socket.remotePort, err.toString()));
 	    socket.on('end', () => log('%disconnect:red️ (%s:italic:dim %d:italic:gray)', socket.remoteAddress, socket.remotePort));
@@ -84,8 +84,8 @@ var self = module.exports = {
 	  server.on('close', () => log('%stop:red %s:gray %d:yellow', server.address().address, server.address().port))
 	  server.on('connection', (socket) => log('%connect:green (%s:italic:dim %d:italic:gray)', socket.remoteAddress, socket.remotePort))
 	  server.on('request', (request, response) => {
-	    log('%data:cyan (%s:italic:dim %d:italic:gray) HTTP/%s:dim %s:green %s:blue', request.socket.remoteAddress, request.socket.remotePort, request.httpVersion, request.method, request.url)
-	    log(`%data:cyan (%s:italic:dim %d:italic:gray) ${self.headerFormat(request.headers)}`, request.socket.remoteAddress, request.socket.remotePort, ...request.rawHeaders)
+	    if (config.debug) log('%data:cyan (%s:italic:dim %d:italic:gray) HTTP/%s:dim %s:green %s:blue', request.socket.remoteAddress, request.socket.remotePort, request.httpVersion, request.method, request.url)
+	    if (config.debug) log(`%data:cyan (%s:italic:dim %d:italic:gray) ${self.headerFormat(request.headers)}`, request.socket.remoteAddress, request.socket.remotePort, ...request.rawHeaders)
 
 	    response.writeHead(200, { 'Content-Type': request.headers['content-type'] || 'text/plain' })
 
