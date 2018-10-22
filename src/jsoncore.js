@@ -261,7 +261,7 @@ const processJson = function(data,socket) {
 
 	  } else if (data.type && data.event && !data.session_id){
 		
-		console.log('JANUS CONFIG', data);
+		if (config.debug) log('%data:cyan JANUS CONFIG [%s:blue][%s:green]', stringify(data) );
 		insert.sid = "JANUS_CORE";
 
 	  } else if (data.event && data.event == 'producer.stats' &&  data.stats){
