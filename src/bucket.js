@@ -104,11 +104,10 @@ exports.e_bucket = e_bucket;
 if (config.db.loki){
  try {
   var loki = require('./loki');
-  l_bucket.set_id = function(id){ return; }
   log('%start:green Initialize Loki driver' );
-
   log('%start:green Initializing Bulk bucket...');
   l_bucket = bucket_emitter.create(config.queue);
+  l_bucket.set_id = function(id){ return; }
   l_bucket.on('data', function(data) {
     // Bulk ready to emit!
     if (config.debug) log('%data:cyan Loki BULK Out %s:blue', stringify(data) );
