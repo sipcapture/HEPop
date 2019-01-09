@@ -18,13 +18,24 @@ if(!config.db.loki) {
     //return;
   }
 
-
 var lokiApi = axios.create({
   baseURL: config.db.loki.url,
   timeout: 1000,
 });
 lokiApi.defaults.headers.post['Content-Type'] = 'application/json';
 
+/* helpers */
+
+const groupBy = (items, key) => items.reduce(
+  (result, item) => ({
+    ...result,
+    [item.raw[key]]: [
+      ...(result[item.raw[key]] || []),
+      item,
+    ],
+  }), 
+  {},
+);
 
 var rawSize = config.db.rawSize || 8000;
 
@@ -40,18 +51,22 @@ exports.insert = function(bulk,id){
 
 	// FORM Loki API Post body
 	var line = {"streams": [{"labels": "", "entries": [] }]};
-	var results = 0;
+	var count = 0;
+	var groups = 0;
 	var labels = "";
-        line.streams[0].labels="{type=\"json\", id=\""+id+"\"}"
-             bulk.forEach(function(row){
-		results++;
-		console.log(row);
-                line.streams[0].entries.push({ "ts": row['create_date']||new Date().toISOString(), "line": JSON.stringify(row.raw)  });
-             });
+	var dataset = groupBy(bulk,'type');
 
+	for (var xid in dataset){
+	     line.streams[count].labels="{type=\"json\", id=\""+xid+"\"}"
+	     dataset[key].forEach(function(row){
+		if (config.debug) console.log('PROCESSING LOKI BULK',xid, row);
+                line.streams[count].entries.push({ "ts": row['create_date']||new Date().toISOString(), "line": JSON.stringify(row.raw)  });
+             });
+	     count++;
+	}
 	line = JSON.stringify(line);
 	// POST Bulk to Loki
-	if (results>0){
+	if (line){
 		lokiApi.post(config.db.loki.url, line)
 		  .then(function (response) {
 		    if (config.debug) console.log('LOKI RESP',response);
