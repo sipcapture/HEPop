@@ -58,7 +58,7 @@ exports.insert = function(bulk,id){
 
 	for (var xid in dataset){
 	     line.streams[count].labels="{type=\"json\", id=\""+xid+"\"}"
-	     dataset[key].forEach(function(row){
+	     dataset[xid].forEach(function(row){
 		if (config.debug) console.log('PROCESSING LOKI BULK',xid, row);
                 line.streams[count].entries.push({ "ts": row['create_date']||new Date().toISOString(), "line": JSON.stringify(row.raw)  });
              });
