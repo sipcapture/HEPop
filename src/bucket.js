@@ -103,7 +103,8 @@ exports.e_bucket = e_bucket;
 // Loki
 if (config.db.loki){
  try {
-  l = require('./loki');
+  var loki = require('./loki');
+  l_bucket.set_id = function(id){ return; }
   log('%start:green Initialize Loki driver' );
 
   log('%start:green Initializing Bulk bucket...');

@@ -5,7 +5,7 @@ FROM node:8
 ENV BUILD 703024
 
 # Requires HOMER7-UI Git
-RUN git clone https://github.com/sipcapture/hepop /app
+RUN git clone --single-branch --branch loki https://github.com/sipcapture/hepop /app
 WORKDIR /app
 RUN npm install 
 
