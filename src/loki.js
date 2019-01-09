@@ -50,17 +50,22 @@ exports.insert = function(bulk,id){
 	if (config.debug) log('GOT LOKI BULK ID:%s: %s',id, JSON.stringify(bulk));
 
 	// FORM Loki API Post body
-	var line = {"streams": [{"labels": "", "entries": [] }]};
+	var line = {"streams": []};
+	var uniq = [];
 	var count = 0;
 	var groups = 0;
 	var labels = "";
 	var dataset = groupBy(bulk,'type');
 
 	for (var xid in dataset){
-	     line.streams[count].labels="{type=\"json\", id=\""+xid+"\"}"
+	     if(uniq.indexOf(xid) == -1) {
+		uniq[xid] = count;
+		line.streams.push({"labels": "", "entries": [] });
+	     }
+	     line.streams[uniq[xid]].labels="{type=\"json\", id=\""+xid+"\"}"
 	     dataset[xid].forEach(function(row){
 		if (config.debug) console.log('PROCESSING LOKI BULK',xid, row);
-                line.streams[count].entries.push({ "ts": row['create_date']||new Date().toISOString(), "line": JSON.stringify(row.raw)  });
+                line.streams[uniq[xid]].entries.push({ "ts": row['create_date']||new Date().toISOString(), "line": JSON.stringify(row.raw)  });
              });
 	     count++;
 	}
