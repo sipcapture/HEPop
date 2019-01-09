@@ -12,8 +12,8 @@ var db;
 const axios = require('axios');
 
 
-if(!config.db.pgsql) {
-    log('%stop:red Missing configuration for PGsql [%s:blue]');
+if(!config.db.loki) {
+    log('%stop:red Missing configuration for Loki [%s:blue]');
     process.exit();
     //return;
   }
