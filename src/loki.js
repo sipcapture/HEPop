@@ -35,21 +35,21 @@ exports.insert = function(bulk,id){
 	var line = {"streams": [{"labels": "", "entries": [] }]};
 	var results = 0;
 	var labels = "";
-        line.streams[0].labels="__name__=\""+id+"\""
+        line.streams[0].labels="{type=\"json\", id=\""+id+"\"}"
              bulk.forEach(function(row){
-		// results++;
+		results++;
 		console.log(row);
-                // line.streams[0].entries.push({ "ts": row['@timestamp']||new Date().toISOString(), "line": row.message  });
+                line.streams[0].entries.push({ "ts": row['create_date']||new Date().toISOString(), "line": JSON.stringify(row.raw)  });
              });
 
 	// POST Bulk to Loki
 	if (results>0){
 		axios.post(config.db.loki.url, line)
 		  .then(function (response) {
-		    console.log(response);
+		    if (config.debug) console.log('LOKI RESP',response);
 		  })
 		  .catch(function (error) {
-		    console.log(error);
+		    console.log('LOKI ERR',error);
 		  });
 	}
 
