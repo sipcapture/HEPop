@@ -19,6 +19,12 @@ if(!config.db.loki) {
   }
 
 
+var push = axios.create({
+  baseURL: config.db.loki.url,
+  timeout: 1000,
+  headers: {'Content-Type': 'application/json'}
+});
+
 var rawSize = config.db.rawSize || 8000;
 
 // Generating a multi-row insert to /api/prom/push
@@ -42,6 +48,7 @@ exports.insert = function(bulk,id){
                 line.streams[0].entries.push({ "ts": row['create_date']||new Date().toISOString(), "line": JSON.stringify(row.raw)  });
              });
 
+	line = JSON.stringify(line);
 	// POST Bulk to Loki
 	if (results>0){
 		axios.post(config.db.loki.url, line)
