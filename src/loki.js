@@ -19,11 +19,12 @@ if(!config.db.loki) {
   }
 
 
-var push = axios.create({
+var lokiApi = axios.create({
   baseURL: config.db.loki.url,
   timeout: 1000,
-  headers: {'Content-Type': 'application/json'}
 });
+lokiApi.defaults.headers.post['Content-Type'] = 'application/json';
+
 
 var rawSize = config.db.rawSize || 8000;
 
@@ -51,7 +52,7 @@ exports.insert = function(bulk,id){
 	line = JSON.stringify(line);
 	// POST Bulk to Loki
 	if (results>0){
-		axios.post(config.db.loki.url, line)
+		lokiApi.post(config.db.loki.url, line)
 		  .then(function (response) {
 		    if (config.debug) console.log('LOKI RESP',response);
 		  })
