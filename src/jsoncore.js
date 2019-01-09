@@ -36,11 +36,17 @@ const processJson = function(data,socket) {
 	  var tags = {};
 	  // Create protocol bucket
 	  var key = 1000 + "_"+ (insert.protocol_header.type || "default");
-	  if (config.db.pgsql && !buckets[key] ) { buckets[key] = require('./bucket').pgp_bucket; }
-	  else if (config.db.elastic && !buckets[key] ) { buckets[key] = require('./bucket').e_bucket; }
-	  else if (config.db.loki && !buckets[key] ) { buckets[key] = require('./bucket').l_bucket; }
+	  if (config.db.pgsql && !buckets[key] ) { 
+		buckets[key] = require('./bucket').pgp_bucket; 
+		buckets[key].set_id("hep_proto_"+key);
+	  } else if (config.db.elastic && !buckets[key] ) { 
+		buckets[key] = require('./bucket').e_bucket; 
+	        buckets[key].set_id("hep_proto_"+key);
+	  } else if (config.db.loki && !buckets[key] ) { 
+		buckets[key] = require('./bucket').l_bucket; 
+	  }
+
 	  // else if (config.db.rethink &&!buckets[key]) { const r_bucket = require('./bucket').bucket; const r = require('./bucket').r; }
-	  buckets[key].set_id("hep_proto_"+key);
 
 	  if (data.type && data.event && data.session_id){
 	    // Janus Events
