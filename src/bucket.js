@@ -14,6 +14,7 @@ var r_bucket;
 var p_bucket;
 var e_bucket;
 var m_bucket;
+var l_bucket;
 
 // RethinkDB
 if (config.db.rethink){
@@ -97,6 +98,29 @@ if (config.db.elastic){
 }
 
 exports.e_bucket = e_bucket;
+
+
+// Loki
+if (config.db.loki){
+ try {
+  l = require('./loki');
+  log('%start:green Initialize Loki driver' );
+
+  log('%start:green Initializing Bulk bucket...');
+  l_bucket = bucket_emitter.create(config.queue);
+  l_bucket.on('data', function(data) {
+    // Bulk ready to emit!
+    if (config.debug) log('%data:cyan Loki BULK Out %s:blue', stringify(data) );
+		loki.insert(data);
+  }).on('error', function(err) {
+    log('%error:red %s', err.toString() )
+  });
+
+ } catch(e){ log('%stop:red Failed to Initialize Loki driver/queue',e); return; }
+}
+
+exports.l_bucket = l_bucket;
+
 
 process.on('beforeExit', function() {
   bucket.close(function(leftData) {
