@@ -21,6 +21,13 @@ if(!config.metrics || !config.metrics.influx){
 var buckets = [];
 
 const processJson = function(data,socket) {
+	/* Arrays */
+	if (data.isArray){
+		data.forEach(function(event){
+			processJson(event,socket);	
+		});
+		return;
+	}
 	/* Plain Objects */
 	try {
   	  //if (config.debug) log('%data:cyan JSON Net [%s:blue][%s:green]', stringify(socket) );
