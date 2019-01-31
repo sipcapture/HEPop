@@ -21,7 +21,7 @@ if(!config.metrics || !config.metrics.influx){
 var buckets = [];
 
 const processJson = function(data,socket) {
-	/* Arrays */
+	/* Bulk Arrays */
 	if (data.isArray){
 		data.forEach(function(event){
 			processJson(event,socket);	
