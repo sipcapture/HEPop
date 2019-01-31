@@ -328,9 +328,38 @@ const processJson = function(data,socket) {
 
 		// Jitsi Analytics Event
 		if (config.debug) log('%data:green JITSI CLIENT REPORT [%s]',stringify(data) );
-		/* Static SID from session_id */
-		insert.sid = data.device_id || 'unknown';
-		tags = { session: data.device_id, handle: data.ip, action: data.action, source: 'jitsi' };
+
+		/* Grab Base Labels/Tags */
+		tags = { session: data.device_id, action: data.action, source: 'jitsi' };
+
+		if(data.attributes){
+		  // Session Tags
+		  if(data.device_id) tags.device_id = data.attributes.device_id;
+		  if(data.ip) tags.ip = data.attributes.ip;
+		  if(data.attributes.p2p) tags.p2p = data.attributes.p2p;
+		  if(data.attributes.transport_type) tags.p2p = data.attributes.transport_type;
+		  if(data.attributes.remote_candidate_type) tags.local = data.attributes.remote_candidate_type;
+		  if(data.attributes.local_candidate_type) tags.remote = data.attributes.local_candicate_type;
+
+		  // Series
+		  if(data.attributes.conference_size) metrics.increment(metrics.counter("jitsi", tags, 'conference_size' ), data.attributes.conference_size );
+		  if(data.attributes.end2end_rtt_avg) metrics.increment(metrics.counter("jitsi", tags, 'end2end_rtt_avg' ), data.attributes.end2end_rtt_avg );
+
+		  // RTT
+		  if(data.attributes.rtt_avg) metrics.increment(metrics.counter("jitsi", tags, 'rtt_avg' ), data.attributes.rtt_avg );
+
+		  // BITRATE
+		  if(data.attributes.bitrate_audio_upload_avg) metrics.increment(metrics.counter("jitsi", tags, 'bitrate_audio_upload_avg' ), data.attributes.bitrate_audio_upload_avg );
+		  if(data.attributes.bitrate_video_download_avg) metrics.increment(metrics.counter("jitsi", tags, 'bitrate_video_download_avg' ), data.attributes.bitrate_video_download_avg );
+		  if(data.attributes.bitrate_video_upload_avg) metrics.increment(metrics.counter("jitsi", tags, 'bitrate_video_upload_avg' ), data.attributes.bitrate_video_upload_avg );
+		  if(data.attributes.bitrate_audio_download_avg) metrics.increment(metrics.counter("jitsi", tags, 'bitrate_audio_download_avg' ), data.attributes.bitrate_audio_download_avg );
+		  // PACKET LOSS
+		  if(data.attributes.packet_loss_total_avg) metrics.increment(metrics.counter("jitsi", tags, 'packet_loss_total_avg' ), data.attributes.packet_loss_total_avg );
+		  if(data.attributes.packet_loss_download_avg) metrics.increment(metrics.counter("jitsi", tags, 'packet_loss_download_avg' ), data.attributes.packet_loss_download_avg );
+		  if(data.attributes.packet_loss_upload_avg) metrics.increment(metrics.counter("jitsi", tags, 'packet_loss_upload_avg' ), data.attributes.packet_loss_upload_avg );
+		  // CONNECTION QUALITY
+		  if(data.attributes.connection_quality_avg) metrics.increment(metrics.counter("jitsi", tags, 'connection_quality_avg' ), data.attributes.connection_quality_avg );
+		}
 
 	  }
 
