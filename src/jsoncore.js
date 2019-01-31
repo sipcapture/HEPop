@@ -323,13 +323,20 @@ const processJson = function(data,socket) {
 		/* Custom Fields */
 	        if (data.stats[0].dtlsState) tags.media = data.stats[0].dtlsState;
 	        tags.source = "mediasoup";
+
+	  } else if (data.source && data.action && data.type){
+
+		// Jitsi Analytics Event
+		if (config.debug) log('%data:green JITSI CLIENT REPORT [%s]',stringify(data) );
+		/* Static SID from session_id */
+		insert.sid = data.device_id || 'unknown';
+		tags = { session: data.device_id, handle: data.ip, action: data.action, source: 'jitsi' };
+
 	  }
 
 	  // Use Tags for Protocol Search
-	  // insert.data_header = tags;
 	  insert.data_header = Object.assign(insert.data_header, tags);
 
-	  //if (r_bucket) r_bucket.push(JSON.parse(dec));
 	  if (buckets[key]) buckets[key].push(insert);
 
 

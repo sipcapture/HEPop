@@ -2,7 +2,7 @@
 FROM node:8
 
 # BUILD FORCE
-ENV BUILD 703034
+ENV BUILD 703040
 
 # Requires HOMER7-UI Git
 RUN git clone --single-branch --branch master https://github.com/sipcapture/hepop /app
@@ -11,6 +11,7 @@ RUN npm install
 
 # Expose Ports
 EXPOSE 9060
+EXPOSE 8080
 
 # Configure entrypoint
 COPY /myconfig.js /app/myconfig.js
