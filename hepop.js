@@ -23,7 +23,7 @@ program
   .option('-d, --dbName <address>', 'database name', String, 'hepic')
   .option('-t, --tableName <address>', 'database table name', String, 'hep')
   .option('-c, --configfile <configfile>', 'configuration file', String)
-  .option('-s, --socket <socket>', 'socket service (udp,tcp,http,sipfix)', String, 'udp')
+  .option('-s, --socket <socket>', 'socket service (udp,tcp,http,https,sipfix)', String, 'udp')
   .parse(process.argv)
 
 if (!program.socket||!program.configfile) {

@@ -1,5 +1,7 @@
 const hepjs = require('hep-js');
 const _http = require('http');
+const _https = require('https');
+const fs = require('fs');
 const dgram = require('dgram');
 const net = require('net');
 const log = require('./logger');
@@ -79,6 +81,52 @@ var self = module.exports = {
 	http: function({ port = undefined, address = '127.0.0.1' } = { address: '127.0.0.1' }) {
 	  let funcs = self.getFuncs();
 	  let server = _http.createServer()
+
+	  server.on('error', (err) => log('%error:red %s', err.toString()))
+	  server.on('listening', () => log('%start:green HTTP %s:gray %d:yellow', server.address().address, server.address().port))
+	  server.on('close', () => log('%stop:red %s:gray %d:yellow', server.address().address, server.address().port))
+	  server.on('connection', (socket) => log('%connect:green (%s:italic:dim %d:italic:gray)', socket.remoteAddress, socket.remotePort))
+	  server.on('request', (request, response) => {
+	    if (config.debug) log('%data:cyan (%s:italic:dim %d:italic:gray) HTTP/%s:dim %s:green %s:blue', request.socket.remoteAddress, request.socket.remotePort, request.httpVersion, request.method, request.url)
+	    if (config.debug) log(`%data:cyan (%s:italic:dim %d:italic:gray) ${self.headerFormat(request.headers)}`, request.socket.remoteAddress, request.socket.remotePort, ...request.rawHeaders)
+
+	    response.writeHead(200, { 'Content-Type': request.headers['content-type'] || 'text/plain' })
+
+	    request.on('data', (data) => {
+		if (data instanceof Array) {
+        	        data.forEach(function(subdata){
+		            funcs.processJson(subdata,request.socket);
+        	        });
+	        } else {
+		            funcs.processJson(data,request.socket);
+		}
+	        // response.write(data)
+	    })
+
+	    if (request.rawTrailers.length > 0) {
+	      log(`%data:cyan (%s:italic:dim %d:italic:gray) ${self.headerFormat(request.trailers)}`, request.socket.remoteAddress, request.socket.remotePort, ...request.rawTrailers)
+	    }
+
+	    request.on('end', () => {
+	      log('%disconnect:red️ (%s:italic:dim %d:italic:gray)', request.socket.remoteAddress, request.socket.remotePort)
+	      response.end()
+	    })
+
+	    request.on('error', (err) => log('%error:red (%s:italic:dim %d:italic:gray) %s', request.socket.remoteAddress, request.socket.remotePort, err.toString()))
+	  })
+
+	  server.listen(port, address)
+	},
+	
+	https: function({ port = undefined, address = '127.0.0.1' } = { address: '127.0.0.1' }) {
+	  let funcs = self.getFuncs();
+
+      const options = {
+  		key: fs.readFileSync(config.tls.key),
+  		cert: fs.readFileSync(config.tls.cert)
+	  }
+
+	  let server = _https.createServer(options)
 
 	  server.on('error', (err) => log('%error:red %s', err.toString()))
 	  server.on('listening', () => log('%start:green HTTP %s:gray %d:yellow', server.address().address, server.address().port))
