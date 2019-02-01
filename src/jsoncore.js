@@ -326,13 +326,16 @@ const processJson = function(data,socket) {
 
 	  } else if (data.source && data.action && data.type){
 
+		insert.sid = data.action;
+
 		// Jitsi Analytics Event
 		if (config.debug) log('%data:green JITSI CLIENT REPORT [%s]',stringify(data) );
 
 		/* Grab Base Labels/Tags */
 		tags = { session: data.device_id, action: data.action, source: 'jitsi' };
 
-		if(data.attributes){
+		if(data.attributes && data.action == "rtp.stats"){
+		  if(config.debug) log('%data:green JITSI RTP REPORT [%s]',stringify(data.attributes) );
 		  // Session Tags
 		  if(data.device_id) tags.device_id = data.attributes.device_id;
 		  if(data.ip) tags.ip = data.attributes.ip;
