@@ -1,8 +1,12 @@
 {
   "id" : "HEPop101",
-  "socket": "udp",
-  "port": 9060,
+  "socket": "http",
+  "port": 8080,
   "address": "127.0.0.1",
+  "tls": {
+    "key":"/etc/keys/self.key",
+    "cert":"/etc/keys/self.crt"
+  },
   "queue": {
     "timeout": 2000,
     "maxSize": 1000,

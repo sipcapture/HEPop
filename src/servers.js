@@ -6,7 +6,6 @@ const dgram = require('dgram');
 const net = require('net');
 const log = require('./logger');
 const config = require('./config').getConfig();
-
 const getFuncs = function(){
   const hep = require('./hepcore');
   const jsoncore = require('./jsoncore');
@@ -14,11 +13,14 @@ const getFuncs = function(){
   return {
 	processHep: hep.processHep,
 	processJson: jsoncore.processJson,
- 	processIpfix: sipfix.processIpfix
+ 	processIpfix: sipfix.processIpfix,
+	config: config,
   };
 };
 
 var self = module.exports = {
+
+	getConfig: require('./config').getConfig,
 
 	getFuncs: getFuncs,
 
@@ -121,7 +123,8 @@ var self = module.exports = {
 	https: function({ port = undefined, address = '127.0.0.1' } = { address: '127.0.0.1' }) {
 	  let funcs = self.getFuncs();
 
-      const options = {
+	  var config = this.getConfig();
+          const options = {
   		key: fs.readFileSync(config.tls.key),
   		cert: fs.readFileSync(config.tls.cert)
 	  }
