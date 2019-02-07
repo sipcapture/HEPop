@@ -344,23 +344,23 @@ const processJson = function(data,socket) {
 		  if(config.debug) log('%data:green JITSI TAGS [%s]',stringify(tags) );
 
 		  // Series
-		  if(data.attributes.conference_size) metrics.increment(metrics.counter("jitsi", tags, 'conference_size' ), data.attributes.conference_size||0 );
-		  if(data.attributes.end2end_rtt_avg) metrics.increment(metrics.counter("jitsi", tags, 'end2end_rtt_avg' ), data.attributes.end2end_rtt_avg||0 );
+		  metrics.increment(metrics.counter("jitsi", tags, 'conference_size' ), data.attributes.conference_size||0 );
+		  metrics.increment(metrics.counter("jitsi", tags, 'end2end_rtt_avg' ), data.attributes.end2end_rtt_avg||0 );
 
 		  // RTT
-		  if(data.attributes.rtt_avg) metrics.increment(metrics.counter("jitsi", tags, 'rtt_avg' ), data.attributes.rtt_avg || 0);
+		  metrics.increment(metrics.counter("jitsi", tags, 'rtt_avg' ), data.attributes.rtt_avg || 0);
 
 		  // BITRATE
-		  if(data.attributes.bitrate_audio_upload_avg) metrics.increment(metrics.counter("jitsi", tags, 'bitrate_audio_upload_avg' ), data.attributes.bitrate_audio_upload_avg || 0);
-		  if(data.attributes.bitrate_video_download_avg) metrics.increment(metrics.counter("jitsi", tags, 'bitrate_video_download_avg' ), data.attributes.bitrate_video_download_av || 0);
-		  if(data.attributes.bitrate_video_upload_avg) metrics.increment(metrics.counter("jitsi", tags, 'bitrate_video_upload_avg' ), data.attributes.bitrate_video_upload_avg || 0);
-		  if(data.attributes.bitrate_audio_download_avg) metrics.increment(metrics.counter("jitsi", tags, 'bitrate_audio_download_avg' ), data.attributes.bitrate_audio_download_avg || 0);
+		  metrics.increment(metrics.counter("jitsi", tags, 'bitrate_audio_upload_avg' ), data.attributes.bitrate_audio_upload_avg || 0);
+		  metrics.increment(metrics.counter("jitsi", tags, 'bitrate_video_download_avg' ), data.attributes.bitrate_video_download_av || 0);
+		  metrics.increment(metrics.counter("jitsi", tags, 'bitrate_video_upload_avg' ), data.attributes.bitrate_video_upload_avg || 0);
+		  metrics.increment(metrics.counter("jitsi", tags, 'bitrate_audio_download_avg' ), data.attributes.bitrate_audio_download_avg || 0);
 		  // PACKET LOSS
-		  if(data.attributes.packet_loss_total_avg) metrics.increment(metrics.counter("jitsi", tags, 'packet_loss_total_avg' ), data.attributes.packet_loss_total_avg || 0);
-		  if(data.attributes.packet_loss_download_avg) metrics.increment(metrics.counter("jitsi", tags, 'packet_loss_download_avg' ), data.attributes.packet_loss_download_avg || 0);
-		  if(data.attributes.packet_loss_upload_avg) metrics.increment(metrics.counter("jitsi", tags, 'packet_loss_upload_avg' ), data.attributes.packet_loss_upload_avg || 0);
+		  metrics.increment(metrics.counter("jitsi", tags, 'packet_loss_total_avg' ), data.attributes.packet_loss_total_avg || 0);
+		  metrics.increment(metrics.counter("jitsi", tags, 'packet_loss_download_avg' ), data.attributes.packet_loss_download_avg || 0);
+		  metrics.increment(metrics.counter("jitsi", tags, 'packet_loss_upload_avg' ), data.attributes.packet_loss_upload_avg || 0);
 		  // CONNECTION QUALITY
-		  if(data.attributes.connection_quality_avg) metrics.increment(metrics.counter("jitsi", tags, 'connection_quality_avg' ), data.attributes.connection_quality_avg || 0);
+		  metrics.increment(metrics.counter("jitsi", tags, 'connection_quality_avg' ), data.attributes.connection_quality_avg || 0);
 		}
 
 	  }
