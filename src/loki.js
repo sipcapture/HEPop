@@ -11,7 +11,6 @@ var db;
 
 const axios = require('axios');
 
-
 if(!config.db.loki) {
     log('%stop:red Missing configuration for Loki [%s:blue]');
     process.exit();
@@ -58,14 +57,14 @@ exports.insert = function(bulk,id){
 	     }
 	     line.streams[uniq[xid]].labels="{type=\"json\", id=\""+xid+"\"}";
 	     dataset[xid].forEach(function(row){
-		if (config.debug) console.log('PROCESSING LOKI ROW',xid, row);
                 line.streams[uniq[xid]].entries.push({ "ts": new Date().toISOString(), "line": JSON.stringify(row.raw)  });
              });
 	     count++;
 	}
-	//line = JSON.stringify(line);
+	line = JSON.stringify(line);
 	// POST Bulk to Loki
 	if (line){
+		if (config.debug) console.log('PROCESSING LOKI BULK',line);
 		lokiApi.post(config.db.loki.url, line)
 		  .then(function (response) {
 		    if (config.debug) console.log('LOKI RESP',response.status);

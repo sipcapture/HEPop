@@ -346,6 +346,7 @@ const processJson = function(data,socket) {
 		   // REPORT COUNTER (DEV)
 		   metrics.increment(metrics.counter("jitsi", tags, 'report' ), 1 );
 		   // CONFERENCE INFO
+		  if(config.debug) log('%data:green JITSI CONFERENCE SIZE [%s]',data.attributes.conference_size );
 		   metrics.increment(metrics.counter("jitsi", tags, 'conference_size' ), data.attributes.conference_size);
 		   // RTT
 		   metrics.increment(metrics.counter("jitsi", tags, 'rtt_avg' ), data.attributes.rtt_avg);
