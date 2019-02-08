@@ -332,6 +332,9 @@ const processJson = function(data,socket) {
 		/* Grab Base Labels/Tags */
 		tags = { session: data.device_id, action: data.action, source: 'jitsi' };
 
+		// REPORT COUNTER (DEV)
+		metrics.increment(metrics.counter("jitsi", tags, 'report' ), 1 );
+
 		if(data.attributes && data.action == "rtp.stats"){
 		  if(config.debug) log('%data:green JITSI RTP REPORT [%s]',stringify(data.attributes) );
 		  // Session Tags
@@ -343,8 +346,6 @@ const processJson = function(data,socket) {
 		  if(data.attributes.local_candidate_type) tags.remote = data.attributes.local_candicate_type;
 		  if(config.debug) log('%data:green JITSI TAGS [%s]',stringify(tags) );
 		
-		   // REPORT COUNTER (DEV)
-		   metrics.increment(metrics.counter("jitsi", tags, 'report' ), 1 );
 		   // CONFERENCE INFO
 		  if(config.debug) log('%data:green JITSI CONFERENCE SIZE [%s]',data.attributes.conference_size );
 		   metrics.increment(metrics.counter("jitsi", tags, 'conference_size' ), data.attributes.conference_size);
