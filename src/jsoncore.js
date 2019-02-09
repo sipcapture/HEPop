@@ -332,37 +332,38 @@ const processJson = function(data,socket) {
 		/* Grab Base Labels/Tags */
 		tags = { session: data.device_id, action: data.action, source: 'jitsi' };
 
+		// REPORT COUNTER (DEV)
+		metrics.increment(metrics.counter("jitsi", tags, 'report' ), 1 );
+
 		if(data.attributes && data.action == "rtp.stats"){
 		  if(config.debug) log('%data:green JITSI RTP REPORT [%s]',stringify(data.attributes) );
 		  // Session Tags
 		  if(data.device_id) tags.device_id = data.attributes.device_id;
 		  if(data.ip) tags.ip = data.attributes.ip;
-		  if(data.attributes.p2p) tags.p2p = data.attributes.p2p;
+		  if(data.attributes.p2p) tags.p2p = "" + data.attributes.p2p;
 		  if(data.attributes.transport_type) tags.p2p = data.attributes.transport_type;
 		  if(data.attributes.remote_candidate_type) tags.local = data.attributes.remote_candidate_type;
 		  if(data.attributes.local_candidate_type) tags.remote = data.attributes.local_candicate_type;
 		  if(config.debug) log('%data:green JITSI TAGS [%s]',stringify(tags) );
-
-		  // Series
-		  if(data.attributes.conference_size) metrics.increment(metrics.counter("jitsi", tags, 'conference_size' ), data.attributes.conference_size||0 );
-		  if(data.attributes.end2end_rtt_avg) metrics.increment(metrics.counter("jitsi", tags, 'end2end_rtt_avg' ), data.attributes.end2end_rtt_avg||0 );
-
-		  // RTT
-		  if(data.attributes.rtt_avg) metrics.increment(metrics.counter("jitsi", tags, 'rtt_avg' ), data.attributes.rtt_avg || 0);
-
-		  // BITRATE
-		  if(data.attributes.bitrate_audio_upload_avg) metrics.increment(metrics.counter("jitsi", tags, 'bitrate_audio_upload_avg' ), data.attributes.bitrate_audio_upload_avg || 0);
-		  if(data.attributes.bitrate_video_download_avg) metrics.increment(metrics.counter("jitsi", tags, 'bitrate_video_download_avg' ), data.attributes.bitrate_video_download_av || 0);
-		  if(data.attributes.bitrate_video_upload_avg) metrics.increment(metrics.counter("jitsi", tags, 'bitrate_video_upload_avg' ), data.attributes.bitrate_video_upload_avg || 0);
-		  if(data.attributes.bitrate_audio_download_avg) metrics.increment(metrics.counter("jitsi", tags, 'bitrate_audio_download_avg' ), data.attributes.bitrate_audio_download_avg || 0);
-		  // PACKET LOSS
-		  if(data.attributes.packet_loss_total_avg) metrics.increment(metrics.counter("jitsi", tags, 'packet_loss_total_avg' ), data.attributes.packet_loss_total_avg || 0);
-		  if(data.attributes.packet_loss_download_avg) metrics.increment(metrics.counter("jitsi", tags, 'packet_loss_download_avg' ), data.attributes.packet_loss_download_avg || 0);
-		  if(data.attributes.packet_loss_upload_avg) metrics.increment(metrics.counter("jitsi", tags, 'packet_loss_upload_avg' ), data.attributes.packet_loss_upload_avg || 0);
-		  // CONNECTION QUALITY
-		  if(data.attributes.connection_quality_avg) metrics.increment(metrics.counter("jitsi", tags, 'connection_quality_avg' ), data.attributes.connection_quality_avg || 0);
+		
+		   // CONFERENCE INFO
+		   if(config.debug) log('%data:green JITSI CONFERENCE SIZE [%s]',data.attributes.conference_size );
+		   metrics.increment(metrics.counter("jitsi", tags, "conference-size" ), data.attributes.conference_size);
+		   // RTT
+		   metrics.increment(metrics.counter("jitsi", tags, "rtt-avg" ), data.attributes.rtt_avg);
+		   metrics.increment(metrics.counter("jitsi", tags, "end2end-rtt-avg" ), data.attributes.end2end_rtt_avg);
+		   // BITRATE
+		   metrics.increment(metrics.counter("jitsi", tags, "bitrate-audio_upload-avg" ), data.attributes.bitrate_audio_upload_avg );
+		   metrics.increment(metrics.counter("jitsi", tags, "bitrate-video_download-avg" ), data.attributes.bitrate_video_download_avg );
+		   metrics.increment(metrics.counter("jitsi", tags, "bitrate-video_upload-avg" ), data.attributes.bitrate_video_upload_avg );
+		   metrics.increment(metrics.counter("jitsi", tags, "bitrate-audio_download-avg" ), data.attributes.bitrate_audio_download_avg );
+		   // PACKET LOSS
+		   metrics.increment(metrics.counter("jitsi", tags, "packet-loss_total-avg" ), data.attributes.packet_loss_total_avg );
+		   metrics.increment(metrics.counter("jitsi", tags, "packet-loss_download-avg" ), data.attributes.packet_loss_download_avg);
+		   metrics.increment(metrics.counter("jitsi", tags, "packet-loss_upload-avg" ), data.attributes.packet_loss_upload_avg);
+		   // CONNECTION QUALITY
+		   metrics.increment(metrics.counter("jitsi", tags, "connection-quality-avg" ), data.attributes.connection_quality_avg );
 		}
-
 	  }
 
 	  // Use Tags for Protocol Search
