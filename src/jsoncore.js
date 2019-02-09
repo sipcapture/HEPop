@@ -336,18 +336,21 @@ const processJson = function(data,socket) {
 		metrics.increment(metrics.counter("jitsi", tags, 'report' ), 1 );
 
 		if(data.attributes && data.action == "rtp.stats"){
+			
 		  if(config.debug) log('%data:green JITSI RTP REPORT [%s]',stringify(data.attributes) );
+		  /*
 		  // Session Tags
 		  if(data.device_id) tags.device_id = data.attributes.device_id;
 		  if(data.ip) tags.ip = data.attributes.ip;
 		  if(data.attributes.p2p) tags.p2p = "" + data.attributes.p2p;
-		  if(data.attributes.transport_type) tags.p2p = data.attributes.transport_type;
+		  if(data.attributes.transport_type) tags.transport = data.attributes.transport_type;
 		  if(data.attributes.remote_candidate_type) tags.local = data.attributes.remote_candidate_type;
 		  if(data.attributes.local_candidate_type) tags.remote = data.attributes.local_candicate_type;
-		  if(config.debug) log('%data:green JITSI TAGS [%s]',stringify(tags) );
+		  */
+
+		   if(config.debug) log('%data:green JITSI TAGS [%s]',stringify(tags) );
 		
 		   // CONFERENCE INFO
-		   if(config.debug) log('%data:green JITSI CONFERENCE SIZE [%s]',data.attributes.conference_size );
 		   metrics.increment(metrics.counter("jitsi", tags, "conference-size" ), data.attributes.conference_size);
 		   // RTT
 		   metrics.increment(metrics.counter("jitsi", tags, "rtt-avg" ), data.attributes.rtt_avg);
