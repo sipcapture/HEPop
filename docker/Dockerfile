@@ -2,10 +2,10 @@
 FROM node:8
 
 # BUILD FORCE
-ENV BUILD 703063
+ENV BUILD 703064
 
 # Requires HOMER7-UI Git
-RUN git clone --single-branch --branch jitsi https://github.com/sipcapture/hepop /app
+RUN git clone --single-branch --branch master https://github.com/sipcapture/hepop /app
 WORKDIR /app
 RUN npm install 
 

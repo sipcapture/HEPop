@@ -340,7 +340,7 @@ const processJson = function(data,socket) {
 		  // Session Tags
 		  if(data.device_id) tags.device_id = data.attributes.device_id;
 		  if(data.ip) tags.ip = data.attributes.ip;
-		  if(data.attributes.p2p) tags.p2p = data.attributes.p2p;
+		  if(data.attributes.p2p) tags.p2p = "" + data.attributes.p2p;
 		  if(data.attributes.transport_type) tags.p2p = data.attributes.transport_type;
 		  if(data.attributes.remote_candidate_type) tags.local = data.attributes.remote_candidate_type;
 		  if(data.attributes.local_candidate_type) tags.remote = data.attributes.local_candicate_type;
