@@ -338,6 +338,7 @@ const processJson = function(data,socket) {
 		if(data.attributes && data.action == "rtp.stats"){
 			
 		  if(config.debug) log('%data:green JITSI RTP REPORT [%s]',stringify(data.attributes) );
+
 		  /*
 		  // Session Tags
 		  if(data.device_id) tags.device_id = data.attributes.device_id;
@@ -347,7 +348,14 @@ const processJson = function(data,socket) {
 		  if(data.attributes.remote_candidate_type) tags.local = data.attributes.remote_candidate_type;
 		  if(data.attributes.local_candidate_type) tags.remote = data.attributes.local_candicate_type;
 		  */
-
+			
+		   /* Jitsi userProps as tags */
+		   if (data.user){	
+		      if(data.user.callstats_name) { tags.user = data.user.callstats_name; }
+		      if(data.user.conference_name) { tags.conference = data.user.conference_name; }
+		      if(data.user.browser_name) { tags.browser = data.user.browser_name; }
+		   }
+			
 		   if(config.debug) log('%data:green JITSI TAGS [%s]',stringify(tags) );
 		
 		   // CONFERENCE INFO
