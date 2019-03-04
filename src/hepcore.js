@@ -209,6 +209,26 @@ exports.processHep = function processHep(data,socket) {
 		  if (decoded.payload && decoded.payload.call_id) insert.sid = decoded.payload.call_id;
 		  if (decoded.payload) insert.data_header = decoded.payload;
 
+
+		case 54:
+		  /* ISUP JSON */
+	  	  if (config.debug) {
+			log('%data:cyan HEP ISUP Type [%s:blue]', insert.protocol_header.payloadType );
+		  	log('%data:cyan HEP ISUP Payload [%s:yellow]', stringify(decoded.payload) );
+		  }
+		  var isup = decoded.payload;
+		  var sid = "" + (isup.opc||0) + (isup.dpc||0) + (isup.cic||0);
+		  if (decoded && sid) insert.sid = sid;
+		  if (decoded && isup.cic) insert.data_header.cic = isup.cic;
+		  if (decoded && isup.opc) insert.data_header.opc = isup.opc;
+		  if (decoded && isup.dpc) insert.data_header.dpc = isup.dpc;
+		  if (decoded && isup.msg_type) insert.data_header.msg_type = isup.msg_type;
+		  if (decoded && isup.msg_name) insert.data_header.msg_name = isup.msg_name;
+
+		  if (decoded && isup.calling_party) insert.data_header.calling_party = isup.calling_party.num;
+		  if (decoded && isup.called_number) insert.data_header.called_number = isup.called_number.num;
+
+
 		default:
 	  	  if (config.debug) {
 			log('%data:cyan HEP Type [%s:blue]', insert.protocol_header.payloadType );
@@ -223,9 +243,9 @@ exports.processHep = function processHep(data,socket) {
 	     if(decoded['rcinfo.timeSeconds']) decoded['rcinfo.ts'] = r.epochTime(decoded['rcinfo.timeSeconds']);
 	     r_bucket.push(decoded);
 	  }
-	
+
 	  if (mdb_bucket) mdb_bucket.push(decoded);
-		
+
 	  if (e_bucket)	{
 		  if(decoded['rcinfo.timeSeconds']) decoded['@timestamp'] = r.epochTime(decoded['rcinfo.timeSeconds']);
 		  e_bucket.push(decoded);
