@@ -159,6 +159,7 @@ const processJson = function(data,socket) {
 
 		case 32:
 		  /* Media Report */
+	          insert.bypass = true; // do not insert raw data to DB
 		  if (data.event.media) {
 			tags.medium = data.event.media;
 			insert.data_header.event = data.event.media + "_report";
@@ -171,11 +172,11 @@ const processJson = function(data,socket) {
 		    metrics.increment(metrics.counter("janus", tags, 'lost-by-remote' ), data.event["lost-by-remote"] || 0 );
 		    metrics.increment(metrics.counter("janus", tags, 'jitter-local' ), data.event["jitter-local"] || 0 );
 		    metrics.increment(metrics.counter("janus", tags, 'jitter-remote' ), data.event["jitter-remote"] || 0);
-	        metrics.increment(metrics.counter("janus", tags, 'in-link-quality' ), data.event["in-link-quality"] || 0);
-	        metrics.increment(metrics.counter("janus", tags, 'in-media-link-quality' ), data.event["in-media-link-quality"] || 0);
-	        metrics.increment(metrics.counter("janus", tags, 'out-link-quality' ), data.event["out-link-quality"] || 0);
-	        metrics.increment(metrics.counter("janus", tags, 'out-media-link-quality' ), data.event["out-media-link-quality"] || 0);
-	        metrics.increment(metrics.counter("janus", tags, 'packets-sent' ), data.event["packets-sent"] || 0);
+	            metrics.increment(metrics.counter("janus", tags, 'in-link-quality' ), data.event["in-link-quality"] || 0);
+	            metrics.increment(metrics.counter("janus", tags, 'in-media-link-quality' ), data.event["in-media-link-quality"] || 0);
+	            metrics.increment(metrics.counter("janus", tags, 'out-link-quality' ), data.event["out-link-quality"] || 0);
+	            metrics.increment(metrics.counter("janus", tags, 'out-media-link-quality' ), data.event["out-media-link-quality"] || 0);
+	            metrics.increment(metrics.counter("janus", tags, 'packets-sent' ), data.event["packets-sent"] || 0);
 		    metrics.increment(metrics.counter("janus", tags, 'packets-received' ), data.event["packets-sent"] || 0);
 		    metrics.increment(metrics.counter("janus", tags, 'bytes-sent' ), data.event["bytes-sent"] || 0);
 		    metrics.increment(metrics.counter("janus", tags, 'bytes-received' ), data.event["bytes-received"]|| 0 );
@@ -380,7 +381,7 @@ const processJson = function(data,socket) {
 	  // Use Tags for Protocol Search
 	  insert.data_header = Object.assign(insert.data_header, tags);
 
-	  if (buckets[key]) buckets[key].push(insert);
+	  if (buckets[key] && !insert.bypass) buckets[key].push(insert);
 
 
 	} catch(err) { log('%error:red %s', err.toString() ) }
