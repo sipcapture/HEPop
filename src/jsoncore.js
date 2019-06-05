@@ -159,7 +159,7 @@ const processJson = function(data,socket) {
 
 		case 32:
 		  /* Media Report */
-	          insert.bypass = true; // do not insert raw data to DB
+	          insert.bypass = config.metrics.media_bypass || true; // do not insert raw data to DB
 		  if (data.event.media) {
 			tags.medium = data.event.media;
 			insert.data_header.event = data.event.media + "_report";
