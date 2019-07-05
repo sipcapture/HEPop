@@ -21,7 +21,7 @@ During testing, HEPop bulking clocked about 10-15k/PPS per shared core on a Xeon
 | TYPE       |               |
 |------------|-----------------|
 | JSON       | Postgres (default), RethinkDB, MongoDB, Elasticsearch |
-| Timeseries | InfluxDB (default), Prometheus |
+| Timeseries | InfluxDB (default), Prometheus, VictoriaMetrics |
 
 #### Supported Sources
 
