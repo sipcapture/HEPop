@@ -29,7 +29,8 @@
 		"expire": 300000,
 		"dbName": "homer",
 		"hostname": "localhost:8086"
-	}
+	},
+	"media_bypass": false
   },
   "db_off": {
 	"loki" : {
