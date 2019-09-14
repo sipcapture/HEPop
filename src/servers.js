@@ -82,15 +82,16 @@ var self = module.exports = {
 	},
 
 	mqtt: function({ port = undefined, address = '127.0.0.1' } = { address: '127.0.0.1' }) {
+	  if (!config.mqtt) config.mqtt = { "server":"tcp://127.0.0.1:1883", "topic":"/hepop/pub" };
 	  let funcs = self.getFuncs();
-	  let server = mqtt.connect(config.mqtt.server | 'tcp://127.0.0.1:1883')
+	  let server = mqtt.connect(config.mqtt.server)
 
 	  server.on('error', (err) => log('%error:red %s', err.toString()))
 	  server.on('close', (err) => log('%stop:red %s:gray %d:yellow', err.toString()))
 	  server.on('connect', () => {
-		server.subscribe(config.mqtt.topic,, function (err) {
+		server.subscribe(config.mqtt.topic, function (err) {
 		    if (!err) {
-		      client.publish('/hepop/presence', 'Hello mqtt! This is HEPop')
+		      client.publish('/hepop/hello, 'Hello mqtt! This is HEPop')
 		    }
 		  })
 	  })
