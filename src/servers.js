@@ -91,7 +91,7 @@ var self = module.exports = {
 	  server.on('connect', () => {
 		server.subscribe(config.mqtt.topic, function (err) {
 		    if (!err) {
-		      client.publish('/hepop/hello, 'Hello mqtt! This is HEPop')
+		      client.publish('/hepop/hello', 'Hello mqtt! This is HEPop')
 		    }
 		  })
 	  })
