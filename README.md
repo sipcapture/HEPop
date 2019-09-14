@@ -58,12 +58,8 @@ See [myconfig.js](https://github.com/sipcapture/HEPop/blob/master/myconfig.js) f
 #### Options:
 ```
     -V, --version                  output the version number
-    -p, --port <number>            port to listen on (default: 9060)
-    -a, --address <address>        network address to listen on
-    -d, --dbName <address>         database name
-    -t, --tableName <address>      database table name
     -c, --configfile <configfile>  configuration file
-    -s, --socket <socket>          socket service (udp,tcp,http,sipfix) (default: udp)
+    -s, --socket <socket>          socket service (udp,tcp,http,sipfix,mqtt) (default: udp)
 ```
 
 
