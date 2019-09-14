@@ -2,6 +2,7 @@ const hepjs = require('hep-js');
 const _http = require('http');
 const _https = require('https');
 const fs = require('fs');
+const mqtt = require('mqtt');
 const dgram = require('dgram');
 const net = require('net');
 const log = require('./logger');
@@ -79,6 +80,33 @@ var self = module.exports = {
 
 	  socket.bind(port, address)
 	},
+
+	mqtt: function({ port = undefined, address = '127.0.0.1' } = { address: '127.0.0.1' }) {
+	  let funcs = self.getFuncs();
+	  let server = mqtt.connect(config.mqtt.server | 'tcp://127.0.0.1:1883')
+
+	  server.on('error', (err) => log('%error:red %s', err.toString()))
+	  server.on('close', (err) => log('%stop:red %s:gray %d:yellow', err.toString()))
+	  server.on('connect', () => {
+		server.subscribe(config.mqtt.topic,, function (err) {
+		    if (!err) {
+		      client.publish('/hepop/presence', 'Hello mqtt! This is HEPop')
+		    }
+		  })
+	  })
+
+	  server.on('message', (topic, data) => {
+		if (data instanceof Array) {
+        	        data.forEach(function(subdata){
+		            funcs.processJson(subdata,{});
+        	        });
+	        } else {
+		            funcs.processJson(data,{});
+		}
+	  })
+
+	},
+
 
 	http: function({ port = undefined, address = '127.0.0.1' } = { address: '127.0.0.1' }) {
 	  let funcs = self.getFuncs();

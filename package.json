@@ -1,6 +1,6 @@
 {
   "name": "hepop",
-  "version": "1.0.27",
+  "version": "1.0.30",
   "description": "HEP Packet Server & Switch",
   "main": "hepop.js",
   "bin": {
@@ -26,6 +26,7 @@
     "client",
     "core",
     "rtc",
+    "mqtt",
     "postgres",
     "mongodb",
     "rethinkdb",
@@ -49,7 +50,7 @@
     "hep-js": "^1.0.13",
     "import-fresh": "^2.0.0",
     "mongodb": "^3.0.4",
-    "npm": "^5.7.1",
+    "mqtt": "^3.0.0",
     "oh-my-log": "^5.0.1",
     "optimist": "^0.6.1",
     "parsip": "^1.0.5",
