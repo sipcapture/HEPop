@@ -42,7 +42,7 @@ const processJson = function(data,socket) {
 		};
 	  var tags = {};
 	  // Create protocol bucket
-	  var key = 1000 + "_"+ (insert.protocol_header.type || "default");
+	  var key = 1000 + "_"+ (insert.protocol_header.PayloadType || "default");
 	  if (config.db.pgsql && !buckets[key] ) { 
 		buckets[key] = require('./bucket').pgp_bucket; 
 		buckets[key].set_id("hep_proto_"+key);
