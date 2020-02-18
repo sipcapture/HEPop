@@ -65,8 +65,8 @@ const processJson = function(data,socket) {
 	    /* extract time */
 	    if (data.timestamp) {
 		var ts = data.timestamp/1000;
-		insert.protocol_header.time_sec = Math.floor(ts);
-		insert.protocol_header.time_usec = parseInt( (ts - insert.protocol_header.time_sec ) * 1000);
+		insert.protocol_header.timeSeconds = Math.floor(ts/1000);
+		insert.protocol_header.timeUseconds = parseInt( (ts - insert.protocol_header.timeSeconds ) * 1000);
 		insert.original_date = new Date(ts);
 	    }
 
@@ -86,6 +86,9 @@ const processJson = function(data,socket) {
 		if (data.emitter) insert.protocol_header.srcIp = data.emitter || insert.protocol_header.address || "Janus";
 	    	if (data.session_id) insert.protocol_header.dstIp = "S_" + data.session_id;
 	    	if (data.handle_id) insert.protocol_header.srcIp = "H_" + data.handle_id;
+	    /* Default Ports for Flow Display, to be overwritten by Transport Events */
+		insert.protocol_header.srcPort = 0;
+		insert.protocol_header.dstPort = 0;
 
 	    switch(data.type) {
 
