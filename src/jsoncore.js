@@ -42,8 +42,8 @@ const processJson = function(data,socket) {
 		};
 	  var tags = {};
 	  // Create protocol bucket
-	  insert.protocol_header.PayloadType = 1000; // JSON Type
-	  var key = ( insert.protocol_header.PayloadType ) + "_"+ (insert.protocol_header.type || "default");
+	  insert.protocol_header.payloadType = 1000; // JSON Type
+	  var key = ( insert.protocol_header.payloadType ) + "_"+ (insert.protocol_header.type || "default");
 	  if (config.db.pgsql && !buckets[key] ) { 
 		buckets[key] = require('./bucket').pgp_bucket; 
 		buckets[key].set_id("hep_proto_"+key);
