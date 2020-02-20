@@ -42,7 +42,8 @@ const processJson = function(data,socket) {
 		};
 	  var tags = {};
 	  // Create protocol bucket
-	  var key = 1000 + "_"+ (insert.protocol_header.PayloadType || "default");
+	  insert.protocol_header.PayloadType = 1000; // JSON Type
+	  var key = ( insert.protocol_header.PayloadType ) + "_"+ (insert.protocol_header.type || "default");
 	  if (config.db.pgsql && !buckets[key] ) { 
 		buckets[key] = require('./bucket').pgp_bucket; 
 		buckets[key].set_id("hep_proto_"+key);
@@ -66,7 +67,7 @@ const processJson = function(data,socket) {
 	    if (data.timestamp) {
 		var ts = data.timestamp/1000;
 		insert.protocol_header.timeSeconds = Math.floor(ts/1000);
-		insert.protocol_header.timeUseconds = parseInt( (ts - insert.protocol_header.timeSeconds ) * 1000);
+		insert.protocol_header.timeUseconds = parseInt( (ts - insert.protocol_header.timeSeconds * 1000));
 		insert.original_date = new Date(ts);
 	    }
 
