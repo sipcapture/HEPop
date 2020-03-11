@@ -48,7 +48,8 @@ exports.processHep = function processHep(data,socket) {
 				"protocol_header": decoded.rcinfo,
 				"data_header": {},
 				"create_date": new Date(),
-				"raw": decoded.payload || ""
+				"raw": decoded.payload || "",
+				"sid": "no-call-id"
 		};
 		/* HEP Correlation ID as SID */
 		if (decoded.rcinfo.correlation_id) insert.sid = decoded.rcinfo.correlation_id;
