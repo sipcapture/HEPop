@@ -30,7 +30,10 @@
 		"dbName": "homer",
 		"hostname": "localhost:8086"
 	},
-	"media_bypass": false
+	"media_bypass": false,
+	"tags":{
+		"host": "server1"
+	}
   },
   "db_off": {
 	"loki" : {
