@@ -41,6 +41,9 @@ const processJson = function(data,socket) {
 			 "raw": data || ""
 		};
 	  var tags = {};
+	  if(config.metrics && config.metrics.tags) {
+		  tags = config.metrics.tags;
+	  }
 	  // Create protocol bucket
 	  insert.protocol_header.payloadType = 1000; // JSON Type
 	  var key = ( insert.protocol_header.payloadType ) + "_"+ (insert.protocol_header.type || "default");
@@ -61,7 +64,8 @@ const processJson = function(data,socket) {
 	    if (config.debug) log('%data:green JANUS REPORT [%s]',stringify(data) );
 	    /* Static SID from session_id */
 	    insert.sid = data.session_id || '000000000000';
-	    tags = { session: data.session_id, handle: data.handle_id };
+	    tags.session = data.session_id;
+	    tags.handle = data.handle_id;
 
 	    /* extract time */
 	    if (data.timestamp) {
@@ -288,7 +292,10 @@ const processJson = function(data,socket) {
 		/* Hybrid SID */
 		insert.sid = data.producerId+"_"+data.peerName;
 	        if (config.debug) log('%data:green MEDIASOUP PRODUCER REPORT [%s]',stringify(data) );
-		tags = { roomId: data.roomId, peerName: data.peerName, producerId: data.producerId, event: data.event };
+		    tags.roomId = data.roomId;
+		    tags.peerName = data.peerName;
+		    tags.producerId = data.producerId;
+		    tags.event = data.event;
 		    if (data.stats[0].mediaType) tags.media = data.stats[0].mediaType;
 		    if (data.stats[0].mediaType) tags.media = data.stats[0].mimeType;
 		    if (data.stats[0].type) tags.type = data.stats[0].type;
