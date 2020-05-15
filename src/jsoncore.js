@@ -64,6 +64,7 @@ const processJson = function(data,socket) {
 	    if (config.debug) log('%data:green JANUS REPORT [%s]',stringify(data) );
 	    /* Static SID from session_id */
 	    insert.sid = data.session_id || '000000000000';
+	    tags.emitter = data.emitter;
 	    tags.session = data.session_id;
 	    tags.handle = data.handle_id;
 
