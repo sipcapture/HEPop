@@ -40,6 +40,7 @@
   "homepage": "https://github.com/sipcapture/hepop#readme",
   "dependencies": {
     "async": "^2.6.0",
+    "aws-sdk": "^2.747.0",
     "axios": "^0.18.0",
     "commander": "^2.13.0",
     "crow-metrics": "^4.1.0",
