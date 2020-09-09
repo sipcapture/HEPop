@@ -67,7 +67,7 @@ const putLogs = function(events, id, token, retries) {
     };
     // when a new logstream is created, there is no token,
     // and passing an empty token is an invalid api request
-    if (token != "") {
+    if (token != "" && token != "null") {
         params.sequenceToken = token
     }
     if (retries > settings.invalid_token_retries) {
