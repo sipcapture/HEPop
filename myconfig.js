@@ -52,7 +52,11 @@
      	  "max_bulk_qtty": 1000,
      	  "max_request_num": 20,
      	  "index": "hep"
-        }
+	},
+	"cloudwatch": {
+		"log_group": "homer",
+		"region": "us-east-1"
+	}
   },
   "debug": false
 }

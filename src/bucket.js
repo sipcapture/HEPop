@@ -15,6 +15,7 @@ var p_bucket;
 var e_bucket;
 var m_bucket;
 var l_bucket;
+var c_bucket;
 
 // RethinkDB
 if (config.db.rethink){
@@ -120,6 +121,26 @@ if (config.db.loki){
 }
 
 exports.l_bucket = l_bucket;
+
+// AWS Cloudwatch
+if (config.db.cloudwatch){
+ try {
+  var cloudwatch = require('./cloudwatch');
+  log('%start:green Initialize Cloudwatch driver' );
+  c_bucket = bucket_emitter.create(config.queue);
+  c_bucket.on('data', function(data, id) {
+    // Bulk ready to emit!
+    if (config.debug) log('%data:cyan Cloudwatch BULK ID %s:blue', id );
+    if (config.debug) log('%data:cyan Cloudwatch BULK Out %s:blue', stringify(data) );
+		cloudwatch.insert(data, id);
+  }).on('error', function(err) {
+    log('%error:red %s', err.toString() )
+  });
+
+ } catch(e){ log('%stop:red Failed to Initialize Cloudwatch driver/queue',e); return; }
+}
+
+exports.c_bucket = c_bucket;
 
 
 process.on('beforeExit', function() {
