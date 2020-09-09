@@ -127,9 +127,7 @@ if (config.db.cloudwatch){
  try {
   var cloudwatch = require('./cloudwatch');
   log('%start:green Initialize Cloudwatch driver' );
-  log('%start:green Initializing Bulk bucket...');
   c_bucket = bucket_emitter.create(config.queue);
-  // c_bucket.set_id = function(id){ return; }
   c_bucket.on('data', function(data, id) {
     // Bulk ready to emit!
     if (config.debug) log('%data:cyan Cloudwatch BULK ID %s:blue', id );
