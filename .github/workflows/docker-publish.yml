@@ -1,0 +1,50 @@
+# This workflow will:
+# build docker image
+# push imaget to docker hub
+
+name: DockerHub Publish
+
+on:
+  release:
+    types: [created]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    # required pre-steps for docker + cache
+    - name: Checkout
+      uses: actions/checkout@v2
+    - name: Set up QEMU
+      uses: docker/setup-qemu-action@v1
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v1
+    - name: Cache Docker layers
+      uses: actions/cache@v2
+      with:
+        path: /tmp/.buildx-cache
+        key: ${{ runner.os }}-buildx-${{ github.sha }}
+        restore-keys: |
+          ${{ runner.os }}-buildx-
+    - name: Login to DockerHub
+      uses: docker/login-action@v1
+      with:
+        # https://docs.github.com/en/actions/reference/encrypted-secrets
+        username: ${{ secrets.DOCKERHUB_USERNAME }}
+        password: ${{ secrets.DOCKERHUB_PASSWORD }}
+
+    # establish the docker tag to use
+    - name: Prepare
+      id: prep
+      run: |
+        PACKAGE_VERSION=$(cat package.json | grep version | head -1 | awk -F: '{ print $2 }' | sed 's/[",]//g')
+        TAG="$(echo -e "${PACKAGE_VERSION}-$(date +%s)" | tr -d '[:space:]')"
+        echo ::set-output name=version::${TAG}
+
+    - name: Build and Push
+      uses: docker/build-push-action@v2
+      with:
+        file: ./docker/Dockerfile
+        tags: sipcapture/hepop:${{ steps.prep.outputs.version }}
+        push: true

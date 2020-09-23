@@ -1,0 +1,14 @@
+# ignore all markdown files
+*.md
+# !README*.md
+
+# ignore all ci files
+.github
+
+# ignore existing node_modules
+node_modules
+
+# some other folders to ignore
+.git
+.cache
+examples
