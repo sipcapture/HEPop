@@ -5,18 +5,17 @@ FROM node:8
 ENV BUILD 703089
 
 # Requires HOMER7-UI Git
-RUN git clone --single-branch --branch master https://github.com/sipcapture/hepop /app
+COPY . /app
 WORKDIR /app
-RUN npm install 
+RUN npm install
 
 # Expose Ports
 EXPOSE 9060
 EXPOSE 8080
 
 # Configure entrypoint
-COPY /myconfig.js /app/myconfig.js
-COPY /docker-entrypoint.sh /
-COPY /docker-entrypoint.d/* /docker-entrypoint.d/
+COPY ./docker/docker-entrypoint.sh /
+COPY ./docker/docker-entrypoint.d/* /docker-entrypoint.d/
 RUN chmod +x /docker-entrypoint.d/* /docker-entrypoint.sh
 
 ENTRYPOINT ["/docker-entrypoint.sh"]
