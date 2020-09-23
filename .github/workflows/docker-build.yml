@@ -41,5 +41,5 @@ jobs:
       uses: docker/build-push-action@v2
       with:
         file: ./docker/Dockerfile
-        tags: hepop:${{ steps.prep.outputs.version }}
+        tags: sipcapture/hepop:${{ steps.prep.outputs.version }}
         push: false
