@@ -1,0 +1,23 @@
+# This workflow will:
+# build docker image to confirm it's working
+
+name: Docker Build CI
+
+on:
+  push:
+    branches: [ master ]
+  pull_request:
+    branches: [ master ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v2
+    - name: Build and push
+      uses: docker/build-push-action@v2
+      with:
+        file: ./docker/Dockerfile
+        tag_with_ref: true
+        push: false
