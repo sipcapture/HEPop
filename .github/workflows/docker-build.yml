@@ -33,11 +33,7 @@ jobs:
     - name: Prepare
       id: prep
       run: |
-        PACKAGE_VERSION=$(cat package.json \
-        | grep version \
-        | head -1 \
-        | awk -F: '{ print $2 }' \
-        | sed 's/[",]//g')
+        PACKAGE_VERSION=$(cat package.json | grep version | head -1 | awk -F: '{ print $2 }' | sed 's/[",]//g')
         echo ::set-output name=version::$PACKAGE_VERSION-$(date +%s)
 
     - name: Build wihtout push
