@@ -14,10 +14,25 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@v2
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v1
+
+    - name: Cache Docker layers
+      uses: actions/cache@v2
+      with:
+        path: /tmp/.buildx-cache
+        key: ${{ runner.os }}-buildx-${{ github.sha }}
+        restore-keys: |
+          ${{ runner.os }}-buildx-
+
+    - name: Prepare
+      id: prep
+      run: |
+        echo ::set-output name=version::$(date +%s)
+
     - name: Build and push
       uses: docker/build-push-action@v2
       with:
         file: ./docker/Dockerfile
-        tag_with_ref: true
+        tags: hepop:${{ steps.prep.outputs.tags }}
         push: false
