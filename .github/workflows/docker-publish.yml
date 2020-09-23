@@ -39,7 +39,7 @@ jobs:
       with:
         # https://docs.github.com/en/actions/reference/encrypted-secrets
         username: ${{ secrets.DOCKERHUB_USERNAME }}
-        password: ${{ secrets.DOCKERHUB_TOKEN }}
+        password: ${{ secrets.DOCKERHUB_PASSWORD }}
 
     # establish the docker tag to use
     - name: Prepare
