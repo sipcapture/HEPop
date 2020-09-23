@@ -33,7 +33,12 @@ jobs:
     - name: Prepare
       id: prep
       run: |
-        echo ::set-output name=version::$(date +%s)
+        PACKAGE_VERSION=$(cat package.json \
+        | grep version \
+        | head -1 \
+        | awk -F: '{ print $2 }' \
+        | sed 's/[",]//g')
+        echo ::set-output name=version::$PACKAGE_VERSION-$(date +%s)
 
     - name: Build wihtout push
       uses: docker/build-push-action@v2
