@@ -34,9 +34,7 @@ jobs:
       id: prep
       run: |
         PACKAGE_VERSION=$(cat package.json | grep version | head -1 | awk -F: '{ print $2 }' | sed 's/[",]//g')
-        echo "${PACKAGE_VERSION}-$(date +%s)"
-        TAG="${PACKAGE_VERSION}-$(date +%s)"
-        echo "----> $TAG <----"
+        TAG="$(echo -e "${PACKAGE_VERSION}-$(date +%s)" | tr -d '[:space:]')"
         echo ::set-output name=version::${TAG}
 
     - name: Build wihtout push
