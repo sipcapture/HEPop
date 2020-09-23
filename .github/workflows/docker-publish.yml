@@ -49,7 +49,7 @@ jobs:
         TAG="$(echo -e "${PACKAGE_VERSION}-$(date +%s)" | tr -d '[:space:]')"
         echo ::set-output name=version::${TAG}
 
-    - name: Build wihtout push
+    - name: Build and Push
       uses: docker/build-push-action@v2
       with:
         file: ./docker/Dockerfile
