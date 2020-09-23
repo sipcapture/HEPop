@@ -33,6 +33,8 @@ jobs:
     - name: Prepare
       id: prep
       run: |
+        ls
+        cat package.json | grep version
         PACKAGE_VERSION=$(cat package.json | grep version | head -1 | awk -F: '{ print $2 }' | sed 's/[",]//g')
         echo ::set-output name=version::$PACKAGE_VERSION-$(date +%s)
 
