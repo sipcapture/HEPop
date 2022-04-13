@@ -39,7 +39,7 @@
   },
   "homepage": "https://github.com/sipcapture/hepop#readme",
   "dependencies": {
-    "async": "^2.6.0",
+    "async": "^3.2.2",
     "aws-sdk": "^2.747.0",
     "axios": "^0.21.1",
     "commander": "^2.13.0",
