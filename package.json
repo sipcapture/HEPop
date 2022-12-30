@@ -47,7 +47,7 @@
     "debug": "^3.1.0",
     "elasticsearch": "^14.1.0",
     "events": "^2.0.0",
-    "flat": "^4.0.0",
+    "flat": "^5.0.1",
     "hep-js": "^1.0.13",
     "import-fresh": "^2.0.0",
     "mongodb": "^3.5.0",
