@@ -29,13 +29,18 @@
 }%%
 
   graph TD;
-      HEP-Client-- hep -->HEPop:9069;
+      HEP-Client-- hep -->server;
       HEPop:9069-- gRPC -->IOx:8181;
-      IOx:8181-->Storage;
-      IOx:8181-->Parquet-Compactor;
+      server-->Storage;
+      server-->Parquet-Compactor;
       Parquet-Compactor-->Storage;
       Storage-.->S3;
       Storage-.->Filesystem;
+
+      subgraph server
+        HEPop:9069
+        IOx:8181
+      end
 
 ```
 
