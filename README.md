@@ -10,6 +10,17 @@
 - InfluxDB3/FlightSQL API
 - Object Storage, Parquet
 
+```mermaid
+  graph TD;
+      HEP-Client-- hep -->HEPop:9069;
+      HEPop:9069-- gRPC -->IOx:8181;
+      IOx:8181-->Storage;
+      IOx:8181-->Parquet-Compactor;
+      Parquet-Compactor-->Storage;
+      Storage-.->S3;
+      Storage-.->Filesystem;
+
+```
 
 
 ### Install & Build
