@@ -13,13 +13,16 @@
 
 
 ### Install & Build
+
+Use Bun to generate a bundled standalone binary for `hepop`
+
 ```bash
 bun install
 bun build ./hepop.js --compile --outfile hepop
 ```
 
 ### Run
-Configure the client using ENV
+Configure the client using ENV variables
 ```
   INFLUX_HOST: "http://influxdb3:8181"
   INFLUX_TOKEN: "optional"
