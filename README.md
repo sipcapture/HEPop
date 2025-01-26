@@ -79,7 +79,7 @@ Just send hep to the server using UDP/TCP. Each HEP type will generate a table _
 Query the HEP data using the HTTP API or Flight SQL
 #### API
 ```bash
-# curl http://127.0.0.1:8181/api/v3/query_sql --data '{"db": "hep", "q": "select * from hep_1 limit 1"}'
+curl http://127.0.0.1:8181/api/v3/query_sql --data '{"db": "hep", "q": "select * from hep_1 limit 1"}'
 ```
 ```json
 [{"capture_id":2001,"capture_pass":"myHep","correlation_id":"067d3@127.0.0.1","dst_ip":"192.168.1.2","dst_port":5060,"ip_family":2,"payload":"OPTIONS sip:127.0.0.1 SIP/2.0Call-ID: 067d3@127.0.0.1CSeq: 9999 OPTIONSFrom: <sip:nodejs@127.0.0.1>;tag=2628881569To: <sip:nodejs@127.0.0.1>Via: SIP/2.0/UDP 127.0.0.1:48495;branch=z9hG4bK9b82aa8fb4c7705466a3456dfff7f384333332Max-Forwards: 70User-Agent: HEPGEN-UACContent-Length: 0","proto_type":0,"protocol":17,"src_ip":"192.168.1.1","src_port":5060,"time":"2025-01-26T18:44:07.120","time_sec":1737917047,"time_usec":120000,"type":"1"}]
@@ -87,6 +87,8 @@ Query the HEP data using the HTTP API or Flight SQL
 #### Flight
 ```sql
 influxdb3 query --database hep "SELECT * FROM hep_1 limit 1"
+```
+```sql
 +------------+--------------+-----------------+-------------+----------+-----------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+------------+----------+-------------+----------+-------------------------+------------+-----------+------+
 | capture_id | capture_pass | correlation_id  | dst_ip      | dst_port | ip_family | payload                                                                                                                                                                                                                                                                                  | proto_type | protocol | src_ip      | src_port | time                    | time_sec   | time_usec | type |
 +------------+--------------+-----------------+-------------+----------+-----------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+------------+----------+-------------+----------+-------------------------+------------+-----------+------+
