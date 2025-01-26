@@ -1,65 +1,16 @@
 {
   "name": "hepop",
-  "version": "1.0.36",
-  "description": "HEP Packet Server & Switch",
-  "main": "hepop.js",
-  "bin": {
-    "hepop": "./hepop.js"
+  "module": "hepop.js",
+  "type": "module",
+  "devDependencies": {
+    "@types/bun": "latest"
   },
-  "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
-    "start": "node hepop.js -c /app/myconfig.js"
+  "peerDependencies": {
+    "typescript": "^5.0.0"
   },
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/sipcapture/hepop.git"
-  },
-  "keywords": [
-    "hep",
-    "eep",
-    "hep3",
-    "encapsulation",
-    "homer",
-    "sipcapture",
-    "capture",
-    "server",
-    "client",
-    "core",
-    "rtc",
-    "mqtt",
-    "postgres",
-    "mongodb",
-    "rethinkdb",
-    "elasticsearch"
-  ],
-  "author": "Lorenzo Mangani <lorenzo.mangani@gmail.com> (http://qxip.net/)",
-  "license": "MIT",
-  "bugs": {
-    "url": "https://github.com/sipcapture/hepop/issues"
-  },
-  "homepage": "https://github.com/sipcapture/hepop#readme",
   "dependencies": {
-    "async": "^2.6.0",
-    "aws-sdk": "^2.747.0",
-    "axios": "^0.21.1",
-    "commander": "^2.13.0",
-    "crow-metrics": "^4.1.0",
-    "debug": "^3.1.0",
-    "elasticsearch": "^14.1.0",
-    "events": "^2.0.0",
-    "flat": "^5.0.1",
-    "hep-js": "^1.0.13",
-    "import-fresh": "^2.0.0",
-    "mongodb": "^3.5.0",
-    "mqtt": "^3.0.0",
-    "oh-my-log": "^5.0.1",
-    "optimist": "^0.6.1",
-    "parsip": "^1.0.5",
-    "perf_hooks": "0.0.1",
-    "pg-promise": "^8.2.1",
-    "receptacle": "^1.3.0",
-    "rethinkdbdash": "^2.3.31",
-    "safe-stable-stringify": "^1.0.1",
-    "sipfix": "^1.0.1"
+    "@influxdata/influxdb3-client": "^1.0.0",
+    "hep-js": "^1.0.20",
+    "parsip": "^1.0.7"
   }
 }

@@ -1,0 +1,41 @@
+version: '3.8'
+
+services:
+  hepop:
+    image: ghcr.io/sipcapture/hepop:bun
+    container_name: hepop
+    ports:
+      - 9069:9069
+    environment:
+      INFLUX_HOST: "http://influxdb3:8181"
+      INFLUX_TOKEN: ""
+      INFLUX_DATABASE: "hep"
+
+  influxdb3:
+    image: quay.io/influxdb/influxdb3-core:latest
+    container_name: influxdb3
+    environment:
+      INFLUXDB3_MAX_HTTP_REQUEST_SIZE: "10485760"
+      INFLUXDB3_GEN1_DURATION: "10m"
+      INFLUXDB3_WAL_FLUSH_INTERVAL: "1s"
+      INFLUXDB3_WAL_SNAPSHOT_SIZE: "600"
+      INFLUXDB3_NUM_WAL_FILES_TO_KEEP: "50"
+      INFLUXDB3_WAL_MAX_WRITE_BUFFER_SIZE: "100000"
+      INFLUXDB3_BUFFER_MEM_LIMIT_MB: "5000"
+      INFLUXDB3_PARQUET_MEM_CACHE_SIZE_MB: "1000"
+      INFLUXDB3_FORCE_SNAPSHOT_MEM_THRESHOLD: "70%"
+      INFLUXDB3_TELEMETRY_DISABLE_UPLOAD: true
+      INFLUXDB3_NODE_IDENTIFIER_PREFIX: "bucket-id"
+      INFLUXDB3_OBJECT_STORE: "file"
+      INFLUXDB3_DB_DIR: "/data"
+    ports:
+      - 8181:8181
+    command:
+      - serve
+      - --writer-id=my_host
+      - --object-store
+      - file
+      - --data-dir
+      - /data
+    volumes:
+      - ./data:/data:rw
