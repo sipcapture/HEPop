@@ -1,13 +1,18 @@
 import hepjs from 'hep-js';
 import { getSIP } from 'parsip';
 import { InfluxDBClient } from '@influxdata/influxdb3-client';
+import { influxDBController } from './src/database/influxdb'
 
 class BufferManager {
   constructor(flushInterval = 2000, bufferSize = 100) {
     this.buffers = new Map();
     this.flushInterval = flushInterval;
     this.bufferSize = bufferSize;
-
+    influxDBController.initializeModule(
+      process.env.INFLUX_HOST || 'http://localhost:8181',
+      process.env.INFLUX_TOKEN || '',
+      process.env.INFLUX_DATABASE || 'hep'
+    )
     this.host = process.env.INFLUX_HOST || 'http://localhost:8181';
     const token = process.env.INFLUX_TOKEN || '';
     this.database = process.env.INFLUX_DATABASE || 'hep';
@@ -59,6 +64,7 @@ class BufferManager {
   }
 
   async writeWithRetry(points, retryCount = this.retryAttempts) {
+    /* TODO: call database module */
     try {
       console.log(`Attempting to write points to InfluxDB (${this.host}/${this.database})`);
       await this.client.write(points, this.database);
@@ -83,6 +89,7 @@ class BufferManager {
     if (!buffer?.length) return;
     
     try {
+      /* TODO: call database module */
       const points = buffer.map(data => {
         const clean = str => str?.replace(/["\\\r\n]/g, '') || '';
         const rcinfo = data.protocol_header || {};
