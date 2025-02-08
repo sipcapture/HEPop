@@ -6,16 +6,13 @@
 
 - [x] High-Performance Bun Server
   - [x] HEP/EEP Packet Support (UDP/TCP)
-  - [x] Automatic Protocol Detection
-  - [x] Graceful Shutdown & Recovery
 - [x] Apache Parquet Storage
-  - [x] Efficient Columnar Storage
-  - [x] Automatic File Rotation
-  - [x] Smart File Compaction
+  - [x] Parquet Columnar Storage
+  - [x] Automatic Rotation and Compaction
   - [x] Time-Based Directory Structure
   - [x] Metadata Management
 - [x] DuckDB Integration
-  - [x] Fast Data Compaction
+  - [x] Parquet Data Compaction
   - [x] Query Capabilities
 - [ ] HOMER Search API
 
