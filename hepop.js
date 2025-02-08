@@ -281,9 +281,7 @@ class CompactionManager {
       '1h': 60 * 60 * 1000,
       '24h': 24 * 60 * 60 * 1000
     };
-    this.compactionLock = new Map(); // Add lock for each type
-    
-    this.initialize();
+    this.compactionLock = new Map();
   }
 
   async initialize() {
@@ -291,6 +289,9 @@ class CompactionManager {
       // Initialize DuckDB
       this.db = await DuckDBInstance.create(':memory:');
       console.log(`Initialized DuckDB for parquet compaction`);
+      
+      // Run initial compaction check
+      await this.checkAndCompact();
       
       // Start compaction jobs after initialization
       this.startCompactionJobs();
@@ -302,28 +303,39 @@ class CompactionManager {
 
   startCompactionJobs() {
     // Run compaction checks every minute
-    this.compactionInterval = setInterval(() => {
-      this.checkAndCompact().catch(error => {
+    this.compactionInterval = setInterval(async () => {
+      try {
+        console.log('Running scheduled compaction check...');
+        await this.checkAndCompact();
+      } catch (error) {
         console.error('Compaction job error:', error);
-      });
+      }
     }, 60 * 1000);
   }
 
   async checkAndCompact() {
     // Get list of types from base directory
     const typeDirs = await this.getTypeDirectories();
+    console.log('Found types for compaction:', typeDirs);
 
     for (const type of typeDirs) {
       // Skip if compaction is already running for this type
       if (this.compactionLock.get(type)) {
+        console.log(`Skipping compaction for type ${type} - already running`);
         continue;
       }
 
       try {
         this.compactionLock.set(type, true);
         const metadata = await this.bufferManager.getTypeMetadata(type);
+        
+        // Log files available for compaction
+        console.log(`Type ${type} has ${metadata.files.length} files to consider for compaction`);
+        
         await this.compactTimeRange(type, metadata.files, '10m', '1h');
         await this.compactTimeRange(type, metadata.files, '1h', '24h');
+      } catch (error) {
+        console.error(`Error during compaction for type ${type}:`, error);
       } finally {
         this.compactionLock.set(type, false);
       }
@@ -367,9 +379,14 @@ class CompactionManager {
     // Group all files (including compacted) by hour
     const groups = new Map();
     
+    console.log(`Checking ${files.length} files for ${fromRange} compaction...`);
+    
     files.forEach(file => {
       // Skip files that are too new
-      if (now - file.max_time < interval) return;
+      if (now - file.max_time < interval) {
+        console.log(`File ${path.basename(file.path)} is too new for compaction`);
+        return;
+      }
       
       // Calculate target hour timestamp (floor to hour)
       const timestamp = new Date(file.chunk_time / 1000000);
@@ -395,6 +412,11 @@ class CompactionManager {
       }
     });
 
+    // Log grouping results
+    for (const [hourTime, { raw, compacted }] of groups) {
+      console.log(`Hour ${new Date(hourTime).toISOString()}: ${raw.length} raw files, ${compacted.length} compacted files`);
+    }
+
     // Process each hour group
     for (const [hourTime, { raw, compacted }] of groups) {
       try {
@@ -412,7 +434,10 @@ class CompactionManager {
 
         // Only proceed if we have files to compact
         if (filesToCompact.length >= 2) {
+          console.log(`Compacting ${filesToCompact.length} files for hour ${new Date(hourTime).toISOString()}`);
           await this.compactFiles(type, filesToCompact, toRange);
+        } else {
+          console.log(`Not enough files to compact for hour ${new Date(hourTime).toISOString()}`);
         }
       } catch (error) {
         console.error(`Error compacting files for hour ${new Date(hourTime).toISOString()}:`, error);
