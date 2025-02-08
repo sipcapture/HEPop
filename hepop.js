@@ -44,16 +44,7 @@ class ParquetBufferManager {
       writer_id: hostname,
       next_file_id: 0,
       next_db_id: 0,
-      next_table_id: 0,
-      next_column_id: 0,
-      snapshot_sequence_number: 1,
-      wal_file_sequence_number: 0,
-      catalog_sequence_number: 0,
-      parquet_size_bytes: 0,
-      row_count: 0,
-      min_time: null,
-      max_time: null,
-      databases: [[0, { tables: new Map() }]]
+      next_table_id: 0
     };
   }
 
@@ -143,40 +134,90 @@ class ParquetBufferManager {
     }
   }
 
-  updateMetadata(type, filePath, sizeBytes, rowCount, timestamps) {
+  async getTypeMetadata(type) {
+    const metadataPath = this.getTypeMetadataPath(type);
+    try {
+      const data = await fs.promises.readFile(metadataPath, 'utf8');
+      return JSON.parse(data);
+    } catch (error) {
+      if (error.code === 'ENOENT') {
+        // Initialize new type metadata
+        const metadata = {
+          type,
+          parquet_size_bytes: 0,
+          row_count: 0,
+          min_time: null,
+          max_time: null,
+          wal_sequence: 0,
+          files: [] // Array of file entries
+        };
+        await this.writeTypeMetadata(type, metadata);
+        return metadata;
+      }
+      throw error;
+    }
+  }
+
+  getTypeMetadataPath(type) {
+    return path.join(
+      this.baseDir,
+      this.metadata.writer_id,
+      'dbs',
+      `hep-${this.metadata.next_db_id}`,
+      `hep_${type}-${this.metadata.next_table_id}`,
+      'metadata.json'
+    );
+  }
+
+  async writeTypeMetadata(type, metadata) {
+    const metadataPath = this.getTypeMetadataPath(type);
+    await fs.promises.mkdir(path.dirname(metadataPath), { recursive: true });
+    
+    const tempPath = `${metadataPath}.tmp`;
+    try {
+      await fs.promises.writeFile(tempPath, JSON.stringify(metadata, null, 2));
+      await fs.promises.rename(tempPath, metadataPath);
+    } catch (error) {
+      try {
+        await fs.promises.unlink(tempPath);
+      } catch (e) {
+        // Ignore cleanup errors
+      }
+      throw error;
+    }
+  }
+
+  async updateMetadata(type, filePath, sizeBytes, rowCount, timestamps) {
     const minTime = Math.min(...timestamps.map(t => t.getTime() * 1000000));
     const maxTime = Math.max(...timestamps.map(t => t.getTime() * 1000000));
     const chunkTime = Math.floor(minTime / 600000000000) * 600000000000;
 
+    // Get current type metadata
+    const typeMetadata = await this.getTypeMetadata(type);
+
     const fileInfo = {
-      id: this.metadata.next_file_id++,
+      id: typeMetadata.files.length,
       path: filePath,
       size_bytes: sizeBytes,
       row_count: rowCount,
       chunk_time: chunkTime,
       min_time: minTime,
-      max_time: maxTime
+      max_time: maxTime,
+      type: 'raw'
     };
 
-    // Update tables map
-    const tables = this.metadata.databases[0][1].tables;
-    if (!tables.has(type)) {
-      tables.set(type, []);
-    }
-    tables.get(type).push(fileInfo);
+    // Update type metadata
+    typeMetadata.files.push(fileInfo);
+    typeMetadata.parquet_size_bytes += sizeBytes;
+    typeMetadata.row_count += rowCount;
+    typeMetadata.min_time = typeMetadata.min_time ? 
+      Math.min(typeMetadata.min_time, minTime) : minTime;
+    typeMetadata.max_time = typeMetadata.max_time ?
+      Math.max(typeMetadata.max_time, maxTime) : maxTime;
+    typeMetadata.wal_sequence++;
 
-    // Update global metadata
-    this.metadata.parquet_size_bytes += sizeBytes;
-    this.metadata.row_count += rowCount;
-    this.metadata.min_time = this.metadata.min_time ? 
-      Math.min(this.metadata.min_time, minTime) : minTime;
-    this.metadata.max_time = this.metadata.max_time ?
-      Math.max(this.metadata.max_time, maxTime) : maxTime;
-    this.metadata.wal_file_sequence_number++;
-
-    // Write metadata file
-    const metadataPath = path.join(this.baseDir, this.metadata.writer_id, 'metadata.json');
-    fs.writeFileSync(metadataPath, JSON.stringify(this.metadata, null, 2));
+    // Write updated metadata
+    await this.writeTypeMetadata(type, typeMetadata);
   }
 
   async close() {
@@ -233,10 +274,10 @@ class CompactionManager {
   }
 
   async checkAndCompact() {
-    const metadata = this.bufferManager.metadata;
-    const tables = metadata.databases[0][1].tables;
+    // Get list of types from base directory
+    const typeDirs = await this.getTypeDirectories();
 
-    for (const [type, files] of tables.entries()) {
+    for (const type of typeDirs) {
       // Skip if compaction is already running for this type
       if (this.compactionLock.get(type)) {
         continue;
@@ -244,11 +285,42 @@ class CompactionManager {
 
       try {
         this.compactionLock.set(type, true);
-        await this.compactTimeRange(type, files, '10m', '1h');
-        await this.compactTimeRange(type, files, '1h', '24h');
+        const metadata = await this.bufferManager.getTypeMetadata(type);
+        await this.compactTimeRange(type, metadata.files, '10m', '1h');
+        await this.compactTimeRange(type, metadata.files, '1h', '24h');
       } finally {
         this.compactionLock.set(type, false);
       }
+    }
+  }
+
+  async getTypeDirectories() {
+    const baseDir = path.join(
+      this.bufferManager.baseDir,
+      this.bufferManager.metadata.writer_id,
+      'dbs'
+    );
+    
+    try {
+      const entries = await fs.promises.readdir(baseDir, { withFileTypes: true });
+      const types = new Set();
+      
+      for (const entry of entries) {
+        if (entry.isDirectory() && entry.name.startsWith('hep-')) {
+          const subEntries = await fs.promises.readdir(path.join(baseDir, entry.name));
+          for (const subEntry of subEntries) {
+            if (subEntry.startsWith('hep_')) {
+              const type = subEntry.split('-')[1].split('_')[0];
+              types.add(parseInt(type));
+            }
+          }
+        }
+      }
+      
+      return Array.from(types);
+    } catch (error) {
+      if (error.code === 'ENOENT') return [];
+      throw error;
     }
   }
 
@@ -360,7 +432,7 @@ class CompactionManager {
       const stats = await this.getFileStats(newPath);
       
       // Update metadata first
-      this.updateCompactionMetadata(type, files, {
+      await this.updateCompactionMetadata(type, files, {
         path: newPath,
         size_bytes: stats.size_bytes,
         row_count: stats.row_count,
@@ -419,36 +491,37 @@ class CompactionManager {
     };
   }
 
-  updateCompactionMetadata(type, oldFiles, newFile) {
-    const tables = this.bufferManager.metadata.databases[0][1].tables;
-    const fileList = tables.get(type);
+  async updateCompactionMetadata(type, oldFiles, newFile) {
+    const typeMetadata = await this.bufferManager.getTypeMetadata(type);
 
     // Remove old files from metadata
     oldFiles.forEach(oldFile => {
-      const index = fileList.findIndex(f => f.path === oldFile.path);
+      const index = typeMetadata.files.findIndex(f => f.path === oldFile.path);
       if (index !== -1) {
-        // Subtract old file stats from global metadata
-        this.bufferManager.metadata.parquet_size_bytes -= oldFile.size_bytes;
-        this.bufferManager.metadata.row_count -= oldFile.row_count;
-        fileList.splice(index, 1);
+        typeMetadata.parquet_size_bytes -= oldFile.size_bytes;
+        typeMetadata.row_count -= oldFile.row_count;
+        typeMetadata.files.splice(index, 1);
       }
     });
 
     // Add new compacted file
     const newFileEntry = {
-      id: this.bufferManager.metadata.next_file_id++,
+      id: typeMetadata.files.length,
       ...newFile,
-      compaction_level: path.basename(newFile.path).startsWith('c_') ? 'compacted' : 'raw'
+      type: path.basename(newFile.path).startsWith('c_') ? 'compacted' : 'raw'
     };
-    fileList.push(newFileEntry);
+    typeMetadata.files.push(newFileEntry);
 
     // Update global metadata
-    this.bufferManager.metadata.parquet_size_bytes += newFile.size_bytes;
-    this.bufferManager.metadata.row_count += newFile.row_count;
-    this.bufferManager.metadata.min_time = this.bufferManager.metadata.min_time ? 
-      Math.min(this.bufferManager.metadata.min_time, newFile.min_time) : newFile.min_time;
-    this.bufferManager.metadata.max_time = this.bufferManager.metadata.max_time ?
-      Math.max(this.bufferManager.metadata.max_time, newFile.max_time) : newFile.max_time;
+    typeMetadata.parquet_size_bytes += newFile.size_bytes;
+    typeMetadata.row_count += newFile.row_count;
+    typeMetadata.min_time = typeMetadata.min_time ? 
+      Math.min(typeMetadata.min_time, newFile.min_time) : newFile.min_time;
+    typeMetadata.max_time = typeMetadata.max_time ?
+      Math.max(typeMetadata.max_time, newFile.max_time) : newFile.max_time;
+
+    // Write updated metadata
+    await this.bufferManager.writeTypeMetadata(type, typeMetadata);
   }
 
   async writeMetadata() {
