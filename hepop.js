@@ -30,19 +30,11 @@ class ParquetBufferManager {
         }
       ]
     };
-  }
-
-  async initialize() {
-    try {
-      // Ensure directories exist first
-      await this.ensureDirectories();
-      
-      // Then start the flush interval
-      this.startFlushInterval();
-    } catch (error) {
-      console.error('Failed to initialize ParquetBufferManager:', error);
-      throw error;
-    }
+    
+    this.startFlushInterval();
+    
+    // Ensure base directories exist
+    this.ensureDirectories();
   }
 
   initializeMetadata() {
@@ -181,34 +173,14 @@ class ParquetBufferManager {
       Math.max(this.metadata.max_time, maxTime) : maxTime;
     this.metadata.wal_file_sequence_number++;
 
-    // Write metadata file atomically
-    this.writeMetadata();
+    // Write metadata file
+    const metadataPath = path.join(this.baseDir, this.metadata.writer_id, 'metadata.json');
+    fs.writeFileSync(metadataPath, JSON.stringify(this.metadata, null, 2));
   }
 
-  async writeMetadata() {
-    const metadataPath = path.join(this.baseDir, this.metadata.writer_id, 'metadata.json');
-    const tempPath = `${metadataPath}.tmp`;
-    
-    try {
-      // Ensure parent directory exists
-      await fs.promises.mkdir(path.dirname(metadataPath), { recursive: true });
-      
-      // Write to temp file
-      await fs.promises.writeFile(
-        tempPath,
-        JSON.stringify(this.metadata, null, 2)
-      );
-      
-      // Atomic rename
-      await fs.promises.rename(tempPath, metadataPath);
-    } catch (error) {
-      // Cleanup temp file if it exists
-      try {
-        await fs.promises.unlink(tempPath);
-      } catch (e) {
-        // Ignore cleanup errors
-      }
-      throw error;
+  async close() {
+    for (const type of this.buffers.keys()) {
+      await this.flush(type);
     }
   }
 
@@ -219,13 +191,10 @@ class ParquetBufferManager {
     // Write initial metadata file if it doesn't exist
     const metadataPath = path.join(metadataDir, 'metadata.json');
     if (!fs.existsSync(metadataPath)) {
-      await this.writeMetadata(); // Use the atomic write method
-    }
-  }
-
-  async close() {
-    for (const type of this.buffers.keys()) {
-      await this.flush(type);
+      await fs.promises.writeFile(
+        metadataPath,
+        JSON.stringify(this.metadata, null, 2)
+      );
     }
   }
 }
@@ -247,9 +216,8 @@ class CompactionManager {
     try {
       // Initialize DuckDB
       this.db = await DuckDBInstance.create(':memory:');
-      // Get version from package.json since it's not available in the API
-      const duckdbVersion = require('@duckdb/node-api/package.json').version;
-      console.log(`Initialized DuckDB v${duckdbVersion} for compaction`);
+      const version = await this.db.query('SELECT version()');
+      console.log(`Initialized DuckDB ${version} for compaction`);
       
       // Start compaction jobs after initialization
       this.startCompactionJobs();
@@ -351,7 +319,7 @@ class CompactionManager {
       // Get stats from new file
       const stats = await this.getFileStats(newPath);
       
-      // Update metadata and write it before cleaning up files
+      // Update metadata first
       this.updateCompactionMetadata(type, files, {
         path: newPath,
         size_bytes: stats.size_bytes,
@@ -362,7 +330,7 @@ class CompactionManager {
         range: targetRange
       });
 
-      // Write metadata before cleaning up files
+      // Write metadata
       await this.writeMetadata();
 
       // Only after metadata is written, clean up old files
@@ -371,6 +339,7 @@ class CompactionManager {
       console.log(`Compacted ${files.length} files into ${newPath} (${stats.row_count} rows)`);
     } catch (error) {
       console.error(`Compaction error for type ${type}:`, error);
+      // Cleanup failed compaction file if it exists
       try {
         await fs.promises.unlink(newPath);
       } catch (e) {
@@ -441,30 +410,30 @@ class CompactionManager {
   }
 
   async writeMetadata() {
-    const metadataPath = path.join(
+    const metadataDir = path.join(
       this.bufferManager.baseDir, 
-      this.bufferManager.metadata.writer_id,
-      'metadata.json'
+      this.bufferManager.metadata.writer_id
     );
+    
+    await fs.promises.mkdir(metadataDir, { recursive: true });
+    
+    const metadataPath = path.join(metadataDir, 'metadata.json');
     const tempPath = `${metadataPath}.tmp`;
     
     try {
-      // Ensure parent directory exists
-      await fs.promises.mkdir(path.dirname(metadataPath), { recursive: true });
-      
-      // Write to temp file
+      // Write metadata to temp file
       await fs.promises.writeFile(
-        tempPath,
+        tempPath, 
         JSON.stringify(this.bufferManager.metadata, null, 2)
       );
       
-      // Ensure temp file exists
+      // Ensure temp file exists before rename
       await fs.promises.access(tempPath);
       
       // Atomic rename
       await fs.promises.rename(tempPath, metadataPath);
       
-      // Verify final file exists
+      // Verify metadata file exists
       await fs.promises.access(metadataPath);
     } catch (error) {
       // Cleanup temp file if it exists
@@ -549,15 +518,11 @@ class HEPServer {
 
   async initialize() {
     try {
-      // Create and initialize buffer manager first
       this.buffer = new ParquetBufferManager();
-      await this.buffer.initialize();
       
-      // Then create and initialize compaction manager
       this.compaction = new CompactionManager(this.buffer);
       await this.compaction.initialize();
       
-      // Finally start the servers
       await this.startServers();
     } catch (error) {
       console.error('Failed to initialize HEPServer:', error);
@@ -569,42 +534,42 @@ class HEPServer {
     const port = parseInt(process.env.PORT) || 9069;
     const host = process.env.HOST || "0.0.0.0";
     const retryAttempts = 3;
-    const retryDelay = 1000;
+    const retryDelay = 1000; // 1 second
 
     for (let attempt = 1; attempt <= retryAttempts; attempt++) {
       try {
-        // TCP Server with enhanced address handling
+        // Try to create TCP Server
         const tcpServer = Bun.listen({
-          hostname: host,
-          port: port,
-          socket: {
-            data: (socket, data) => {
-              socket.remoteAddress = socket.remoteAddress || 'unknown';
-              this.handleData(data, socket);
-            },
-            error: (socket, error) => console.error('TCP error:', error),
-          }
-        });
+      hostname: host,
+      port: port,
+      socket: {
+        data: (socket, data) => this.handleData(data, socket),
+        error: (socket, error) => console.error('TCP error:', error),
+      }
+    });
 
-        // UDP Server - keep it simple like the original
+        // If TCP succeeds, create UDP Server
         const udpServer = Bun.udpSocket({
-          hostname: host,
-          port: port,
-          socket: {
-            data: (socket, data) => this.handleData(data, socket),
-            error: (socket, error) => console.error('UDP error:', error),
-          }
-        });
+      hostname: host,
+      port: port,
+      udp: true,
+      socket: {
+        data: (socket, data) => this.handleData(data, socket),
+        error: (socket, error) => console.error('UDP error:', error),
+      }
+    });
 
-        console.log(`HEP Server listening on ${host}:${port} (TCP/UDP)`);
+    console.log(`HEP Server listening on ${host}:${port} (TCP/UDP)`);
         
+        // Store server references
         this.tcpServer = tcpServer;
         this.udpServer = udpServer;
 
-        process.on('SIGTERM', this.shutdown.bind(this));
-        process.on('SIGINT', this.shutdown.bind(this));
+    // Handle graceful shutdown
+    process.on('SIGTERM', this.shutdown.bind(this));
+    process.on('SIGINT', this.shutdown.bind(this));
         
-        return;
+        return; // Success, exit the retry loop
       } catch (error) {
         console.error(`Attempt ${attempt}/${retryAttempts} failed:`, error);
         
@@ -612,6 +577,7 @@ class HEPServer {
           throw new Error(`Failed to start server after ${retryAttempts} attempts: ${error.message}`);
         }
         
+        // Wait before retrying
         await new Promise(resolve => setTimeout(resolve, retryDelay));
       }
     }
@@ -637,10 +603,7 @@ class HEPServer {
 
   handleData(data, socket) {
     try {
-      // Get remote address safely, but keep it simple for UDP
-      const remoteAddress = socket?.remoteAddress || 'unknown';
-      
-      console.log(`Received ${data.length} bytes from ${remoteAddress}`);
+      console.log(`Received ${data.length} bytes from ${socket.remoteAddress}`);
       const processed = this.processHep(data, socket);
       const type = processed.type;
       console.log(`Processed HEP type ${type}, adding to buffer`);
