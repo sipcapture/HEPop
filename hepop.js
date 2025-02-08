@@ -1,4 +1,3 @@
-import * as arrow from "apache-arrow";
 import parquet from '@dsnp/parquetjs';
 import { DuckDBInstance } from '@duckdb/node-api';
 import hepjs from 'hep-js';
