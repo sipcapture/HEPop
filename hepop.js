@@ -235,7 +235,11 @@ class CompactionManager {
     const metadata = this.bufferManager.metadata;
     const tables = metadata.databases[0][1].tables;
 
-    for (const [type, files] of tables.entries()) {
+    // Iterate over table entries in the array
+    for (const tableEntry of tables) {
+      const type = tableEntry[0];
+      const files = tableEntry[1];
+
       // Skip if compaction is already running for this type
       if (this.compactionLock.get(type)) {
         continue;
@@ -275,6 +279,8 @@ class CompactionManager {
     for (const [groupTime, groupFiles] of groups) {
       if (groupFiles.length < 2) continue;
 
+      // Sort files by min_time to ensure proper ordering
+      groupFiles.sort((a, b) => a.min_time - b.min_time);
       await this.compactFiles(type, groupFiles, toRange);
     }
   }
@@ -377,25 +383,19 @@ class CompactionManager {
   updateCompactionMetadata(type, oldFiles, newFile) {
     const tables = this.bufferManager.metadata.databases[0][1].tables;
     
-    // Initialize tables as array if it's empty object
-    if (!Array.isArray(tables)) {
-      this.bufferManager.metadata.databases[0][1].tables = [];
-    }
-    
-    // Find or create table entry
-    let tableEntry = this.bufferManager.metadata.databases[0][1].tables.find(t => t[0] === type);
+    // Find table entry
+    let tableEntry = tables.find(t => t[0] === type);
     if (!tableEntry) {
       tableEntry = [type, []];
-      this.bufferManager.metadata.databases[0][1].tables.push(tableEntry);
+      tables.push(tableEntry);
     }
     
     const fileList = tableEntry[1];
 
-    // Remove old files from metadata
+    // Remove old files from metadata and update global stats
     oldFiles.forEach(oldFile => {
       const index = fileList.findIndex(f => f.path === oldFile.path);
       if (index !== -1) {
-        // Subtract old file stats from global metadata
         this.bufferManager.metadata.parquet_size_bytes -= oldFile.size_bytes;
         this.bufferManager.metadata.row_count -= oldFile.row_count;
         fileList.splice(index, 1);
@@ -465,6 +465,9 @@ class CompactionManager {
     const hour = timestamp.getHours().toString().padStart(2, '0');
     const minute = Math.floor(timestamp.getMinutes() / 10) * 10;
     const minutePath = minute.toString().padStart(2, '0');
+    
+    // Increment WAL sequence number for the new file
+    this.bufferManager.metadata.wal_file_sequence_number++;
     
     return path.join(
       this.bufferManager.baseDir,
