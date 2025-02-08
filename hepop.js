@@ -181,14 +181,34 @@ class ParquetBufferManager {
       Math.max(this.metadata.max_time, maxTime) : maxTime;
     this.metadata.wal_file_sequence_number++;
 
-    // Write metadata file
-    const metadataPath = path.join(this.baseDir, this.metadata.writer_id, 'metadata.json');
-    fs.writeFileSync(metadataPath, JSON.stringify(this.metadata, null, 2));
+    // Write metadata file atomically
+    this.writeMetadata();
   }
 
-  async close() {
-    for (const type of this.buffers.keys()) {
-      await this.flush(type);
+  async writeMetadata() {
+    const metadataPath = path.join(this.baseDir, this.metadata.writer_id, 'metadata.json');
+    const tempPath = `${metadataPath}.tmp`;
+    
+    try {
+      // Ensure parent directory exists
+      await fs.promises.mkdir(path.dirname(metadataPath), { recursive: true });
+      
+      // Write to temp file
+      await fs.promises.writeFile(
+        tempPath,
+        JSON.stringify(this.metadata, null, 2)
+      );
+      
+      // Atomic rename
+      await fs.promises.rename(tempPath, metadataPath);
+    } catch (error) {
+      // Cleanup temp file if it exists
+      try {
+        await fs.promises.unlink(tempPath);
+      } catch (e) {
+        // Ignore cleanup errors
+      }
+      throw error;
     }
   }
 
@@ -199,10 +219,13 @@ class ParquetBufferManager {
     // Write initial metadata file if it doesn't exist
     const metadataPath = path.join(metadataDir, 'metadata.json');
     if (!fs.existsSync(metadataPath)) {
-      await fs.promises.writeFile(
-        metadataPath,
-        JSON.stringify(this.metadata, null, 2)
-      );
+      await this.writeMetadata(); // Use the atomic write method
+    }
+  }
+
+  async close() {
+    for (const type of this.buffers.keys()) {
+      await this.flush(type);
     }
   }
 }
@@ -328,7 +351,7 @@ class CompactionManager {
       // Get stats from new file
       const stats = await this.getFileStats(newPath);
       
-      // Update metadata first
+      // Update metadata and write it before cleaning up files
       this.updateCompactionMetadata(type, files, {
         path: newPath,
         size_bytes: stats.size_bytes,
@@ -339,7 +362,7 @@ class CompactionManager {
         range: targetRange
       });
 
-      // Write metadata
+      // Write metadata before cleaning up files
       await this.writeMetadata();
 
       // Only after metadata is written, clean up old files
@@ -348,7 +371,6 @@ class CompactionManager {
       console.log(`Compacted ${files.length} files into ${newPath} (${stats.row_count} rows)`);
     } catch (error) {
       console.error(`Compaction error for type ${type}:`, error);
-      // Cleanup failed compaction file if it exists
       try {
         await fs.promises.unlink(newPath);
       } catch (e) {
@@ -419,30 +441,30 @@ class CompactionManager {
   }
 
   async writeMetadata() {
-    const metadataDir = path.join(
+    const metadataPath = path.join(
       this.bufferManager.baseDir, 
-      this.bufferManager.metadata.writer_id
+      this.bufferManager.metadata.writer_id,
+      'metadata.json'
     );
-    
-    await fs.promises.mkdir(metadataDir, { recursive: true });
-    
-    const metadataPath = path.join(metadataDir, 'metadata.json');
     const tempPath = `${metadataPath}.tmp`;
     
     try {
-      // Write metadata to temp file
+      // Ensure parent directory exists
+      await fs.promises.mkdir(path.dirname(metadataPath), { recursive: true });
+      
+      // Write to temp file
       await fs.promises.writeFile(
-        tempPath, 
+        tempPath,
         JSON.stringify(this.bufferManager.metadata, null, 2)
       );
       
-      // Ensure temp file exists before rename
+      // Ensure temp file exists
       await fs.promises.access(tempPath);
       
       // Atomic rename
       await fs.promises.rename(tempPath, metadataPath);
       
-      // Verify metadata file exists
+      // Verify final file exists
       await fs.promises.access(metadataPath);
     } catch (error) {
       // Cleanup temp file if it exists
