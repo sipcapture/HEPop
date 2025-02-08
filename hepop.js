@@ -207,8 +207,8 @@ class CompactionManager {
       '1h': 60 * 60 * 1000,
       '24h': 24 * 60 * 60 * 1000
     };
+    this.compactionLock = new Map(); // Add lock for each type
     
-    // Initialize async in constructor
     this.initialize();
   }
 
@@ -236,8 +236,18 @@ class CompactionManager {
     const tables = metadata.databases[0][1].tables;
 
     for (const [type, files] of tables.entries()) {
-      await this.compactTimeRange(type, files, '10m', '1h');
-      await this.compactTimeRange(type, files, '1h', '24h');
+      // Skip if compaction is already running for this type
+      if (this.compactionLock.get(type)) {
+        continue;
+      }
+
+      try {
+        this.compactionLock.set(type, true);
+        await this.compactTimeRange(type, files, '10m', '1h');
+        await this.compactTimeRange(type, files, '1h', '24h');
+      } finally {
+        this.compactionLock.set(type, false);
+      }
     }
   }
 
@@ -270,11 +280,18 @@ class CompactionManager {
   }
 
   async compactFiles(type, files, targetRange) {
+    const newPath = this.getCompactedFilePath(type, new Date(files[0].chunk_time / 1000000), targetRange);
+    
     try {
-      const newPath = this.getCompactedFilePath(type, new Date(files[0].chunk_time / 1000000), targetRange);
+      // Check if all source files exist before starting
+      for (const file of files) {
+        await fs.promises.access(file.path);
+      }
+
+      // Create directory for new file
       await fs.promises.mkdir(path.dirname(newPath), { recursive: true });
 
-      // Create new writer with same schema as buffer manager
+      // Create new writer
       const writer = await parquet.ParquetWriter.openFile(
         this.bufferManager.schema,
         newPath,
@@ -294,14 +311,15 @@ class CompactionManager {
         await reader.close();
       }
 
-      // Close writer
+      // Close writer and ensure file is written
       await writer.close();
+      await fs.promises.access(newPath);
 
       // Get stats from new file
       const stats = await this.getFileStats(newPath);
       
-      // Perform cleanup and metadata update atomically
-      await this.finalizeCompaction(type, files, {
+      // Update metadata first
+      this.updateCompactionMetadata(type, files, {
         path: newPath,
         size_bytes: stats.size_bytes,
         row_count: stats.row_count,
@@ -310,6 +328,12 @@ class CompactionManager {
         max_time: stats.max_time,
         range: targetRange
       });
+
+      // Write metadata
+      await this.writeMetadata();
+
+      // Only after metadata is written, clean up old files
+      await this.cleanupCompactedFiles(files);
 
       console.log(`Compacted ${files.length} files into ${newPath} (${stats.row_count} rows)`);
     } catch (error) {
@@ -320,6 +344,7 @@ class CompactionManager {
       } catch (e) {
         // Ignore cleanup errors
       }
+      throw error;
     }
   }
 
@@ -351,25 +376,95 @@ class CompactionManager {
     };
   }
 
-  async finalizeCompaction(type, oldFiles, newFile) {
+  updateCompactionMetadata(type, oldFiles, newFile) {
+    const tables = this.bufferManager.metadata.databases[0][1].tables;
+    const fileList = tables.get(type);
+
+    // Remove old files from metadata
+    oldFiles.forEach(oldFile => {
+      const index = fileList.findIndex(f => f.path === oldFile.path);
+      if (index !== -1) {
+        // Subtract old file stats from global metadata
+        this.bufferManager.metadata.parquet_size_bytes -= oldFile.size_bytes;
+        this.bufferManager.metadata.row_count -= oldFile.row_count;
+        fileList.splice(index, 1);
+      }
+    });
+
+    // Add new compacted file
+    const newFileEntry = {
+      id: this.bufferManager.metadata.next_file_id++,
+      ...newFile,
+      compaction_level: newFile.range
+    };
+    fileList.push(newFileEntry);
+
+    // Update global metadata
+    this.bufferManager.metadata.parquet_size_bytes += newFile.size_bytes;
+    this.bufferManager.metadata.row_count += newFile.row_count;
+    this.bufferManager.metadata.min_time = this.bufferManager.metadata.min_time ? 
+      Math.min(this.bufferManager.metadata.min_time, newFile.min_time) : newFile.min_time;
+    this.bufferManager.metadata.max_time = this.bufferManager.metadata.max_time ?
+      Math.max(this.bufferManager.metadata.max_time, newFile.max_time) : newFile.max_time;
+  }
+
+  async writeMetadata() {
+    const metadataDir = path.join(
+      this.bufferManager.baseDir, 
+      this.bufferManager.metadata.writer_id
+    );
+    
+    await fs.promises.mkdir(metadataDir, { recursive: true });
+    
+    const metadataPath = path.join(metadataDir, 'metadata.json');
+    const tempPath = `${metadataPath}.tmp`;
+    
     try {
-      // Update metadata first
-      this.updateCompactionMetadata(type, oldFiles, newFile);
-
-      // Write updated metadata to disk
-      await this.writeMetadata();
-
-      // Only clean up old files after metadata is successfully written
-      await this.cleanupCompactedFiles(oldFiles);
+      // Write metadata to temp file
+      await fs.promises.writeFile(
+        tempPath, 
+        JSON.stringify(this.bufferManager.metadata, null, 2)
+      );
+      
+      // Ensure temp file exists before rename
+      await fs.promises.access(tempPath);
+      
+      // Atomic rename
+      await fs.promises.rename(tempPath, metadataPath);
+      
+      // Verify metadata file exists
+      await fs.promises.access(metadataPath);
     } catch (error) {
-      console.error('Error during compaction finalization:', error);
-      // Attempt to rollback by removing the new file
+      // Cleanup temp file if it exists
       try {
-        await fs.promises.unlink(newFile.path);
+        await fs.promises.unlink(tempPath);
       } catch (e) {
-        console.error('Error during rollback:', e);
+        // Ignore cleanup errors
       }
       throw error;
+    }
+  }
+
+  getCompactedFilePath(type, timestamp, range) {
+    const date = timestamp.toISOString().split('T')[0];
+    const hour = timestamp.getHours().toString().padStart(2, '0');
+    
+    return path.join(
+      this.bufferManager.baseDir,
+      this.bufferManager.metadata.writer_id,
+      'compacted',
+      range,
+      `hep-${this.bufferManager.metadata.next_db_id}`,
+      `hep_${type}-${this.bufferManager.metadata.next_table_id}`,
+      date,
+      hour,
+      `${this.bufferManager.metadata.wal_file_sequence_number.toString().padStart(10, '0')}.parquet`
+    );
+  }
+
+  async close() {
+    if (this.db) {
+      await this.db.close();
     }
   }
 
@@ -411,93 +506,6 @@ class CompactionManager {
           console.error(`Error cleaning up directory ${dir}:`, error);
         }
       }
-    }
-  }
-
-  updateCompactionMetadata(type, oldFiles, newFile) {
-    const tables = this.bufferManager.metadata.databases[0][1].tables;
-    const fileList = tables.get(type);
-
-    // Remove old files from metadata
-    oldFiles.forEach(oldFile => {
-      const index = fileList.findIndex(f => f.path === oldFile.path);
-      if (index !== -1) {
-        // Subtract old file stats from global metadata
-        this.bufferManager.metadata.parquet_size_bytes -= oldFile.size_bytes;
-        this.bufferManager.metadata.row_count -= oldFile.row_count;
-        fileList.splice(index, 1);
-      }
-    });
-
-    // Add new compacted file
-    const newFileEntry = {
-      id: this.bufferManager.metadata.next_file_id++,
-      ...newFile,
-      compaction_level: newFile.range
-    };
-    fileList.push(newFileEntry);
-
-    // Update global metadata
-    this.bufferManager.metadata.parquet_size_bytes += newFile.size_bytes;
-    this.bufferManager.metadata.row_count += newFile.row_count;
-    this.bufferManager.metadata.min_time = this.bufferManager.metadata.min_time ? 
-      Math.min(this.bufferManager.metadata.min_time, newFile.min_time) : newFile.min_time;
-    this.bufferManager.metadata.max_time = this.bufferManager.metadata.max_time ?
-      Math.max(this.bufferManager.metadata.max_time, newFile.max_time) : newFile.max_time;
-  }
-
-  async writeMetadata() {
-    const metadataDir = path.join(
-      this.bufferManager.baseDir, 
-      this.bufferManager.metadata.writer_id
-    );
-    
-    // Ensure metadata directory exists
-    await fs.promises.mkdir(metadataDir, { recursive: true });
-    
-    const metadataPath = path.join(metadataDir, 'metadata.json');
-    const tempPath = `${metadataPath}.tmp`;
-    
-    try {
-      // Write to temporary file
-      await fs.promises.writeFile(
-        tempPath, 
-        JSON.stringify(this.bufferManager.metadata, null, 2)
-      );
-      
-      // Atomic rename
-      await fs.promises.rename(tempPath, metadataPath);
-    } catch (error) {
-      // Cleanup temp file if it exists
-      try {
-        await fs.promises.unlink(tempPath);
-      } catch (e) {
-        // Ignore cleanup errors
-      }
-      throw error;
-    }
-  }
-
-  getCompactedFilePath(type, timestamp, range) {
-    const date = timestamp.toISOString().split('T')[0];
-    const hour = timestamp.getHours().toString().padStart(2, '0');
-    
-    return path.join(
-      this.bufferManager.baseDir,
-      this.bufferManager.metadata.writer_id,
-      'compacted',
-      range,
-      `hep-${this.bufferManager.metadata.next_db_id}`,
-      `hep_${type}-${this.bufferManager.metadata.next_table_id}`,
-      date,
-      hour,
-      `${this.bufferManager.metadata.wal_file_sequence_number.toString().padStart(10, '0')}.parquet`
-    );
-  }
-
-  async close() {
-    if (this.db) {
-      await this.db.close();
     }
   }
 }
