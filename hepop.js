@@ -1,11 +1,5 @@
 import * as arrow from "apache-arrow";
-import initWasm, {
-  Compression,
-  readParquet,
-  Table,
-  writeParquet,
-  WriterPropertiesBuilder,
-} from "parquet-wasm";
+import parquet from '@dsnp/parquetjs';
 import { DuckDBInstance } from '@duckdb/node-api';
 import hepjs from 'hep-js';
 import { getSIP } from 'parsip';
@@ -20,26 +14,24 @@ class ParquetBufferManager {
     this.metadata = this.initializeMetadata();
     this.baseDir = process.env.PARQUET_DIR || './data';
     
-    // Initialize async in constructor
-    this.initialize();
-  }
+    // Define schema for HEP data
+    this.schema = new parquet.ParquetSchema({
+      timestamp: { type: 'TIMESTAMP_MILLIS' },
+      rcinfo: { type: 'UTF8' },
+      payload: { type: 'UTF8' }
+    });
 
-  async initialize() {
-    try {
-      // Initialize Parquet WASM
-      await initWasm();
-      this.writerProperties = new WriterPropertiesBuilder()
-        .setCompression(Compression.ZSTD)
-        .build();
-      
-      console.log('Parquet WASM initialized');
-      
-      // Start flush interval after initialization
-      this.startFlushInterval();
-    } catch (error) {
-      console.error('Failed to initialize ParquetBufferManager:', error);
-      throw error;
-    }
+    // Add bloom filters for better query performance
+    this.writerOptions = {
+      bloomFilters: [
+        {
+          column: 'timestamp',
+          numFilterBytes: 1024
+        }
+      ]
+    };
+    
+    this.startFlushInterval();
   }
 
   initializeMetadata() {
@@ -104,36 +96,39 @@ class ParquetBufferManager {
     if (!buffer?.length) return;
 
     try {
-      const timestamps = [];
-      const rcinfos = [];
-      const payloads = [];
-
-      buffer.forEach(data => {
-        timestamps.push(new Date(data.create_date));
-        rcinfos.push(JSON.stringify(data.protocol_header));
-        payloads.push(data.raw || '');
-      });
-
-      const table = arrow.tableFromArrays({
-        timestamp: timestamps,
-        rcinfo: rcinfos,
-        payload: payloads
-      });
-
-      const wasmTable = Table.fromIPCStream(arrow.tableToIPC(table, "stream"));
-      const parquetData = writeParquet(wasmTable, this.writerProperties);
-
-      // Get file path based on first timestamp
-      const filePath = this.getFilePath(type, timestamps[0]);
-      
-      // Ensure directory exists
+      const filePath = this.getFilePath(type, buffer[0].create_date);
       await fs.promises.mkdir(path.dirname(filePath), { recursive: true });
-      
-      // Write parquet file
-      await fs.promises.writeFile(filePath, parquetData);
 
+      // Create writer
+      const writer = await parquet.ParquetWriter.openFile(
+        this.schema,
+        filePath,
+        this.writerOptions
+      );
+
+      // Write rows
+      for (const data of buffer) {
+        await writer.appendRow({
+          timestamp: new Date(data.create_date),
+          rcinfo: JSON.stringify(data.protocol_header),
+          payload: data.raw || ''
+        });
+      }
+
+      // Close writer to flush data
+      await writer.close();
+
+      // Get file stats
+      const stats = await fs.promises.stat(filePath);
+      
       // Update metadata
-      this.updateMetadata(type, filePath, parquetData.length, buffer.length, timestamps);
+      this.updateMetadata(
+        type, 
+        filePath, 
+        stats.size, 
+        buffer.length, 
+        buffer.map(d => new Date(d.create_date))
+      );
       
       // Clear buffer
       this.buffers.set(type, []);
@@ -262,29 +257,30 @@ class CompactionManager {
       const newPath = this.getCompactedFilePath(type, new Date(files[0].chunk_time / 1000000), targetRange);
       await fs.promises.mkdir(path.dirname(newPath), { recursive: true });
 
-      // Create file list for DuckDB query
-      const fileListQuery = files
-        .map(f => `'${f.path}'`)
-        .join(',');
+      // Create new writer with same schema as buffer manager
+      const writer = await parquet.ParquetWriter.openFile(
+        this.bufferManager.schema,
+        newPath,
+        this.bufferManager.writerOptions
+      );
 
-      // Execute merge query with time-based sorting
-      const mergeQuery = `COPY (
-        SELECT * FROM read_parquet([${fileListQuery}]) 
-        ORDER BY timestamp
-      ) TO '${newPath}' (
-        FORMAT 'parquet',
-        COMPRESSION 'ZSTD',
-        ROW_GROUP_SIZE 100000
-      );`;
+      // Read and merge all files
+      for (const file of files) {
+        const reader = await parquet.ParquetReader.openFile(file.path);
+        const cursor = reader.getCursor();
+        
+        let record = null;
+        while (record = await cursor.next()) {
+          await writer.appendRow(record);
+        }
+        
+        await reader.close();
+      }
 
-      await new Promise((resolve, reject) => {
-        this.db.exec(mergeQuery, (err) => {
-          if (err) reject(err);
-          else resolve();
-        });
-      });
+      // Close writer
+      await writer.close();
 
-      // Get stats from merged file for metadata
+      // Get stats from new file
       const stats = await this.getFileStats(newPath);
       
       // Perform cleanup and metadata update atomically
@@ -311,28 +307,30 @@ class CompactionManager {
   }
 
   async getFileStats(filePath) {
-    const statsQuery = `
-      SELECT 
-        COUNT(*) as row_count,
-        MIN(timestamp) as min_time,
-        MAX(timestamp) as max_time
-      FROM read_parquet('${filePath}');
-    `;
-
-    const stats = await new Promise((resolve, reject) => {
-      this.db.all(statsQuery, (err, rows) => {
-        if (err) reject(err);
-        else resolve(rows[0]);
-      });
-    });
-
+    const reader = await parquet.ParquetReader.openFile(filePath);
+    const cursor = reader.getCursor();
+    
+    let rowCount = 0;
+    let minTime = Infinity;
+    let maxTime = -Infinity;
+    
+    let record = null;
+    while (record = await cursor.next()) {
+      rowCount++;
+      const timestamp = record.timestamp.getTime();
+      minTime = Math.min(minTime, timestamp);
+      maxTime = Math.max(maxTime, timestamp);
+    }
+    
+    await reader.close();
+    
     const { size: sizeBytes } = await fs.promises.stat(filePath);
 
     return {
       size_bytes: sizeBytes,
-      row_count: stats.row_count,
-      min_time: new Date(stats.min_time).getTime() * 1000000,
-      max_time: new Date(stats.max_time).getTime() * 1000000
+      row_count: rowCount,
+      min_time: minTime * 1000000, // Convert to nanoseconds
+      max_time: maxTime * 1000000
     };
   }
 
@@ -477,7 +475,6 @@ class HEPServer {
   async initialize() {
     try {
       this.buffer = new ParquetBufferManager();
-      await this.buffer.initialize();
       
       this.compaction = new CompactionManager(this.buffer);
       await this.compaction.initialize();
