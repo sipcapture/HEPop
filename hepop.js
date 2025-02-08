@@ -97,7 +97,7 @@ class ParquetBufferManager {
   async flush(type) {
     const buffer = this.buffers.get(type);
     if (!buffer?.length) return;
-
+    
     try {
       const filePath = this.getFilePath(type, buffer[0].create_date);
       await fs.promises.mkdir(path.dirname(filePath), { recursive: true });
@@ -535,17 +535,16 @@ class HEPServer {
     const port = parseInt(process.env.PORT) || 9069;
     const host = process.env.HOST || "0.0.0.0";
     const retryAttempts = 3;
-    const retryDelay = 1000; // 1 second
+    const retryDelay = 1000;
 
     for (let attempt = 1; attempt <= retryAttempts; attempt++) {
       try {
-        // Try to create TCP Server
+        // TCP Server with enhanced address handling
         const tcpServer = Bun.listen({
           hostname: host,
           port: port,
           socket: {
             data: (socket, data) => {
-              // For TCP, remoteAddress is on the socket
               socket.remoteAddress = socket.remoteAddress || 'unknown';
               this.handleData(data, socket);
             },
@@ -553,32 +552,25 @@ class HEPServer {
           }
         });
 
-        // If TCP succeeds, create UDP Server
+        // UDP Server - keep it simple like the original
         const udpServer = Bun.udpSocket({
           hostname: host,
           port: port,
-          udp: true,
           socket: {
-            data: (socket, data, addr) => {
-              // For UDP, we get the address from addr parameter
-              socket.remoteAddress = addr?.address || 'unknown';
-              this.handleData(data, socket);
-            },
+            data: (socket, data) => this.handleData(data, socket),
             error: (socket, error) => console.error('UDP error:', error),
           }
         });
 
         console.log(`HEP Server listening on ${host}:${port} (TCP/UDP)`);
         
-        // Store server references
         this.tcpServer = tcpServer;
         this.udpServer = udpServer;
 
-        // Handle graceful shutdown
         process.on('SIGTERM', this.shutdown.bind(this));
         process.on('SIGINT', this.shutdown.bind(this));
         
-        return; // Success, exit the retry loop
+        return;
       } catch (error) {
         console.error(`Attempt ${attempt}/${retryAttempts} failed:`, error);
         
@@ -586,7 +578,6 @@ class HEPServer {
           throw new Error(`Failed to start server after ${retryAttempts} attempts: ${error.message}`);
         }
         
-        // Wait before retrying
         await new Promise(resolve => setTimeout(resolve, retryDelay));
       }
     }
@@ -612,10 +603,8 @@ class HEPServer {
 
   handleData(data, socket) {
     try {
-      // Get remote address safely
-      const remoteAddress = socket?.remoteAddress || 
-                           socket?.socket?.remoteAddress || 
-                           'unknown';
+      // Get remote address safely, but keep it simple for UDP
+      const remoteAddress = socket?.remoteAddress || 'unknown';
       
       console.log(`Received ${data.length} bytes from ${remoteAddress}`);
       const processed = this.processHep(data, socket);
@@ -657,7 +646,7 @@ class HEPServer {
 // Create and initialize server
 async function startServer() {
   try {
-    const server = new HEPServer({ debug: true });
+const server = new HEPServer({ debug: true });
     await server.initialize();  // Now we properly wait for initialization
     return server;
   } catch (error) {
