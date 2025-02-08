@@ -216,7 +216,9 @@ class CompactionManager {
     try {
       // Initialize DuckDB
       this.db = await DuckDBInstance.create(':memory:');
-      console.log(`Initialized DuckDB ${DuckDBInstance.version} for compaction`);
+      // Get version from package.json since it's not available in the API
+      const duckdbVersion = require('@duckdb/node-api/package.json').version;
+      console.log(`Initialized DuckDB v${duckdbVersion} for compaction`);
       
       // Start compaction jobs after initialization
       this.startCompactionJobs();
@@ -542,7 +544,11 @@ class HEPServer {
           hostname: host,
           port: port,
           socket: {
-            data: (socket, data) => this.handleData(data, socket),
+            data: (socket, data) => {
+              // For TCP, remoteAddress is on the socket
+              socket.remoteAddress = socket.remoteAddress || 'unknown';
+              this.handleData(data, socket);
+            },
             error: (socket, error) => console.error('TCP error:', error),
           }
         });
@@ -553,7 +559,11 @@ class HEPServer {
           port: port,
           udp: true,
           socket: {
-            data: (socket, data) => this.handleData(data, socket),
+            data: (socket, data, addr) => {
+              // For UDP, we get the address from addr parameter
+              socket.remoteAddress = addr?.address || 'unknown';
+              this.handleData(data, socket);
+            },
             error: (socket, error) => console.error('UDP error:', error),
           }
         });
@@ -602,7 +612,12 @@ class HEPServer {
 
   handleData(data, socket) {
     try {
-      console.log(`Received ${data.length} bytes from ${socket.remoteAddress}`);
+      // Get remote address safely
+      const remoteAddress = socket?.remoteAddress || 
+                           socket?.socket?.remoteAddress || 
+                           'unknown';
+      
+      console.log(`Received ${data.length} bytes from ${remoteAddress}`);
       const processed = this.processHep(data, socket);
       const type = processed.type;
       console.log(`Processed HEP type ${type}, adding to buffer`);
