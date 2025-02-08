@@ -6,14 +6,14 @@
 
 - [x] High-Performance Bun Server
   - [x] HEP/EEP Packet Support (UDP/TCP)
-- [x] Apache Parquet Storage
-  - [x] Parquet Columnar Storage
-  - [x] Automatic Rotation and Compaction
+- [x] Apache Parquet Writer
+  - [x] Parquet Columnar WAL + Storage
+  - [x] Automatic Rotation + Compaction
   - [x] Time-Based Directory Structure
   - [x] Metadata Management
 - [x] DuckDB Integration
   - [x] Parquet Data Compaction
-  - [x] Query Capabilities
+  - [x] Query Parquet
 - [ ] HOMER Search API
 
 ```mermaid
