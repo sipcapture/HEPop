@@ -1,16 +1,10 @@
 import * as arrow from "apache-arrow";
-import initWasm, {
-  Compression,
-  readParquet,
-  Table,
-  writeParquet,
-  WriterPropertiesBuilder,
-} from "parquet-wasm";
+import { DuckDBInstance } from '@duckdb/node-api';
+import parquetWasm from "parquet-wasm";
 import hepjs from 'hep-js';
 import { getSIP } from 'parsip';
 import path from 'path';
 import fs from 'fs';
-import duckdb from '@duckdb/node-api';
 
 class ParquetBufferManager {
   constructor(flushInterval = 10000, bufferSize = 1000) {
@@ -19,18 +13,27 @@ class ParquetBufferManager {
     this.bufferSize = bufferSize;
     this.metadata = this.initializeMetadata();
     this.baseDir = process.env.PARQUET_DIR || './data';
-    this.writerProperties = new WriterPropertiesBuilder()
-      .setCompression(Compression.ZSTD)
-      .build();
-
-    // Initialize WebAssembly
-    this.initializeWasm();
-    this.startFlushInterval();
+    
+    // Initialize async in constructor
+    this.initialize();
   }
 
-  async initializeWasm() {
-    await initWasm();
-    console.log('Parquet WASM initialized');
+  async initialize() {
+    try {
+      // Initialize Parquet WASM
+      await parquetWasm.init();
+      this.writerProperties = new parquetWasm.WriterPropertiesBuilder()
+        .setCompression(parquetWasm.Compression.ZSTD)
+        .build();
+      
+      console.log('Parquet WASM initialized');
+      
+      // Start flush interval after initialization
+      this.startFlushInterval();
+    } catch (error) {
+      console.error('Failed to initialize ParquetBufferManager:', error);
+      throw error;
+    }
   }
 
   initializeMetadata() {
@@ -111,8 +114,8 @@ class ParquetBufferManager {
         payload: payloads
       });
 
-      const wasmTable = Table.fromIPCStream(arrow.tableToIPC(table, "stream"));
-      const parquetData = writeParquet(wasmTable, this.writerProperties);
+      const wasmTable = parquetWasm.Table.fromIPCStream(arrow.tableToIPC(table, "stream"));
+      const parquetData = parquetWasm.writeParquet(wasmTable, this.writerProperties);
 
       // Get file path based on first timestamp
       const filePath = this.getFilePath(type, timestamps[0]);
@@ -187,10 +190,22 @@ class CompactionManager {
       '24h': 24 * 60 * 60 * 1000
     };
     
-    // Initialize DuckDB
-    this.db = new duckdb.Database(':memory:');
-    this.startCompactionJobs();
-    console.log(`Initialized DuckDB ${duckdb.version()} for compaction`);
+    // Initialize async in constructor
+    this.initialize();
+  }
+
+  async initialize() {
+    try {
+      // Initialize DuckDB
+      this.db = await DuckDBInstance.create(':memory:');
+      console.log(`Initialized DuckDB ${this.db.version()} for compaction`);
+      
+      // Start compaction jobs after initialization
+      this.startCompactionJobs();
+    } catch (error) {
+      console.error('Failed to initialize CompactionManager:', error);
+      throw error;
+    }
   }
 
   startCompactionJobs() {
@@ -439,21 +454,33 @@ class CompactionManager {
   }
 
   async close() {
-    return new Promise((resolve, reject) => {
-      this.db.close((err) => {
-        if (err) reject(err);
-        else resolve();
-      });
-    });
+    if (this.db) {
+      await this.db.close();
+    }
   }
 }
 
 class HEPServer {
   constructor(config = {}) {
     this.debug = config.debug || false;
-    this.buffer = new ParquetBufferManager();
-    this.compaction = new CompactionManager(this.buffer);
-    this.startServers();
+    
+    // Initialize async in constructor
+    this.initialize();
+  }
+
+  async initialize() {
+    try {
+      this.buffer = new ParquetBufferManager();
+      await this.buffer.initialize();
+      
+      this.compaction = new CompactionManager(this.buffer);
+      await this.compaction.initialize();
+      
+      this.startServers();
+    } catch (error) {
+      console.error('Failed to initialize HEPServer:', error);
+      throw error;
+    }
   }
 
   startServers() {
@@ -534,7 +561,17 @@ class HEPServer {
   }
 }
 
-// Start the server
-const server = new HEPServer({ debug: true });
+// Start the server asynchronously
+async function startServer() {
+  try {
+    const server = new HEPServer({ debug: true });
+    await server.initialize();
+  } catch (error) {
+    console.error('Failed to start HEP server:', error);
+    process.exit(1);
+  }
+}
+
+startServer();
 
 export { HEPServer, hepjs };
