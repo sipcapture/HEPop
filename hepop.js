@@ -467,9 +467,6 @@ class CompactionManager {
 class HEPServer {
   constructor(config = {}) {
     this.debug = config.debug || false;
-    
-    // Initialize async in constructor
-    this.initialize();
   }
 
   async initialize() {
@@ -596,17 +593,18 @@ class HEPServer {
   }
 }
 
-// Start the server asynchronously
+// Create and initialize server
 async function startServer() {
   try {
     const server = new HEPServer({ debug: true });
-    await server.initialize();
+    await server.initialize();  // Now we properly wait for initialization
+    return server;
   } catch (error) {
     console.error('Failed to start HEP server:', error);
     process.exit(1);
   }
 }
 
-startServer();
-
-export { HEPServer, hepjs };
+// Start server and export for module usage
+const serverPromise = startServer();
+export { HEPServer, hepjs, serverPromise };
