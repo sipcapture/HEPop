@@ -452,19 +452,22 @@ class CompactionManager {
     console.log(`Checking ${files.length} files for ${fromRange} compaction...`);
     
     files.forEach(file => {
-      // For restart safety, we consider all files older than the interval
-      // This ensures we catch orphaned files from previous runs
+      const isCompacted = path.basename(file.path).startsWith('c_');
       const fileAge = now - file.max_time;
-      const isOldEnough = fileAge > interval;
-      const isOrphaned = fileAge > (interval * 2); // Files that are twice as old as interval
-
-      if (!isOldEnough) {
-        console.log(`File ${path.basename(file.path)} is too new for compaction (age: ${fileAge / 1000000}s)`);
-        return;
-      }
-
-      if (isOrphaned) {
-        console.log(`Found orphaned file ${path.basename(file.path)} (age: ${fileAge / 1000000}s)`);
+      
+      // Different rules for raw vs compacted files
+      if (isCompacted) {
+        // Compacted files are never too new, they're consolidation targets
+        console.log(`Found compacted file ${path.basename(file.path)} as potential merge target`);
+      } else {
+        // Only raw files have age restrictions
+        if (fileAge <= interval) {
+          console.log(`File ${path.basename(file.path)} is too new for compaction (age: ${fileAge / 1000000}s)`);
+          return;
+        }
+        if (fileAge > (interval * 2)) {
+          console.log(`Found orphaned raw file ${path.basename(file.path)} (age: ${fileAge / 1000000}s)`);
+        }
       }
       
       // Calculate target hour timestamp (floor to hour)
@@ -484,7 +487,7 @@ class CompactionManager {
       }
 
       // Separate raw and compacted files
-      if (path.basename(file.path).startsWith('c_')) {
+      if (isCompacted) {
         groups.get(hourTime).compacted.push(file);
       } else {
         groups.get(hourTime).raw.push(file);
@@ -500,6 +503,7 @@ class CompactionManager {
     for (const [hourTime, { raw, compacted }] of groups) {
       try {
         let filesToCompact = [];
+        let targetCompacted = null;
 
         // Verify files exist before including them
         for (const file of raw) {
@@ -513,10 +517,12 @@ class CompactionManager {
           }
         }
 
-        for (const file of compacted) {
+        // Find the most recent compacted file as merge target
+        for (const file of compacted.sort((a, b) => b.max_time - a.max_time)) {
           try {
             await fs.promises.access(file.path);
-            filesToCompact.push(file);
+            targetCompacted = file;
+            break;
           } catch (error) {
             if (error.code !== 'ENOENT') {
               throw error;
@@ -524,12 +530,17 @@ class CompactionManager {
           }
         }
 
-        // Only proceed if we have enough files to compact
-        if (filesToCompact.length >= 2) {
-          console.log(`Compacting ${filesToCompact.length} files for hour ${new Date(hourTime).toISOString()}`);
+        // Decide whether to compact based on files available
+        if (filesToCompact.length >= 2 || (filesToCompact.length > 0 && targetCompacted)) {
+          if (targetCompacted) {
+            filesToCompact.push(targetCompacted);
+            console.log(`Merging ${filesToCompact.length - 1} raw files into existing compacted file ${path.basename(targetCompacted.path)}`);
+          } else {
+            console.log(`Creating new compacted file from ${filesToCompact.length} raw files`);
+          }
           await this.compactFiles(type, filesToCompact, toRange);
         } else {
-          console.log(`Not enough valid files to compact for hour ${new Date(hourTime).toISOString()}`);
+          console.log(`Not enough files to compact for hour ${new Date(hourTime).toISOString()}`);
         }
       } catch (error) {
         console.error(`Error compacting files for hour ${new Date(hourTime).toISOString()}:`, error);
