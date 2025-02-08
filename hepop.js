@@ -30,11 +30,19 @@ class ParquetBufferManager {
         }
       ]
     };
-    
-    this.startFlushInterval();
-    
-    // Ensure base directories exist
-    this.ensureDirectories();
+  }
+
+  async initialize() {
+    try {
+      // Ensure directories exist first
+      await this.ensureDirectories();
+      
+      // Then start the flush interval
+      this.startFlushInterval();
+    } catch (error) {
+      console.error('Failed to initialize ParquetBufferManager:', error);
+      throw error;
+    }
   }
 
   initializeMetadata() {
@@ -519,11 +527,15 @@ class HEPServer {
 
   async initialize() {
     try {
+      // Create and initialize buffer manager first
       this.buffer = new ParquetBufferManager();
+      await this.buffer.initialize();
       
+      // Then create and initialize compaction manager
       this.compaction = new CompactionManager(this.buffer);
       await this.compaction.initialize();
       
+      // Finally start the servers
       await this.startServers();
     } catch (error) {
       console.error('Failed to initialize HEPServer:', error);
