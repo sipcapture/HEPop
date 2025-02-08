@@ -199,7 +199,7 @@ class CompactionManager {
     try {
       // Initialize DuckDB
       this.db = await DuckDBInstance.create(':memory:');
-      console.log(`Initialized DuckDB ${this.db.version()} for compaction`);
+      console.log(`Initialized DuckDB ${DuckDBInstance.version} for compaction`);
       
       // Start compaction jobs after initialization
       this.startCompactionJobs();
