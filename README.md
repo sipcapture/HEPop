@@ -103,7 +103,7 @@ data/
 - **Atomic Operations**: All file and metadata operations are atomic
 
 ### Query
-Query the HEP data using DuckDB or any Parquet-compatible tool:
+Query HEP data using DuckDB, ClickHouse, Databend or any Parquet-compatible tool:
 ```sql
-SELECT * FROM 'data/writer1/dbs/hep-0/hep_1-0/2025-02-08/19-00/c_0000000001.parquet' LIMIT 1;
+SELECT * FROM 'data/writer1/dbs/hep-0/hep_1-*/*/*/c_0000000001.parquet' LIMIT 10;
 ```
