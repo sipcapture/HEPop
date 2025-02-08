@@ -602,10 +602,8 @@ class HEPServer {
 
   handleData(data, socket) {
     try {
-      console.log(`Received ${data.length} bytes from ${socket.remoteAddress}`);
       const processed = this.processHep(data, socket);
       const type = processed.type;
-      console.log(`Processed HEP type ${type}, adding to buffer`);
       this.buffer.add(type, processed);
     } catch (error) {
       console.error('Handle data error:', error);
