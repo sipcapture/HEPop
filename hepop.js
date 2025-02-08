@@ -329,8 +329,19 @@ class CompactionManager {
         this.compactionLock.set(type, true);
         const metadata = await this.bufferManager.getTypeMetadata(type);
         
+        if (!metadata.files || !metadata.files.length) {
+          console.log(`No files found in metadata for type ${type}`);
+          continue;
+        }
+        
         // Log files available for compaction
         console.log(`Type ${type} has ${metadata.files.length} files to consider for compaction`);
+        console.log('Files:', metadata.files.map(f => ({
+          path: f.path,
+          type: f.type,
+          min_time: new Date(f.min_time / 1000000).toISOString(),
+          max_time: new Date(f.max_time / 1000000).toISOString()
+        })));
         
         await this.compactTimeRange(type, metadata.files, '10m', '1h');
         await this.compactTimeRange(type, metadata.files, '1h', '24h');
@@ -358,16 +369,28 @@ class CompactionManager {
           const subEntries = await fs.promises.readdir(path.join(baseDir, entry.name));
           for (const subEntry of subEntries) {
             if (subEntry.startsWith('hep_')) {
-              const type = subEntry.split('-')[1].split('_')[0];
-              types.add(parseInt(type));
+              // Extract type from hep_TYPE-ID format
+              const match = subEntry.match(/hep_(\d+)-/);
+              if (match) {
+                types.add(parseInt(match[1]));
+              }
             }
           }
         }
       }
       
+      console.log('Found directories:', Array.from(types).map(type => ({
+        type,
+        path: path.join(baseDir, `hep-${this.bufferManager.metadata.next_db_id}`, `hep_${type}-${this.bufferManager.metadata.next_table_id}`)
+      })));
+      
       return Array.from(types);
     } catch (error) {
-      if (error.code === 'ENOENT') return [];
+      if (error.code === 'ENOENT') {
+        console.log('No dbs directory found at:', baseDir);
+        return [];
+      }
+      console.error('Error reading type directories:', error);
       throw error;
     }
   }
@@ -382,10 +405,19 @@ class CompactionManager {
     console.log(`Checking ${files.length} files for ${fromRange} compaction...`);
     
     files.forEach(file => {
-      // Skip files that are too new
-      if (now - file.max_time < interval) {
-        console.log(`File ${path.basename(file.path)} is too new for compaction`);
+      // For restart safety, we consider all files older than the interval
+      // This ensures we catch orphaned files from previous runs
+      const fileAge = now - file.max_time;
+      const isOldEnough = fileAge > interval;
+      const isOrphaned = fileAge > (interval * 2); // Files that are twice as old as interval
+
+      if (!isOldEnough) {
+        console.log(`File ${path.basename(file.path)} is too new for compaction (age: ${fileAge / 1000000}s)`);
         return;
+      }
+
+      if (isOrphaned) {
+        console.log(`Found orphaned file ${path.basename(file.path)} (age: ${fileAge / 1000000}s)`);
       }
       
       // Calculate target hour timestamp (floor to hour)
@@ -427,17 +459,31 @@ class CompactionManager {
           filesToCompact.push(...raw);
         }
 
-        // If we have multiple compacted files, include them in the merge
-        if (compacted.length > 0) {
+        // Include compacted files if:
+        // 1. We have multiple compacted files
+        // 2. We have raw files and a compacted file
+        if (compacted.length > 1 || (compacted.length === 1 && raw.length > 0)) {
           filesToCompact.push(...compacted);
         }
 
         // Only proceed if we have files to compact
         if (filesToCompact.length >= 2) {
+          // Check for orphaned files (much older than interval)
+          const orphanedFiles = filesToCompact.filter(f => (now - f.max_time) > (interval * 2));
+          if (orphanedFiles.length > 0) {
+            console.log(`Including ${orphanedFiles.length} orphaned files in compaction for hour ${new Date(hourTime).toISOString()}`);
+          }
+
           console.log(`Compacting ${filesToCompact.length} files for hour ${new Date(hourTime).toISOString()}`);
           await this.compactFiles(type, filesToCompact, toRange);
         } else {
-          console.log(`Not enough files to compact for hour ${new Date(hourTime).toISOString()}`);
+          // Check for single orphaned files that need to be included in next interval
+          const singleOrphaned = [...raw, ...compacted].filter(f => (now - f.max_time) > (interval * 2));
+          if (singleOrphaned.length > 0) {
+            console.log(`Found ${singleOrphaned.length} orphaned files for hour ${new Date(hourTime).toISOString()} - will be included in next interval`);
+          } else {
+            console.log(`Not enough files to compact for hour ${new Date(hourTime).toISOString()}`);
+          }
         }
       } catch (error) {
         console.error(`Error compacting files for hour ${new Date(hourTime).toISOString()}:`, error);
