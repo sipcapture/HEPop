@@ -745,7 +745,7 @@ class CompactionManager {
     // Delete files first
     for (const file of files) {
       try {
-        await fs.promises.access(file.path); // Check if file exists
+        await fs.promises.access(file.path);
         await fs.promises.unlink(file.path);
       } catch (error) {
         if (error.code !== 'ENOENT') {
@@ -764,15 +764,43 @@ class CompactionManager {
       }
     });
 
+    // Get current hour for comparison
+    const now = new Date();
+    const currentDate = now.toISOString().split('T')[0];
+    const currentHour = now.getHours().toString().padStart(2, '0');
+    const currentHourPath = `${currentDate}/${currentHour}`;
+
     // Clean up empty directories from deepest to shallowest
     const sortedDirs = Array.from(dirsToCheck)
       .sort((a, b) => b.split(path.sep).length - a.split(path.sep).length);
 
     for (const dir of sortedDirs) {
       try {
+        // Skip if this is the current hour's directory
+        if (dir.includes(currentHourPath)) {
+          console.log(`Skipping cleanup of current hour directory: ${dir}`);
+          continue;
+        }
+
         const files = await fs.promises.readdir(dir);
+        
+        // For hour directories, also check if it's from a past hour
+        if (dir.match(/\d{4}-\d{2}-\d{2}\/\d{2}-\d{2}/)) {
+          const dirDate = path.basename(path.dirname(dir));
+          const dirHour = dir.split('/').pop().split('-')[0];
+          const dirPath = `${dirDate}/${dirHour}`;
+          
+          if (dirPath >= currentHourPath) {
+            console.log(`Skipping cleanup of current or future hour directory: ${dir}`);
+            continue;
+          }
+        }
+
         if (files.length === 0) {
           await fs.promises.rmdir(dir);
+          console.log(`Cleaned up empty directory: ${dir}`);
+        } else {
+          console.log(`Directory not empty, skipping cleanup: ${dir} (${files.length} files)`);
         }
       } catch (error) {
         if (error.code !== 'ENOENT') {
