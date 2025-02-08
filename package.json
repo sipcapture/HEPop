@@ -1,6 +1,7 @@
 {
   "name": "hepop",
   "module": "hepop.js",
+  "version": "0.1.0", 
   "type": "module",
   "devDependencies": {
     "@types/bun": "latest"
@@ -9,7 +10,8 @@
     "typescript": "^5.0.0"
   },
   "dependencies": {
-    "@influxdata/influxdb3-client": "^1.0.0",
+    "@dsnp/parquetjs": "^1.8.5",
+    "@duckdb/node-api": "^1.2.0-alpha.13",
     "hep-js": "^1.0.20",
     "parsip": "^1.0.7"
   }
