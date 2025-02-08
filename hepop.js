@@ -32,6 +32,9 @@ class ParquetBufferManager {
     };
     
     this.startFlushInterval();
+    
+    // Ensure base directories exist
+    this.ensureDirectories();
   }
 
   initializeMetadata() {
@@ -178,6 +181,20 @@ class ParquetBufferManager {
   async close() {
     for (const type of this.buffers.keys()) {
       await this.flush(type);
+    }
+  }
+
+  async ensureDirectories() {
+    const metadataDir = path.join(this.baseDir, this.metadata.writer_id);
+    await fs.promises.mkdir(metadataDir, { recursive: true });
+    
+    // Write initial metadata file if it doesn't exist
+    const metadataPath = path.join(metadataDir, 'metadata.json');
+    if (!fs.existsSync(metadataPath)) {
+      await fs.promises.writeFile(
+        metadataPath,
+        JSON.stringify(this.metadata, null, 2)
+      );
     }
   }
 }
@@ -339,11 +356,11 @@ class CompactionManager {
       // Update metadata first
       this.updateCompactionMetadata(type, oldFiles, newFile);
 
-      // Clean up old files and their parent directories
-      await this.cleanupCompactedFiles(oldFiles);
-
       // Write updated metadata to disk
       await this.writeMetadata();
+
+      // Only clean up old files after metadata is successfully written
+      await this.cleanupCompactedFiles(oldFiles);
     } catch (error) {
       console.error('Error during compaction finalization:', error);
       // Attempt to rollback by removing the new file
@@ -357,22 +374,27 @@ class CompactionManager {
   }
 
   async cleanupCompactedFiles(files) {
-    const dirsToCheck = new Set();
-
     // Delete files first
-    await Promise.all(files.map(async (file) => {
+    for (const file of files) {
       try {
+        await fs.promises.access(file.path); // Check if file exists
         await fs.promises.unlink(file.path);
-        // Add parent directories for cleanup check
-        let dirPath = path.dirname(file.path);
-        while (dirPath.startsWith(this.bufferManager.baseDir)) {
-          dirsToCheck.add(dirPath);
-          dirPath = path.dirname(dirPath);
-        }
       } catch (error) {
-        console.error(`Error deleting file ${file.path}:`, error);
+        if (error.code !== 'ENOENT') {
+          console.error(`Error deleting file ${file.path}:`, error);
+        }
       }
-    }));
+    }
+
+    // Collect directories to check
+    const dirsToCheck = new Set();
+    files.forEach(file => {
+      let dirPath = path.dirname(file.path);
+      while (dirPath.startsWith(this.bufferManager.baseDir)) {
+        dirsToCheck.add(dirPath);
+        dirPath = path.dirname(dirPath);
+      }
+    });
 
     // Clean up empty directories from deepest to shallowest
     const sortedDirs = Array.from(dirsToCheck)
@@ -385,7 +407,9 @@ class CompactionManager {
           await fs.promises.rmdir(dir);
         }
       } catch (error) {
-        // Ignore errors during directory cleanup
+        if (error.code !== 'ENOENT') {
+          console.error(`Error cleaning up directory ${dir}:`, error);
+        }
       }
     }
   }
@@ -423,21 +447,35 @@ class CompactionManager {
   }
 
   async writeMetadata() {
-    const metadataPath = path.join(
+    const metadataDir = path.join(
       this.bufferManager.baseDir, 
-      this.bufferManager.metadata.writer_id, 
-      'metadata.json'
+      this.bufferManager.metadata.writer_id
     );
     
-    // Write to temporary file first
+    // Ensure metadata directory exists
+    await fs.promises.mkdir(metadataDir, { recursive: true });
+    
+    const metadataPath = path.join(metadataDir, 'metadata.json');
     const tempPath = `${metadataPath}.tmp`;
-    await fs.promises.writeFile(
-      tempPath, 
-      JSON.stringify(this.bufferManager.metadata, null, 2)
-    );
     
-    // Atomic rename
-    await fs.promises.rename(tempPath, metadataPath);
+    try {
+      // Write to temporary file
+      await fs.promises.writeFile(
+        tempPath, 
+        JSON.stringify(this.bufferManager.metadata, null, 2)
+      );
+      
+      // Atomic rename
+      await fs.promises.rename(tempPath, metadataPath);
+    } catch (error) {
+      // Cleanup temp file if it exists
+      try {
+        await fs.promises.unlink(tempPath);
+      } catch (e) {
+        // Ignore cleanup errors
+      }
+      throw error;
+    }
   }
 
   getCompactedFilePath(type, timestamp, range) {
