@@ -313,13 +313,53 @@ class CompactionManager {
     }, 60 * 1000);
   }
 
+  async verifyAndCleanMetadata(type, metadata) {
+    const existingFiles = [];
+    const removedFiles = [];
+    
+    for (const file of metadata.files) {
+      try {
+        await fs.promises.access(file.path);
+        existingFiles.push(file);
+      } catch (error) {
+        if (error.code === 'ENOENT') {
+          console.log(`Removing missing file from metadata: ${file.path}`);
+          removedFiles.push(file);
+        } else {
+          throw error;
+        }
+      }
+    }
+
+    if (removedFiles.length > 0) {
+      // Update metadata to remove missing files
+      metadata.files = existingFiles;
+      
+      // Recalculate totals
+      metadata.parquet_size_bytes = existingFiles.reduce((sum, f) => sum + f.size_bytes, 0);
+      metadata.row_count = existingFiles.reduce((sum, f) => sum + f.row_count, 0);
+      
+      if (existingFiles.length > 0) {
+        metadata.min_time = Math.min(...existingFiles.map(f => f.min_time));
+        metadata.max_time = Math.max(...existingFiles.map(f => f.max_time));
+      } else {
+        metadata.min_time = null;
+        metadata.max_time = null;
+      }
+
+      // Write updated metadata
+      await this.bufferManager.writeTypeMetadata(type, metadata);
+      console.log(`Cleaned up ${removedFiles.length} missing files from metadata`);
+    }
+
+    return metadata;
+  }
+
   async checkAndCompact() {
-    // Get list of types from base directory
     const typeDirs = await this.getTypeDirectories();
     console.log('Found types for compaction:', typeDirs);
 
     for (const type of typeDirs) {
-      // Skip if compaction is already running for this type
       if (this.compactionLock.get(type)) {
         console.log(`Skipping compaction for type ${type} - already running`);
         continue;
@@ -327,14 +367,21 @@ class CompactionManager {
 
       try {
         this.compactionLock.set(type, true);
-        const metadata = await this.bufferManager.getTypeMetadata(type);
+        let metadata = await this.bufferManager.getTypeMetadata(type);
         
         if (!metadata.files || !metadata.files.length) {
           console.log(`No files found in metadata for type ${type}`);
           continue;
         }
+
+        // Verify and clean metadata before compaction
+        metadata = await this.verifyAndCleanMetadata(type, metadata);
         
-        // Log files available for compaction
+        if (!metadata.files.length) {
+          console.log(`No valid files remain after metadata cleanup for type ${type}`);
+          continue;
+        }
+        
         console.log(`Type ${type} has ${metadata.files.length} files to consider for compaction`);
         console.log('Files:', metadata.files.map(f => ({
           path: f.path,
@@ -454,36 +501,35 @@ class CompactionManager {
       try {
         let filesToCompact = [];
 
-        // If we have raw files to compact
-        if (raw.length >= 2) {
-          filesToCompact.push(...raw);
-        }
-
-        // Include compacted files if:
-        // 1. We have multiple compacted files
-        // 2. We have raw files and a compacted file
-        if (compacted.length > 1 || (compacted.length === 1 && raw.length > 0)) {
-          filesToCompact.push(...compacted);
-        }
-
-        // Only proceed if we have files to compact
-        if (filesToCompact.length >= 2) {
-          // Check for orphaned files (much older than interval)
-          const orphanedFiles = filesToCompact.filter(f => (now - f.max_time) > (interval * 2));
-          if (orphanedFiles.length > 0) {
-            console.log(`Including ${orphanedFiles.length} orphaned files in compaction for hour ${new Date(hourTime).toISOString()}`);
+        // Verify files exist before including them
+        for (const file of raw) {
+          try {
+            await fs.promises.access(file.path);
+            filesToCompact.push(file);
+          } catch (error) {
+            if (error.code !== 'ENOENT') {
+              throw error;
+            }
           }
+        }
 
+        for (const file of compacted) {
+          try {
+            await fs.promises.access(file.path);
+            filesToCompact.push(file);
+          } catch (error) {
+            if (error.code !== 'ENOENT') {
+              throw error;
+            }
+          }
+        }
+
+        // Only proceed if we have enough files to compact
+        if (filesToCompact.length >= 2) {
           console.log(`Compacting ${filesToCompact.length} files for hour ${new Date(hourTime).toISOString()}`);
           await this.compactFiles(type, filesToCompact, toRange);
         } else {
-          // Check for single orphaned files that need to be included in next interval
-          const singleOrphaned = [...raw, ...compacted].filter(f => (now - f.max_time) > (interval * 2));
-          if (singleOrphaned.length > 0) {
-            console.log(`Found ${singleOrphaned.length} orphaned files for hour ${new Date(hourTime).toISOString()} - will be included in next interval`);
-          } else {
-            console.log(`Not enough files to compact for hour ${new Date(hourTime).toISOString()}`);
-          }
+          console.log(`Not enough valid files to compact for hour ${new Date(hourTime).toISOString()}`);
         }
       } catch (error) {
         console.error(`Error compacting files for hour ${new Date(hourTime).toISOString()}:`, error);
