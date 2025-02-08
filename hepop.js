@@ -217,7 +217,7 @@ class CompactionManager {
     try {
       // Initialize DuckDB
       this.db = await DuckDBInstance.create(':memory:');
-      console.log(`Initialized DuckDB ${duckdb.version} for compaction`);
+      console.log(`Initialized DuckDB for parquet compaction`);
       
       // Start compaction jobs after initialization
       this.startCompactionJobs();
@@ -257,23 +257,33 @@ class CompactionManager {
     const interval = this.compactionIntervals[fromRange];
     const targetInterval = this.compactionIntervals[toRange];
     
-    // Group files by their target interval
+    // Group files by their hour
     const groups = new Map();
     
     files.forEach(file => {
       // Skip files that are too new
       if (now - file.max_time < interval) return;
       
-      // Calculate target group timestamp
-      const groupTime = Math.floor(file.chunk_time / targetInterval) * targetInterval;
-      if (!groups.has(groupTime)) {
-        groups.set(groupTime, []);
+      // Skip already compacted files (those with c_ prefix)
+      if (path.basename(file.path).startsWith('c_')) return;
+      
+      // Calculate target hour timestamp (floor to hour)
+      const timestamp = new Date(file.chunk_time / 1000000);
+      const hourTime = new Date(
+        timestamp.getFullYear(),
+        timestamp.getMonth(),
+        timestamp.getDate(),
+        timestamp.getHours()
+      ).getTime();
+      
+      if (!groups.has(hourTime)) {
+        groups.set(hourTime, []);
       }
-      groups.get(groupTime).push(file);
+      groups.get(hourTime).push(file);
     });
 
     // Compact each group that has enough files
-    for (const [groupTime, groupFiles] of groups) {
+    for (const [hourTime, groupFiles] of groups) {
       if (groupFiles.length < 2) continue;
 
       await this.compactFiles(type, groupFiles, toRange);
@@ -281,7 +291,11 @@ class CompactionManager {
   }
 
   async compactFiles(type, files, targetRange) {
-    const newPath = this.getCompactedFilePath(type, new Date(files[0].chunk_time / 1000000), targetRange);
+    // Sort files by timestamp to ensure consistent ordering
+    files.sort((a, b) => a.min_time - b.min_time);
+    
+    const timestamp = new Date(files[0].chunk_time / 1000000);
+    const newPath = this.getCompactedFilePath(type, timestamp, targetRange);
     
     try {
       // Check if all source files exist before starting
@@ -396,7 +410,7 @@ class CompactionManager {
     const newFileEntry = {
       id: this.bufferManager.metadata.next_file_id++,
       ...newFile,
-      compaction_level: newFile.range
+      compaction_level: path.basename(newFile.path).startsWith('c_') ? 'compacted' : 'raw'
     };
     fileList.push(newFileEntry);
 
@@ -453,13 +467,12 @@ class CompactionManager {
     return path.join(
       this.bufferManager.baseDir,
       this.bufferManager.metadata.writer_id,
-      'compacted',
-      range,
+      'dbs',
       `hep-${this.bufferManager.metadata.next_db_id}`,
       `hep_${type}-${this.bufferManager.metadata.next_table_id}`,
       date,
-      hour,
-      `${this.bufferManager.metadata.wal_file_sequence_number.toString().padStart(10, '0')}.parquet`
+      `${hour}-00`,  // Always use top of the hour for compacted files
+      `c_${this.bufferManager.metadata.wal_file_sequence_number.toString().padStart(10, '0')}.parquet`
     );
   }
 
