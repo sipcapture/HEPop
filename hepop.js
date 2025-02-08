@@ -12,8 +12,8 @@ class ParquetBufferManager {
     this.buffers = new Map();
     this.flushInterval = flushInterval;
     this.bufferSize = bufferSize;
-    this.metadata = this.initializeMetadata();
     this.baseDir = process.env.PARQUET_DIR || './data';
+    this.writerId = process.env.WRITER_ID || require('os').hostname();
     
     // Define schema for HEP data
     this.schema = new parquet.ParquetSchema({
@@ -31,106 +31,51 @@ class ParquetBufferManager {
         }
       ]
     };
-    
-    this.startFlushInterval();
-    
+  }
+
+  async initialize() {
     // Ensure base directories exist
-    this.ensureDirectories();
-  }
-
-  initializeMetadata() {
-    const hostname = process.env.WRITER_ID || require('os').hostname();
-    return {
-      writer_id: hostname,
-      next_file_id: 0,
-      next_db_id: 0,
-      next_table_id: 0
-    };
-  }
-
-  add(type, data) {
-    if (!this.buffers.has(type)) {
-      this.buffers.set(type, []);
-    }
-    this.buffers.get(type).push(data);
+    await this.ensureDirectories();
     
-    if (this.buffers.get(type).length >= this.bufferSize) {
-      this.flush(type);
-    }
-  }
-
-  startFlushInterval() {
-    setInterval(() => {
-      for (const type of this.buffers.keys()) {
-        this.flush(type);
-      }
-    }, this.flushInterval);
-  }
-
-  getFilePath(type, timestamp) {
-    const date = new Date(timestamp);
-    const datePath = date.toISOString().split('T')[0];
-    const hour = date.getHours().toString().padStart(2, '0');
-    const minute = Math.floor(date.getMinutes() / 10) * 10;
-    const minutePath = minute.toString().padStart(2, '0');
+    // Load or create global metadata
+    await this.initializeMetadata();
     
-    return path.join(
-      this.baseDir,
-      this.metadata.writer_id,
-      'dbs',
-      `hep-${this.metadata.next_db_id}`,
-      `hep_${type}-${this.metadata.next_table_id}`,
-      datePath,
-      `${hour}-${minutePath}`,
-      `${this.metadata.wal_file_sequence_number.toString().padStart(10, '0')}.parquet`
-    );
+    // Start flush interval after initialization
+    this.startFlushInterval();
   }
 
-  async flush(type) {
-    const buffer = this.buffers.get(type);
-    if (!buffer?.length) return;
-    
+  async initializeMetadata() {
+    const metadataPath = path.join(this.baseDir, this.writerId, 'metadata.json');
     try {
-      const filePath = this.getFilePath(type, buffer[0].create_date);
-      await fs.promises.mkdir(path.dirname(filePath), { recursive: true });
-
-      // Create writer
-      const writer = await parquet.ParquetWriter.openFile(
-        this.schema,
-        filePath,
-        this.writerOptions
-      );
-
-      // Write rows
-      for (const data of buffer) {
-        await writer.appendRow({
-          timestamp: new Date(data.create_date),
-          rcinfo: JSON.stringify(data.protocol_header),
-          payload: data.raw || ''
-        });
-      }
-
-      // Close writer to flush data
-      await writer.close();
-
-      // Get file stats
-      const stats = await fs.promises.stat(filePath);
-      
-      // Update metadata
-      this.updateMetadata(
-        type, 
-        filePath, 
-        stats.size, 
-        buffer.length, 
-        buffer.map(d => new Date(d.create_date))
-      );
-      
-      // Clear buffer
-      this.buffers.set(type, []);
-      
-      console.log(`Wrote ${buffer.length} records to ${filePath}`);
+      const data = await fs.promises.readFile(metadataPath, 'utf8');
+      this.metadata = JSON.parse(data);
     } catch (error) {
-      console.error(`Parquet flush error:`, error);
+      if (error.code === 'ENOENT') {
+        this.metadata = {
+          writer_id: this.writerId,
+          next_db_id: 0,
+          next_table_id: 0
+        };
+        await this.writeGlobalMetadata();
+      } else {
+        throw error;
+      }
+    }
+  }
+
+  async writeGlobalMetadata() {
+    const metadataPath = path.join(this.baseDir, this.writerId, 'metadata.json');
+    const tempPath = `${metadataPath}.tmp`;
+    try {
+      await fs.promises.writeFile(tempPath, JSON.stringify(this.metadata, null, 2));
+      await fs.promises.rename(tempPath, metadataPath);
+    } catch (error) {
+      try {
+        await fs.promises.unlink(tempPath);
+      } catch (e) {
+        // Ignore cleanup errors
+      }
+      throw error;
     }
   }
 
@@ -158,10 +103,97 @@ class ParquetBufferManager {
     }
   }
 
+  async getFilePath(type, timestamp) {
+    const typeMetadata = await this.getTypeMetadata(type);
+    const date = new Date(timestamp);
+    const datePath = date.toISOString().split('T')[0];
+    const hour = date.getHours().toString().padStart(2, '0');
+    const minute = Math.floor(date.getMinutes() / 10) * 10;
+    const minutePath = minute.toString().padStart(2, '0');
+    
+    return path.join(
+      this.baseDir,
+      this.writerId,
+      'dbs',
+      `hep-${this.metadata.next_db_id}`,
+      `hep_${type}-${this.metadata.next_table_id}`,
+      datePath,
+      `${hour}-${minutePath}`,
+      `${typeMetadata.wal_sequence.toString().padStart(10, '0')}.parquet`
+    );
+  }
+
+  add(type, data) {
+    if (!this.buffers.has(type)) {
+      this.buffers.set(type, []);
+    }
+    this.buffers.get(type).push(data);
+    
+    if (this.buffers.get(type).length >= this.bufferSize) {
+      this.flush(type);
+    }
+  }
+
+  startFlushInterval() {
+    setInterval(() => {
+      for (const type of this.buffers.keys()) {
+        this.flush(type);
+      }
+    }, this.flushInterval);
+  }
+
+  async flush(type) {
+    const buffer = this.buffers.get(type);
+    if (!buffer?.length) return;
+    
+    try {
+      const filePath = await this.getFilePath(type, buffer[0].create_date);
+      await fs.promises.mkdir(path.dirname(filePath), { recursive: true });
+
+      // Create writer
+      const writer = await parquet.ParquetWriter.openFile(
+        this.schema,
+        filePath,
+        this.writerOptions
+      );
+
+      // Write rows
+      for (const data of buffer) {
+        await writer.appendRow({
+          timestamp: new Date(data.create_date),
+          rcinfo: JSON.stringify(data.protocol_header),
+          payload: data.raw || ''
+        });
+      }
+
+      // Close writer to flush data
+      await writer.close();
+
+      // Get file stats
+      const stats = await fs.promises.stat(filePath);
+      
+      // Update metadata
+      await this.updateMetadata(
+        type, 
+        filePath, 
+        stats.size, 
+        buffer.length, 
+        buffer.map(d => new Date(d.create_date))
+      );
+      
+      // Clear buffer
+      this.buffers.set(type, []);
+      
+      console.log(`Wrote ${buffer.length} records to ${filePath}`);
+    } catch (error) {
+      console.error(`Parquet flush error:`, error);
+    }
+  }
+
   getTypeMetadataPath(type) {
     return path.join(
       this.baseDir,
-      this.metadata.writer_id,
+      this.writerId,
       'dbs',
       `hep-${this.metadata.next_db_id}`,
       `hep_${type}-${this.metadata.next_table_id}`,
@@ -227,7 +259,7 @@ class ParquetBufferManager {
   }
 
   async ensureDirectories() {
-    const metadataDir = path.join(this.baseDir, this.metadata.writer_id);
+    const metadataDir = path.join(this.baseDir, this.writerId);
     await fs.promises.mkdir(metadataDir, { recursive: true });
     
     // Write initial metadata file if it doesn't exist
@@ -297,7 +329,7 @@ class CompactionManager {
   async getTypeDirectories() {
     const baseDir = path.join(
       this.bufferManager.baseDir,
-      this.bufferManager.metadata.writer_id,
+      this.bufferManager.writerId,
       'dbs'
     );
     
@@ -527,7 +559,7 @@ class CompactionManager {
   async writeMetadata() {
     const metadataDir = path.join(
       this.bufferManager.baseDir, 
-      this.bufferManager.metadata.writer_id
+      this.bufferManager.writerId
     );
     
     await fs.promises.mkdir(metadataDir, { recursive: true });
@@ -565,15 +597,18 @@ class CompactionManager {
     const date = timestamp.toISOString().split('T')[0];
     const hour = timestamp.getHours().toString().padStart(2, '0');
     
+    // Get type metadata synchronously since we're in an async context already
+    const typeMetadata = this.bufferManager.getTypeMetadata(type);
+    
     return path.join(
       this.bufferManager.baseDir,
-      this.bufferManager.metadata.writer_id,
+      this.bufferManager.writerId,
       'dbs',
       `hep-${this.bufferManager.metadata.next_db_id}`,
       `hep_${type}-${this.bufferManager.metadata.next_table_id}`,
       date,
       `${hour}-00`,  // Always use top of the hour for compacted files
-      `c_${this.bufferManager.metadata.wal_file_sequence_number.toString().padStart(10, '0')}.parquet`
+      `c_${typeMetadata.wal_sequence.toString().padStart(10, '0')}.parquet`
     );
   }
 
@@ -633,6 +668,7 @@ class HEPServer {
   async initialize() {
     try {
       this.buffer = new ParquetBufferManager();
+      await this.buffer.initialize();
       
       this.compaction = new CompactionManager(this.buffer);
       await this.compaction.initialize();
