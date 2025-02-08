@@ -1,6 +1,12 @@
 import * as arrow from "apache-arrow";
+import initWasm, {
+  Compression,
+  readParquet,
+  Table,
+  writeParquet,
+  WriterPropertiesBuilder,
+} from "parquet-wasm";
 import { DuckDBInstance } from '@duckdb/node-api';
-import parquetWasm from "parquet-wasm";
 import hepjs from 'hep-js';
 import { getSIP } from 'parsip';
 import path from 'path';
@@ -21,9 +27,9 @@ class ParquetBufferManager {
   async initialize() {
     try {
       // Initialize Parquet WASM
-      await parquetWasm.init();
-      this.writerProperties = new parquetWasm.WriterPropertiesBuilder()
-        .setCompression(parquetWasm.Compression.ZSTD)
+      await initWasm();
+      this.writerProperties = new WriterPropertiesBuilder()
+        .setCompression(Compression.ZSTD)
         .build();
       
       console.log('Parquet WASM initialized');
@@ -114,8 +120,8 @@ class ParquetBufferManager {
         payload: payloads
       });
 
-      const wasmTable = parquetWasm.Table.fromIPCStream(arrow.tableToIPC(table, "stream"));
-      const parquetData = parquetWasm.writeParquet(wasmTable, this.writerProperties);
+      const wasmTable = Table.fromIPCStream(arrow.tableToIPC(table, "stream"));
+      const parquetData = writeParquet(wasmTable, this.writerProperties);
 
       // Get file path based on first timestamp
       const filePath = this.getFilePath(type, timestamps[0]);
