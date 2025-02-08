@@ -479,49 +479,81 @@ class HEPServer {
       this.compaction = new CompactionManager(this.buffer);
       await this.compaction.initialize();
       
-      this.startServers();
+      await this.startServers();
     } catch (error) {
       console.error('Failed to initialize HEPServer:', error);
       throw error;
     }
   }
 
-  startServers() {
+  async startServers() {
     const port = parseInt(process.env.PORT) || 9069;
     const host = process.env.HOST || "0.0.0.0";
+    const retryAttempts = 3;
+    const retryDelay = 1000; // 1 second
 
-    // TCP Server
-    Bun.listen({
-      hostname: host,
-      port: port,
-      socket: {
-        data: (socket, data) => this.handleData(data, socket),
-        error: (socket, error) => console.error('TCP error:', error),
+    for (let attempt = 1; attempt <= retryAttempts; attempt++) {
+      try {
+        // Try to create TCP Server
+        const tcpServer = Bun.listen({
+          hostname: host,
+          port: port,
+          socket: {
+            data: (socket, data) => this.handleData(data, socket),
+            error: (socket, error) => console.error('TCP error:', error),
+          }
+        });
+
+        // If TCP succeeds, create UDP Server
+        const udpServer = Bun.udpSocket({
+          hostname: host,
+          port: port,
+          udp: true,
+          socket: {
+            data: (socket, data) => this.handleData(data, socket),
+            error: (socket, error) => console.error('UDP error:', error),
+          }
+        });
+
+        console.log(`HEP Server listening on ${host}:${port} (TCP/UDP)`);
+        
+        // Store server references
+        this.tcpServer = tcpServer;
+        this.udpServer = udpServer;
+
+        // Handle graceful shutdown
+        process.on('SIGTERM', this.shutdown.bind(this));
+        process.on('SIGINT', this.shutdown.bind(this));
+        
+        return; // Success, exit the retry loop
+      } catch (error) {
+        console.error(`Attempt ${attempt}/${retryAttempts} failed:`, error);
+        
+        if (attempt === retryAttempts) {
+          throw new Error(`Failed to start server after ${retryAttempts} attempts: ${error.message}`);
+        }
+        
+        // Wait before retrying
+        await new Promise(resolve => setTimeout(resolve, retryDelay));
       }
-    });
-
-    // UDP Server
-    Bun.udpSocket({
-      hostname: host,
-      port: port,
-      udp: true,
-      socket: {
-        data: (socket, data) => this.handleData(data, socket),
-        error: (socket, error) => console.error('UDP error:', error),
-      }
-    });
-
-    console.log(`HEP Server listening on ${host}:${port} (TCP/UDP)`);
-
-    // Handle graceful shutdown
-    process.on('SIGTERM', this.shutdown.bind(this));
-    process.on('SIGINT', this.shutdown.bind(this));
+    }
   }
 
   async shutdown() {
     console.log('Shutting down HEP server...');
+    
+    // Close servers if they exist
+    if (this.tcpServer) {
+      this.tcpServer.close();
+    }
+    if (this.udpServer) {
+      this.udpServer.close();
+    }
+    
+    // Close other resources
     await this.buffer.close();
     await this.compaction.close();
+    
     process.exit(0);
   }
 
