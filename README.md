@@ -59,7 +59,7 @@ bun build ./hepop.js --compile --outfile hepop
 ### Configuration
 Configure the server using ENV variables:
 ```bash
-PORT=9898              # Server port (default: 9069)
+PORT=9898             # Server port (default: 9069)
 HOST=0.0.0.0          # Server host (default: 0.0.0.0)
 PARQUET_DIR=./data    # Data directory (default: ./data)
 WRITER_ID=writer1     # Unique writer ID (default: hostname)
