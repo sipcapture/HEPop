@@ -216,9 +216,7 @@ class CompactionManager {
     try {
       // Initialize DuckDB
       this.db = await DuckDBInstance.create(':memory:');
-      this.connection = await this.db.connect();
-      const result = await this.connection.run('SELECT version()');
-      console.log(`Initialized DuckDB ${result[0].version} for compaction`);
+      console.log(`Initialized DuckDB ${DuckDBInstance.version} for compaction`);
       
       // Start compaction jobs after initialization
       this.startCompactionJobs();
@@ -465,9 +463,6 @@ class CompactionManager {
   }
 
   async close() {
-    if (this.connection) {
-      await this.connection.close();
-    }
     if (this.db) {
       await this.db.close();
     }
