@@ -52,7 +52,7 @@ class ParquetBufferManager {
       row_count: 0,
       min_time: null,
       max_time: null,
-      databases: [[0, { tables: new Map() }]]
+      databases: [[0, { tables: [] }]]
     };
   }
 
@@ -145,24 +145,24 @@ class ParquetBufferManager {
   updateMetadata(type, filePath, sizeBytes, rowCount, timestamps) {
     const minTime = Math.min(...timestamps.map(t => t.getTime() * 1000000));
     const maxTime = Math.max(...timestamps.map(t => t.getTime() * 1000000));
-    const chunkTime = Math.floor(minTime / 600000000000) * 600000000000;
 
     const fileInfo = {
       id: this.metadata.next_file_id++,
       path: filePath,
       size_bytes: sizeBytes,
       row_count: rowCount,
-      chunk_time: chunkTime,
       min_time: minTime,
       max_time: maxTime
     };
 
-    // Update tables map
+    // Update tables array
     const tables = this.metadata.databases[0][1].tables;
-    if (!tables.has(type)) {
-      tables.set(type, []);
+    let tableEntry = tables.find(t => t[0] === type);
+    if (!tableEntry) {
+      tableEntry = [type, []];
+      tables.push(tableEntry);
     }
-    tables.get(type).push(fileInfo);
+    tableEntry[1].push(fileInfo);
 
     // Update global metadata
     this.metadata.parquet_size_bytes += sizeBytes;
@@ -264,7 +264,7 @@ class CompactionManager {
       if (now - file.max_time < interval) return;
       
       // Calculate target group timestamp
-      const groupTime = Math.floor(file.chunk_time / targetInterval) * targetInterval;
+      const groupTime = Math.floor(file.min_time / targetInterval) * targetInterval;
       if (!groups.has(groupTime)) {
         groups.set(groupTime, []);
       }
@@ -280,7 +280,7 @@ class CompactionManager {
   }
 
   async compactFiles(type, files, targetRange) {
-    const newPath = this.getCompactedFilePath(type, new Date(files[0].chunk_time / 1000000), targetRange);
+    const newPath = this.getCompactedFilePath(type, new Date(files[0].min_time / 1000000), targetRange);
     
     try {
       // Check if all source files exist before starting
@@ -323,10 +323,8 @@ class CompactionManager {
         path: newPath,
         size_bytes: stats.size_bytes,
         row_count: stats.row_count,
-        chunk_time: files[0].chunk_time,
         min_time: stats.min_time,
-        max_time: stats.max_time,
-        range: targetRange
+        max_time: stats.max_time
       });
 
       // Write metadata
@@ -378,7 +376,20 @@ class CompactionManager {
 
   updateCompactionMetadata(type, oldFiles, newFile) {
     const tables = this.bufferManager.metadata.databases[0][1].tables;
-    const fileList = tables.get(type);
+    
+    // Initialize tables as array if it's empty object
+    if (!Array.isArray(tables)) {
+      this.bufferManager.metadata.databases[0][1].tables = [];
+    }
+    
+    // Find or create table entry
+    let tableEntry = this.bufferManager.metadata.databases[0][1].tables.find(t => t[0] === type);
+    if (!tableEntry) {
+      tableEntry = [type, []];
+      this.bufferManager.metadata.databases[0][1].tables.push(tableEntry);
+    }
+    
+    const fileList = tableEntry[1];
 
     // Remove old files from metadata
     oldFiles.forEach(oldFile => {
@@ -394,8 +405,11 @@ class CompactionManager {
     // Add new compacted file
     const newFileEntry = {
       id: this.bufferManager.metadata.next_file_id++,
-      ...newFile,
-      compaction_level: newFile.range
+      path: newFile.path,
+      size_bytes: newFile.size_bytes,
+      row_count: newFile.row_count,
+      min_time: newFile.min_time,
+      max_time: newFile.max_time
     };
     fileList.push(newFileEntry);
 
@@ -446,18 +460,20 @@ class CompactionManager {
   }
 
   getCompactedFilePath(type, timestamp, range) {
+    // Use same path structure as original files
     const date = timestamp.toISOString().split('T')[0];
     const hour = timestamp.getHours().toString().padStart(2, '0');
+    const minute = Math.floor(timestamp.getMinutes() / 10) * 10;
+    const minutePath = minute.toString().padStart(2, '0');
     
     return path.join(
       this.bufferManager.baseDir,
       this.bufferManager.metadata.writer_id,
-      'compacted',
-      range,
+      'dbs',
       `hep-${this.bufferManager.metadata.next_db_id}`,
       `hep_${type}-${this.bufferManager.metadata.next_table_id}`,
       date,
-      hour,
+      `${hour}-${minutePath}`,
       `${this.bufferManager.metadata.wal_file_sequence_number.toString().padStart(10, '0')}.parquet`
     );
   }
