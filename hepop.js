@@ -302,7 +302,11 @@ class CompactionManager {
 
   startCompactionJobs() {
     // Run compaction checks every minute
-    setInterval(() => this.checkAndCompact(), 60 * 1000);
+    this.compactionInterval = setInterval(() => {
+      this.checkAndCompact().catch(error => {
+        console.error('Compaction job error:', error);
+      });
+    }, 60 * 1000);
   }
 
   async checkAndCompact() {
@@ -416,12 +420,29 @@ class CompactionManager {
     }
   }
 
+  async getCompactedFilePath(type, timestamp, typeMetadata) {
+    const date = timestamp.toISOString().split('T')[0];
+    const hour = timestamp.getHours().toString().padStart(2, '0');
+    
+    return path.join(
+      this.bufferManager.baseDir,
+      this.bufferManager.writerId,
+      'dbs',
+      `hep-${this.bufferManager.metadata.next_db_id}`,
+      `hep_${type}-${this.bufferManager.metadata.next_table_id}`,
+      date,
+      `${hour}-00`,  // Always use top of the hour for compacted files
+      `c_${typeMetadata.wal_sequence.toString().padStart(10, '0')}.parquet`
+    );
+  }
+
   async compactFiles(type, files, targetRange) {
     // Sort files by timestamp to ensure consistent ordering
     files.sort((a, b) => a.min_time - b.min_time);
     
     const timestamp = new Date(files[0].chunk_time / 1000000);
-    const newPath = this.getCompactedFilePath(type, timestamp, targetRange);
+    const typeMetadata = await this.bufferManager.getTypeMetadata(type);
+    const newPath = await this.getCompactedFilePath(type, timestamp, typeMetadata);
     
     try {
       // Check if all source files exist before starting
@@ -485,7 +506,6 @@ class CompactionManager {
       console.log(`Compacted ${files.length} files (${summary}) into ${newPath} (${totalRows} rows)`);
     } catch (error) {
       console.error(`Compaction error for type ${type}:`, error);
-      // Cleanup failed compaction file if it exists
       try {
         await fs.promises.unlink(newPath);
       } catch (e) {
@@ -593,31 +613,6 @@ class CompactionManager {
     }
   }
 
-  getCompactedFilePath(type, timestamp, range) {
-    const date = timestamp.toISOString().split('T')[0];
-    const hour = timestamp.getHours().toString().padStart(2, '0');
-    
-    // Get type metadata synchronously since we're in an async context already
-    const typeMetadata = this.bufferManager.getTypeMetadata(type);
-    
-    return path.join(
-      this.bufferManager.baseDir,
-      this.bufferManager.writerId,
-      'dbs',
-      `hep-${this.bufferManager.metadata.next_db_id}`,
-      `hep_${type}-${this.bufferManager.metadata.next_table_id}`,
-      date,
-      `${hour}-00`,  // Always use top of the hour for compacted files
-      `c_${typeMetadata.wal_sequence.toString().padStart(10, '0')}.parquet`
-    );
-  }
-
-  async close() {
-    if (this.db) {
-      await this.db.close();
-    }
-  }
-
   async cleanupCompactedFiles(files) {
     // Delete files first
     for (const file of files) {
@@ -656,6 +651,15 @@ class CompactionManager {
           console.error(`Error cleaning up directory ${dir}:`, error);
         }
       }
+    }
+  }
+
+  async close() {
+    if (this.compactionInterval) {
+      clearInterval(this.compactionInterval);
+    }
+    if (this.db) {
+      await this.db.close();
     }
   }
 }
