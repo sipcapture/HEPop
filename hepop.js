@@ -253,19 +253,15 @@ class CompactionManager {
   }
 
   async compactTimeRange(type, files, fromRange, toRange) {
-    const now = Date.now() * 1000000; // Convert to nanoseconds
+    const now = Date.now() * 1000000;
     const interval = this.compactionIntervals[fromRange];
-    const targetInterval = this.compactionIntervals[toRange];
     
-    // Group files by their hour
+    // Group all files (including compacted) by hour
     const groups = new Map();
     
     files.forEach(file => {
       // Skip files that are too new
       if (now - file.max_time < interval) return;
-      
-      // Skip already compacted files (those with c_ prefix)
-      if (path.basename(file.path).startsWith('c_')) return;
       
       // Calculate target hour timestamp (floor to hour)
       const timestamp = new Date(file.chunk_time / 1000000);
@@ -277,16 +273,42 @@ class CompactionManager {
       ).getTime();
       
       if (!groups.has(hourTime)) {
-        groups.set(hourTime, []);
+        groups.set(hourTime, {
+          raw: [],
+          compacted: []
+        });
       }
-      groups.get(hourTime).push(file);
+
+      // Separate raw and compacted files
+      if (path.basename(file.path).startsWith('c_')) {
+        groups.get(hourTime).compacted.push(file);
+      } else {
+        groups.get(hourTime).raw.push(file);
+      }
     });
 
-    // Compact each group that has enough files
-    for (const [hourTime, groupFiles] of groups) {
-      if (groupFiles.length < 2) continue;
+    // Process each hour group
+    for (const [hourTime, { raw, compacted }] of groups) {
+      try {
+        let filesToCompact = [];
 
-      await this.compactFiles(type, groupFiles, toRange);
+        // If we have raw files to compact
+        if (raw.length >= 2) {
+          filesToCompact.push(...raw);
+        }
+
+        // If we have multiple compacted files, include them in the merge
+        if (compacted.length > 0) {
+          filesToCompact.push(...compacted);
+        }
+
+        // Only proceed if we have files to compact
+        if (filesToCompact.length >= 2) {
+          await this.compactFiles(type, filesToCompact, toRange);
+        }
+      } catch (error) {
+        console.error(`Error compacting files for hour ${new Date(hourTime).toISOString()}:`, error);
+      }
     }
   }
 
@@ -313,6 +335,9 @@ class CompactionManager {
         this.bufferManager.writerOptions
       );
 
+      // Track total rows for logging
+      let totalRows = 0;
+
       // Read and merge all files
       for (const file of files) {
         const reader = await parquet.ParquetReader.openFile(file.path);
@@ -321,6 +346,7 @@ class CompactionManager {
         let record = null;
         while (record = await cursor.next()) {
           await writer.appendRow(record);
+          totalRows++;
         }
         
         await reader.close();
@@ -350,7 +376,9 @@ class CompactionManager {
       // Only after metadata is written, clean up old files
       await this.cleanupCompactedFiles(files);
 
-      console.log(`Compacted ${files.length} files into ${newPath} (${stats.row_count} rows)`);
+      const fileTypes = files.map(f => path.basename(f.path).startsWith('c_') ? 'compacted' : 'raw');
+      const summary = `${fileTypes.filter(t => t === 'raw').length} raw, ${fileTypes.filter(t => t === 'compacted').length} compacted`;
+      console.log(`Compacted ${files.length} files (${summary}) into ${newPath} (${totalRows} rows)`);
     } catch (error) {
       console.error(`Compaction error for type ${type}:`, error);
       // Cleanup failed compaction file if it exists
