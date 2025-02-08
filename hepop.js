@@ -5,6 +5,7 @@ import hepjs from 'hep-js';
 import { getSIP } from 'parsip';
 import path from 'path';
 import fs from 'fs';
+import duckdb from '@duckdb/node-api';
 
 class ParquetBufferManager {
   constructor(flushInterval = 10000, bufferSize = 1000) {
@@ -52,7 +53,7 @@ class ParquetBufferManager {
       row_count: 0,
       min_time: null,
       max_time: null,
-      databases: [[0, { tables: [] }]]
+      databases: [[0, { tables: new Map() }]]
     };
   }
 
@@ -145,24 +146,24 @@ class ParquetBufferManager {
   updateMetadata(type, filePath, sizeBytes, rowCount, timestamps) {
     const minTime = Math.min(...timestamps.map(t => t.getTime() * 1000000));
     const maxTime = Math.max(...timestamps.map(t => t.getTime() * 1000000));
+    const chunkTime = Math.floor(minTime / 600000000000) * 600000000000;
 
     const fileInfo = {
       id: this.metadata.next_file_id++,
       path: filePath,
       size_bytes: sizeBytes,
       row_count: rowCount,
+      chunk_time: chunkTime,
       min_time: minTime,
       max_time: maxTime
     };
 
-    // Update tables array
+    // Update tables map
     const tables = this.metadata.databases[0][1].tables;
-    let tableEntry = tables.find(t => t[0] === type);
-    if (!tableEntry) {
-      tableEntry = [type, []];
-      tables.push(tableEntry);
+    if (!tables.has(type)) {
+      tables.set(type, []);
     }
-    tableEntry[1].push(fileInfo);
+    tables.get(type).push(fileInfo);
 
     // Update global metadata
     this.metadata.parquet_size_bytes += sizeBytes;
@@ -216,7 +217,7 @@ class CompactionManager {
     try {
       // Initialize DuckDB
       this.db = await DuckDBInstance.create(':memory:');
-      console.log(`Initialized DuckDB ${DuckDBInstance.version} for compaction`);
+      console.log(`Initialized DuckDB ${duckdb.version} for compaction`);
       
       // Start compaction jobs after initialization
       this.startCompactionJobs();
@@ -235,11 +236,7 @@ class CompactionManager {
     const metadata = this.bufferManager.metadata;
     const tables = metadata.databases[0][1].tables;
 
-    // Iterate over table entries in the array
-    for (const tableEntry of tables) {
-      const type = tableEntry[0];
-      const files = tableEntry[1];
-
+    for (const [type, files] of tables.entries()) {
       // Skip if compaction is already running for this type
       if (this.compactionLock.get(type)) {
         continue;
@@ -268,7 +265,7 @@ class CompactionManager {
       if (now - file.max_time < interval) return;
       
       // Calculate target group timestamp
-      const groupTime = Math.floor(file.min_time / targetInterval) * targetInterval;
+      const groupTime = Math.floor(file.chunk_time / targetInterval) * targetInterval;
       if (!groups.has(groupTime)) {
         groups.set(groupTime, []);
       }
@@ -279,14 +276,12 @@ class CompactionManager {
     for (const [groupTime, groupFiles] of groups) {
       if (groupFiles.length < 2) continue;
 
-      // Sort files by min_time to ensure proper ordering
-      groupFiles.sort((a, b) => a.min_time - b.min_time);
       await this.compactFiles(type, groupFiles, toRange);
     }
   }
 
   async compactFiles(type, files, targetRange) {
-    const newPath = this.getCompactedFilePath(type, new Date(files[0].min_time / 1000000), targetRange);
+    const newPath = this.getCompactedFilePath(type, new Date(files[0].chunk_time / 1000000), targetRange);
     
     try {
       // Check if all source files exist before starting
@@ -329,8 +324,10 @@ class CompactionManager {
         path: newPath,
         size_bytes: stats.size_bytes,
         row_count: stats.row_count,
+        chunk_time: files[0].chunk_time,
         min_time: stats.min_time,
-        max_time: stats.max_time
+        max_time: stats.max_time,
+        range: targetRange
       });
 
       // Write metadata
@@ -382,20 +379,13 @@ class CompactionManager {
 
   updateCompactionMetadata(type, oldFiles, newFile) {
     const tables = this.bufferManager.metadata.databases[0][1].tables;
-    
-    // Find table entry
-    let tableEntry = tables.find(t => t[0] === type);
-    if (!tableEntry) {
-      tableEntry = [type, []];
-      tables.push(tableEntry);
-    }
-    
-    const fileList = tableEntry[1];
+    const fileList = tables.get(type);
 
-    // Remove old files from metadata and update global stats
+    // Remove old files from metadata
     oldFiles.forEach(oldFile => {
       const index = fileList.findIndex(f => f.path === oldFile.path);
       if (index !== -1) {
+        // Subtract old file stats from global metadata
         this.bufferManager.metadata.parquet_size_bytes -= oldFile.size_bytes;
         this.bufferManager.metadata.row_count -= oldFile.row_count;
         fileList.splice(index, 1);
@@ -405,11 +395,8 @@ class CompactionManager {
     // Add new compacted file
     const newFileEntry = {
       id: this.bufferManager.metadata.next_file_id++,
-      path: newFile.path,
-      size_bytes: newFile.size_bytes,
-      row_count: newFile.row_count,
-      min_time: newFile.min_time,
-      max_time: newFile.max_time
+      ...newFile,
+      compaction_level: newFile.range
     };
     fileList.push(newFileEntry);
 
@@ -460,23 +447,18 @@ class CompactionManager {
   }
 
   getCompactedFilePath(type, timestamp, range) {
-    // Use same path structure as original files
     const date = timestamp.toISOString().split('T')[0];
     const hour = timestamp.getHours().toString().padStart(2, '0');
-    const minute = Math.floor(timestamp.getMinutes() / 10) * 10;
-    const minutePath = minute.toString().padStart(2, '0');
-    
-    // Increment WAL sequence number for the new file
-    this.bufferManager.metadata.wal_file_sequence_number++;
     
     return path.join(
       this.bufferManager.baseDir,
       this.bufferManager.metadata.writer_id,
-      'dbs',
+      'compacted',
+      range,
       `hep-${this.bufferManager.metadata.next_db_id}`,
       `hep_${type}-${this.bufferManager.metadata.next_table_id}`,
       date,
-      `${hour}-${minutePath}`,
+      hour,
       `${this.bufferManager.metadata.wal_file_sequence_number.toString().padStart(10, '0')}.parquet`
     );
   }
