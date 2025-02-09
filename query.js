@@ -184,18 +184,27 @@ class QueryClient {
 
         console.log('Executing query:', query);
         
-        // Use runAndReadAll for simpler result handling
+        // Run query and get result reader
         const reader = await connection.runAndReadAll(query);
-        const rows = reader.getRows();
+        
+        // Get column information
+        const columnNames = reader.columnNames;
+        console.log('Column names:', columnNames);
 
-        // Convert rows to objects with proper formatting
-        return rows.map(row => {
+        // Get raw data
+        const columns = reader.getColumns();
+        console.log('Got columns:', columns.length);
+
+        // Convert column-based data to row objects
+        const results = [];
+        const rowCount = columns[0]?.length || 0;
+
+        for (let rowIndex = 0; rowIndex < rowCount; rowIndex++) {
           const obj = {};
-          const columnNames = reader.columnNames;
           
-          for (let i = 0; i < columnNames.length; i++) {
-            const key = columnNames[i];
-            const value = row[i];
+          for (let colIndex = 0; colIndex < columnNames.length; colIndex++) {
+            const key = columnNames[colIndex];
+            const value = columns[colIndex][rowIndex];
 
             if (key === 'timestamp') {
               obj[key] = new Date(value).toISOString();
@@ -209,8 +218,12 @@ class QueryClient {
               obj[key] = value;
             }
           }
-          return obj;
-        });
+          
+          results.push(obj);
+        }
+
+        console.log(`Processed ${results.length} rows`);
+        return results;
       } finally {
         await connection.close();
       }
