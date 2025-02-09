@@ -183,31 +183,34 @@ class QueryClient {
         `;
 
         console.log('Executing query:', query);
-        const result = await connection.send(query);
         
-        // Convert result to array of objects
-        const rows = [];
-        for (const row of result) {
+        // Use runAndReadAll for simpler result handling
+        const reader = await connection.runAndReadAll(query);
+        const rows = reader.getRows();
+
+        // Convert rows to objects with proper formatting
+        return rows.map(row => {
           const obj = {};
-          for (const key in row) {
-            // Convert timestamp to ISO string
+          const columnNames = reader.columnNames;
+          
+          for (let i = 0; i < columnNames.length; i++) {
+            const key = columnNames[i];
+            const value = row[i];
+
             if (key === 'timestamp') {
-              obj[key] = new Date(row[key]).toISOString();
-            } else if (key === 'rcinfo' && typeof row[key] === 'string') {
-              // Parse rcinfo JSON if it's a string
+              obj[key] = new Date(value).toISOString();
+            } else if (key === 'rcinfo' && typeof value === 'string') {
               try {
-                obj[key] = JSON.parse(row[key]);
+                obj[key] = JSON.parse(value);
               } catch (e) {
-                obj[key] = row[key];
+                obj[key] = value;
               }
             } else {
-              obj[key] = row[key];
+              obj[key] = value;
             }
           }
-          rows.push(obj);
-        }
-
-        return rows;
+          return obj;
+        });
       } finally {
         await connection.close();
       }
@@ -248,3 +251,5 @@ if (require.main === module) {
 }
 
 export default QueryClient;
+
+
