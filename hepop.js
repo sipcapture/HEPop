@@ -5,6 +5,7 @@ import { getSIP } from 'parsip';
 import path from 'path';
 import fs from 'fs';
 import duckdb from '@duckdb/node-api';
+import QueryClient from './query.js';
 
 class ParquetBufferManager {
   constructor(flushInterval = 10000, bufferSize = 1000) {
@@ -341,7 +342,7 @@ class CompactionManager {
       if (existingFiles.length > 0) {
         metadata.min_time = Math.min(...existingFiles.map(f => f.min_time));
         metadata.max_time = Math.max(...existingFiles.map(f => f.max_time));
-      } else {
+    } else {
         metadata.min_time = null;
         metadata.max_time = null;
       }
@@ -813,15 +814,13 @@ class CompactionManager {
     if (this.compactionInterval) {
       clearInterval(this.compactionInterval);
     }
-    if (this.db) {
-      await this.db.close();
-    }
   }
 }
 
 class HEPServer {
   constructor(config = {}) {
     this.debug = config.debug || false;
+    this.queryClient = null;  // Add queryClient property
   }
 
   async initialize() {
@@ -831,6 +830,10 @@ class HEPServer {
       
       this.compaction = new CompactionManager(this.buffer);
       await this.compaction.initialize();
+
+      // Initialize query client
+      this.queryClient = new QueryClient(this.buffer.baseDir);
+      await this.queryClient.initialize();
       
       await this.startServers();
     } catch (error) {
@@ -841,13 +844,14 @@ class HEPServer {
 
   async startServers() {
     const port = parseInt(process.env.PORT) || 9069;
+    const httpPort = parseInt(process.env.HTTP_PORT) || (port + 1);
     const host = process.env.HOST || "0.0.0.0";
     const retryAttempts = 3;
-    const retryDelay = 1000; // 1 second
+    const retryDelay = 1000;
 
     for (let attempt = 1; attempt <= retryAttempts; attempt++) {
       try {
-        // Try to create TCP Server
+        // Create TCP Server
         const tcpServer = Bun.listen({
       hostname: host,
       port: port,
@@ -857,7 +861,7 @@ class HEPServer {
       }
     });
 
-        // If TCP succeeds, create UDP Server
+        // Create UDP Server
         const udpServer = Bun.udpSocket({
       hostname: host,
       port: port,
@@ -868,17 +872,69 @@ class HEPServer {
       }
     });
 
+        // Create HTTP Server for queries
+        const self = this;
+        const httpServer = Bun.serve({
+          hostname: host,
+          port: httpPort,
+          async fetch(req) {
+            const url = new URL(req.url);
+            
+            if (url.pathname === '/query') {
+              try {
+                let query;
+                
+                if (req.method === 'GET') {
+                  query = url.searchParams.get('q');
+                  if (!query) {
+                    return new Response('Missing query parameter "q"', { status: 400 });
+                  }
+                } else if (req.method === 'POST') {
+                  const body = await req.json();
+                  query = body.query;
+                  if (!query) {
+                    return new Response('Missing query in request body', { status: 400 });
+                  }
+                } else {
+                  return new Response('Method not allowed', { status: 405 });
+                }
+
+                const result = await self.queryClient.query(query);
+                
+                // Handle BigInt serialization
+                const safeResult = JSON.parse(JSON.stringify(result, (key, value) =>
+                  typeof value === 'bigint' ? value.toString() : value
+                ));
+
+                return new Response(JSON.stringify(safeResult), {
+                  headers: { 'Content-Type': 'application/json' }
+                });
+              } catch (error) {
+                console.error('Query error:', error);
+                return new Response(JSON.stringify({ error: error.message }), {
+                  status: 500,
+                  headers: { 'Content-Type': 'application/json' }
+                });
+              }
+            }
+
+            return new Response('Not found', { status: 404 });
+          }
+        });
+
     console.log(`HEP Server listening on ${host}:${port} (TCP/UDP)`);
+        console.log(`Query API listening on ${host}:${httpPort} (HTTP)`);
         
         // Store server references
         this.tcpServer = tcpServer;
         this.udpServer = udpServer;
+        this.httpServer = httpServer;
 
     // Handle graceful shutdown
     process.on('SIGTERM', this.shutdown.bind(this));
     process.on('SIGINT', this.shutdown.bind(this));
         
-        return; // Success, exit the retry loop
+        return;
       } catch (error) {
         console.error(`Attempt ${attempt}/${retryAttempts} failed:`, error);
         
@@ -886,7 +942,6 @@ class HEPServer {
           throw new Error(`Failed to start server after ${retryAttempts} attempts: ${error.message}`);
         }
         
-        // Wait before retrying
         await new Promise(resolve => setTimeout(resolve, retryDelay));
       }
     }
@@ -895,18 +950,44 @@ class HEPServer {
   async shutdown() {
     console.log('Shutting down HEP server...');
     
-    // Close servers if they exist
+    // Stop TCP server
     if (this.tcpServer) {
-      this.tcpServer.close();
+      try {
+        this.tcpServer.stop(true);
+        this.tcpServer.unref();
+      } catch (error) {
+        console.error('Error stopping TCP server:', error);
+      }
     }
+
+    // Stop UDP server
     if (this.udpServer) {
-      this.udpServer.close();
+      try {
+        // UDP sockets use close() not stop()
+        this.udpServer.close();
+      } catch (error) {
+        console.error('Error stopping UDP server:', error);
+      }
+    }
+
+    // Stop HTTP server
+    if (this.httpServer) {
+      try {
+        this.httpServer.stop(true);
+        this.httpServer.unref();
+      } catch (error) {
+        console.error('Error stopping HTTP server:', error);
+      }
     }
     
-    // Close other resources
-    await this.buffer.close();
-    await this.compaction.close();
+    // Flush any remaining data
+    try {
+      await this.buffer.close();
+    } catch (error) {
+      console.error('Error flushing buffers:', error);
+    }
     
+    console.log('Server shutdown complete');
     process.exit(0);
   }
 
