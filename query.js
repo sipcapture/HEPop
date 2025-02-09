@@ -130,11 +130,15 @@ class QueryClient {
         throw new Error('Could not determine HEP type from query');
       }
 
+      console.log('Parsed query:', parsed);  // Useful for debugging query parsing
+
       const files = await this.findRelevantFiles(parsed.type, parsed.timeRange);
       if (!files.length) {
         console.log('No files found matching query criteria');
         return [];
       }
+
+      console.log(`Found ${files.length} relevant files:`, files.map(f => f.path));  // Useful for debugging file selection
 
       // Get a connection
       const connection = await this.db.connect();
@@ -177,6 +181,8 @@ class QueryClient {
           ${parsed.orderBy}
           ${parsed.limit}
         `;
+
+        console.log('Executing query:', query);  // Useful for debugging SQL execution
 
         // Run query and get result reader
         const reader = await connection.runAndReadAll(query);
