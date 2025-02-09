@@ -140,29 +140,36 @@ class QueryClient {
 
       console.log(`Found ${files.length} relevant files:`, files.map(f => f.path));
 
-      // Build the query using array of files
-      const query = `
-        SELECT 
-          timestamp as time,
-          rcinfo::json->>'srcIp' as src_ip,
-          rcinfo::json->>'dstIp' as dst_ip,
-          rcinfo::json->>'srcPort' as src_port,
-          rcinfo::json->>'dstPort' as dst_port,
-          rcinfo::json->>'timeSeconds' as time_sec,
-          rcinfo::json->>'timeUseconds' as time_usec,
-          payload
-        FROM read_parquet([${files.map(f => `'${f.path}'`).join(', ')}])
-        ${parsed.timeRange ? `WHERE timestamp >= TIMESTAMP '${new Date(parsed.timeRange.start / 1000000).toISOString()}'
-          AND timestamp <= TIMESTAMP '${new Date(parsed.timeRange.end / 1000000).toISOString()}'` : ''}
-        ${parsed.conditions}
-        ${parsed.orderBy}
-        ${parsed.limit}
-      `;
+      // Get a connection
+      const connection = await this.db.connect();
 
-      console.log('Executing query:', query);
-      const result = await this.db.prepare(query).all();
+      try {
+        // Build the query using array of files
+        const query = `
+          SELECT 
+            timestamp as time,
+            rcinfo::json->>'srcIp' as src_ip,
+            rcinfo::json->>'dstIp' as dst_ip,
+            rcinfo::json->>'srcPort' as src_port,
+            rcinfo::json->>'dstPort' as dst_port,
+            rcinfo::json->>'timeSeconds' as time_sec,
+            rcinfo::json->>'timeUseconds' as time_usec,
+            payload
+          FROM read_parquet([${files.map(f => `'${f.path}'`).join(', ')}])
+          ${parsed.timeRange ? `WHERE timestamp >= TIMESTAMP '${new Date(parsed.timeRange.start / 1000000).toISOString()}'
+            AND timestamp <= TIMESTAMP '${new Date(parsed.timeRange.end / 1000000).toISOString()}'` : ''}
+          ${parsed.conditions}
+          ${parsed.orderBy}
+          ${parsed.limit}
+        `;
 
-      return result;
+        console.log('Executing query:', query);
+        const result = await connection.run(query);
+        return result;
+      } finally {
+        // Always close the connection
+        await connection.close();
+      }
     } catch (error) {
       console.error('Query error:', error);
       throw error;
