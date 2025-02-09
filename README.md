@@ -183,3 +183,72 @@ WHERE payload LIKE '%SIP/2.0 4%'
   OR payload LIKE '%SIP/2.0 5%'
 ORDER BY time DESC
 ```
+
+# HEPop.js
+
+HEPop.js is a high-performance HEP Capture Server with built-in compression and indexing capabilities.
+
+## Features
+- HEP/EEP Packet Reception (TCP/UDP)
+- Parquet File Storage with Compression
+- Automatic File Rotation and Compaction
+- SQL Query Interface
+- High-Performance Data Access
+
+## Installation
+```bash
+npm install hepop
+```
+
+## Usage
+
+### Start Server
+```javascript
+import { HEPServer } from 'hepop';
+
+const server = new HEPServer();
+await server.initialize();
+```
+
+### Query Interface
+HEPop.js provides a SQL query interface accessible via HTTP. Queries can be executed using either GET or POST methods.
+
+#### Example Queries:
+```bash
+# Using POST
+curl -X POST http://localhost:9070/query \
+  -H "Content-Type: application/json" \
+  -d '{
+    "query": "SELECT * FROM hep_1 LIMIT 10"
+  }'
+
+# Query with time range and conditions
+curl -X POST http://localhost:9070/query \
+  -H "Content-Type: application/json" \
+  -d '{
+    "query": "SELECT time, src_ip, dst_ip, payload FROM hep_1 WHERE time >= '\''2025-02-08T19:00:00'\'' AND payload LIKE '\''%INVITE%'\'' ORDER BY time DESC"
+  }'
+
+# Using GET
+curl "http://localhost:9070/query?q=SELECT%20*%20FROM%20hep_1%20LIMIT%2010"
+```
+
+#### Available Fields:
+- `timestamp/time`: Event timestamp
+- `rcinfo`: Raw protocol information (JSON)
+- `payload`: SIP/Protocol payload
+- `src_ip`: Source IP (extracted from rcinfo)
+- `dst_ip`: Destination IP (extracted from rcinfo)
+- `src_port`: Source port (extracted from rcinfo)
+- `dst_port`: Destination port (extracted from rcinfo)
+
+## Configuration
+Environment variables:
+- `PORT`: HEP server port (default: 9069)
+- `HTTP_PORT`: Query API port (default: PORT + 1)
+- `HOST`: Bind address (default: "0.0.0.0")
+- `PARQUET_DIR`: Data directory (default: "./data")
+- `WRITER_ID`: Instance identifier (default: hostname)
+
+## License
+MIT
