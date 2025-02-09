@@ -187,24 +187,24 @@ class QueryClient {
         // Run query and get result reader
         const reader = await connection.runAndReadAll(query);
         
-        // Get column information
-        const columnNames = reader.columnNames;
+        // Get column information - call the function to get names
+        const columnNames = reader.columnNames();
         console.log('Column names:', columnNames);
 
-        // Get raw data
-        const columns = reader.getColumns();
-        console.log('Got columns:', columns.length);
+        // Get raw data as array of vectors
+        const vectors = reader.getVectors();
+        console.log('Got vectors:', vectors.length);
 
-        // Convert column-based data to row objects
+        // Convert vector-based data to row objects
         const results = [];
-        const rowCount = columns[0]?.length || 0;
+        const rowCount = vectors[0]?.itemCount || 0;
 
         for (let rowIndex = 0; rowIndex < rowCount; rowIndex++) {
           const obj = {};
           
           for (let colIndex = 0; colIndex < columnNames.length; colIndex++) {
             const key = columnNames[colIndex];
-            const value = columns[colIndex][rowIndex];
+            const value = vectors[colIndex].getItem(rowIndex);
 
             if (key === 'timestamp') {
               obj[key] = new Date(value).toISOString();
@@ -222,7 +222,7 @@ class QueryClient {
           results.push(obj);
         }
 
-        console.log(`Processed ${results.length} rows`);
+        console.log(`Processed ${results.length} rows with data:`, results[0]);
         return results;
       } finally {
         await connection.close();
