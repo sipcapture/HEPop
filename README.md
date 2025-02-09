@@ -39,12 +39,18 @@
       ParquetWriter-->Storage;
       Storage-->Compactor;
       Compactor-->Storage;
+      Compactor-->Metadata;
       Storage-.->LocalFS;
       Storage-.->S3;
+      Query-API-- GET/POST --> HEPop;
+      DuckDB-->Storage;
+      DuckDB-->Metadata;
 
       subgraph HEPop[HEPop Server]
         ParquetWriter
         Compactor
+        Metadata;
+        DuckDB;
       end
 
 ```
