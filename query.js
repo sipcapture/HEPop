@@ -183,8 +183,31 @@ class QueryClient {
         `;
 
         console.log('Executing query:', query);
-        const result = await connection.run(query);
-        return result;
+        const result = await connection.query(query);
+        
+        // Convert result to array of objects
+        const rows = [];
+        for (const row of result) {
+          const obj = {};
+          for (const key in row) {
+            // Convert timestamp to ISO string
+            if (key === 'timestamp') {
+              obj[key] = new Date(row[key]).toISOString();
+            } else if (key === 'rcinfo' && typeof row[key] === 'string') {
+              // Parse rcinfo JSON if it's a string
+              try {
+                obj[key] = JSON.parse(row[key]);
+              } catch (e) {
+                obj[key] = row[key];
+              }
+            } else {
+              obj[key] = row[key];
+            }
+          }
+          rows.push(obj);
+        }
+
+        return rows;
       } finally {
         await connection.close();
       }
