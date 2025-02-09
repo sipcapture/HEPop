@@ -357,6 +357,39 @@ class ParquetBufferManager {
       console.error(`Line Protocol flush error:`, error);
     }
   }
+
+  async addLineProtocolBulk(measurement, rows) {
+    if (!this.buffers.has(measurement)) {
+      // Create new schema for this measurement including its fields
+      const schema = new parquet.ParquetSchema({
+        timestamp: { type: 'TIMESTAMP_MILLIS' },
+        tags: { type: 'UTF8' },
+        ...Object.entries(rows[0]).reduce((acc, [key, value]) => {
+          if (key !== 'timestamp' && key !== 'tags') {
+            acc[key] = { 
+              type: typeof value === 'number' ? 'DOUBLE' : 
+                    typeof value === 'boolean' ? 'BOOLEAN' : 'UTF8'
+            };
+          }
+          return acc;
+        }, {})
+      });
+
+      this.buffers.set(measurement, {
+        rows: [],
+        schema
+      });
+    }
+
+    const buffer = this.buffers.get(measurement);
+    buffer.rows.push(...rows);
+
+    console.log(`Added ${rows.length} rows to ${measurement} buffer (total: ${buffer.rows.length})`);
+
+    if (buffer.rows.length >= this.bufferSize) {
+      await this.flushLineProtocol(measurement);
+    }
+  }
 }
 
 class CompactionManager {
@@ -1007,18 +1040,39 @@ class HEPServer {
                 const body = await req.text();
                 const lines = body.split('\n').filter(line => line.trim());
                 
+                console.log(`Processing ${lines.length} line protocol records`);
+                
                 const config = {
                   addTimestamp: true,
                   typeMappings: [],
                   defaultTypeMapping: 'float'
                 };
 
+                // Process lines in bulk
+                const bulkData = new Map(); // measurement -> rows
+                
                 for (const line of lines) {
                   const parsed = parse(line, config);
-                  await self.buffer.addLineProtocol(parsed);
+                  const measurement = parsed.measurement;
+                  
+                  if (!bulkData.has(measurement)) {
+                    bulkData.set(measurement, []);
+                  }
+                  
+                  bulkData.get(measurement).push({
+                    timestamp: new Date(parsed.timestamp),
+                    tags: JSON.stringify(parsed.tags),
+                    ...parsed.fields
+                  });
                 }
 
-                return new Response('OK', { status: 200 });
+                // Bulk insert by measurement
+                for (const [measurement, rows] of bulkData) {
+                  console.log(`Writing ${rows.length} rows to measurement ${measurement}`);
+                  await self.buffer.addLineProtocolBulk(measurement, rows);
+                }
+
+                return new Response(null, { status: 201 });
               } catch (error) {
                 console.error('Write error:', error);
                 return new Response(error.message, { status: 400 });
