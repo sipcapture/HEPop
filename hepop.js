@@ -903,7 +903,13 @@ class HEPServer {
                 }
 
                 const result = await self.queryClient.query(query);
-                return new Response(JSON.stringify(result), {
+                
+                // Handle BigInt serialization
+                const safeResult = JSON.parse(JSON.stringify(result, (key, value) =>
+                  typeof value === 'bigint' ? value.toString() : value
+                ));
+
+                return new Response(JSON.stringify(safeResult), {
                   headers: { 'Content-Type': 'application/json' }
                 });
               } catch (error) {
