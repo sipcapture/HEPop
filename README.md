@@ -144,12 +144,12 @@ Query the HEP data using the HTTP API. The server provides both GET and POST end
 
 #### Available Fields:
 - `timestamp/time`: Event timestamp
-- `rcinfo`: Raw protocol information (JSON)
-- `payload`: SIP/Protocol payload
-- `src_ip`: Source IP (extracted from rcinfo)
-- `dst_ip`: Destination IP (extracted from rcinfo)
-- `src_port`: Source port (extracted from rcinfo)
-- `dst_port`: Destination port (extracted from rcinfo)
+- `rcinfo`: Raw HEP protocol header _(JSON)_
+- `payload`: HEP Protocol payload
+- `src_ip`: Source IP _(extracted from rcinfo)_
+- `dst_ip`: Destination IP _(extracted from rcinfo)_
+- `src_port`: Source port _(extracted from rcinfo)_
+- `dst_port`: Destination port _(extracted from rcinfo)_
 
 
 #### GET /query
