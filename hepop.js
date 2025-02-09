@@ -272,9 +272,15 @@ class ParquetBufferManager {
     // Write initial metadata file if it doesn't exist
     const metadataPath = path.join(metadataDir, 'metadata.json');
     if (!fs.existsSync(metadataPath)) {
+      const initialMetadata = {
+        writer_id: this.writerId,
+        next_db_id: 0,
+        next_table_id: 0
+      };
+      
       await fs.promises.writeFile(
         metadataPath,
-        JSON.stringify(this.metadata, null, 2)
+        JSON.stringify(initialMetadata, null, 2)
       );
     }
   }
