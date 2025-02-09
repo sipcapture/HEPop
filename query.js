@@ -206,6 +206,9 @@ class QueryClient {
               } catch (e) {
                 obj[key] = value;
               }
+            } else if (typeof value === 'bigint') {
+              // Convert BigInt to string
+              obj[key] = value.toString();
             } else {
               obj[key] = value;
             }
