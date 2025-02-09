@@ -4,8 +4,8 @@
 
 ##### Features
 
-- [x] High-Performance Bun Server
-  - [x] HEP/EEP Packet Support (UDP/TCP)
+- [x] High-Performance HEP Server
+  - [x] HEPv3/EEP Support (UDP/TCP)
 - [x] Apache Parquet Writer
   - [x] Parquet Columnar WAL + Storage
   - [x] Automatic Rotation + Compaction
@@ -13,8 +13,9 @@
   - [x] Metadata Management
 - [x] DuckDB Integration
   - [x] Parquet Data Compaction
-  - [x] Query Parquet
+  - [x] Query Execution
 - [x] Search API
+
 
 ```mermaid
 %%{
@@ -118,15 +119,6 @@ data/
 }
 
 ```
-
-
-### Features
-- **Automatic Compaction**: Older files are automatically compacted for better storage efficiency
-- **Restart Safety**: Metadata ensures consistency across restarts
-- **Directory Cleanup**: Empty directories from past hours are automatically removed
-- **Type Isolation**: Each HEP type is stored and managed separately
-- **Atomic Operations**: All file and metadata operations are atomic
-
 
 
 ### Query API
