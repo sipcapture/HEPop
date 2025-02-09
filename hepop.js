@@ -953,14 +953,46 @@ class HEPServer {
   async shutdown() {
     console.log('Shutting down HEP server...');
     
-    if (this.tcpServer) this.tcpServer.close();
-    if (this.udpServer) this.udpServer.close();
-    if (this.httpServer) this.httpServer.close();
+    // Stop TCP server
+    if (this.tcpServer) {
+      try {
+        this.tcpServer.stop(true);  // true to close active connections
+        this.tcpServer.unref();
+      } catch (error) {
+        console.error('Error stopping TCP server:', error);
+      }
+    }
+
+    // Stop UDP server
+    if (this.udpServer) {
+      try {
+        this.udpServer.stop(true);
+        this.udpServer.unref();
+      } catch (error) {
+        console.error('Error stopping UDP server:', error);
+      }
+    }
+
+    // Stop HTTP server
+    if (this.httpServer) {
+      try {
+        this.httpServer.stop(true);
+        this.httpServer.unref();
+      } catch (error) {
+        console.error('Error stopping HTTP server:', error);
+      }
+    }
     
-    await this.buffer.close();
-    await this.compaction.close();
-    await this.queryClient.close();
+    // Close other resources
+    try {
+      await this.buffer.close();
+      await this.compaction.close();
+      await this.queryClient.close();
+    } catch (error) {
+      console.error('Error closing resources:', error);
+    }
     
+    console.log('Server shutdown complete');
     process.exit(0);
   }
 
