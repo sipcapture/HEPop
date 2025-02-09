@@ -403,8 +403,6 @@ class ParquetBufferManager {
     const buffer = this.buffers.get(type);
     buffer.rows.push(...rows);
 
-    console.log(`Added ${rows.length} rows to ${type} buffer (total: ${buffer.rows.length})`);
-
     if (buffer.rows.length >= this.bufferSize) {
       await this.flush(type);  // Use the same flush method as HEP
     }
@@ -1063,9 +1061,7 @@ class HEPServer {
               try {
                 const body = await req.text();
                 const lines = body.split('\n').filter(line => line.trim());
-                
-                console.log(`Processing ${lines.length} line protocol records`);
-                
+                                
                 const config = {
                   addTimestamp: true,
                   typeMappings: [],
