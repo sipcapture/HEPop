@@ -1,11 +1,5 @@
-import * as arrow from "apache-arrow";
-import initWasm, {
-  Compression,
-  readParquet,
-  Table,
-  writeParquet,
-  WriterPropertiesBuilder,
-} from "parquet-wasm";
+import parquet from '@dsnp/parquetjs';
+import { DuckDBInstance } from '@duckdb/node-api';
 import hepjs from 'hep-js';
 import { getSIP } from 'parsip';
 import path from 'path';
@@ -20,40 +14,34 @@ class ParquetBufferManager {
     this.bufferSize = bufferSize;
     this.baseDir = process.env.PARQUET_DIR || './data';
     this.writerId = process.env.WRITER_ID || require('os').hostname();
-    this.writerProperties = null;  // Will be initialized later
+    
+    // Define schema for HEP data
+    this.schema = new parquet.ParquetSchema({
+      timestamp: { type: 'TIMESTAMP_MILLIS' },
+      rcinfo: { type: 'UTF8' },
+      payload: { type: 'UTF8' }
+    });
+
+    // Add bloom filters for better query performance
+    this.writerOptions = {
+      bloomFilters: [
+        {
+          column: 'timestamp',
+          numFilterBytes: 1024
+        }
+      ]
+    };
   }
 
   async initialize() {
-    try {
-      // Initialize WebAssembly
-      await initWasm();
-      console.log('Parquet WASM initialized');
-
-      // Initialize writer properties after WASM is ready
-      this.writerProperties = new WriterPropertiesBuilder()
-        .setCompression(Compression.ZSTD)
-        .build();
-
-      // Ensure base directories exist
-      await this.ensureDirectories();
-      
-      // Load or create metadata
-      await this.initializeMetadata();
-      
-      // Start flush interval after initialization
-      this.startFlushInterval();
-
-      console.log('ParquetBufferManager initialized');
-    } catch (error) {
-      console.error('Failed to initialize ParquetBufferManager:', error);
-      throw error;
-    }
-  }
-
-  async ensureDirectories() {
-    const baseDir = path.join(this.baseDir, this.writerId);
-    await fs.promises.mkdir(baseDir, { recursive: true });
-    return baseDir;
+    // Ensure base directories exist
+    await this.ensureDirectories();
+    
+    // Load or create global metadata
+    await this.initializeMetadata();
+    
+    // Start flush interval after initialization
+    this.startFlushInterval();
   }
 
   async initializeMetadata() {
@@ -66,16 +54,73 @@ class ParquetBufferManager {
         this.metadata = {
           writer_id: this.writerId,
           next_db_id: 0,
-          next_table_id: 0,
-          next_file_id: 0,
-          wal_file_sequence_number: 0,
-          databases: [[0, { tables: new Map() }]]
+          next_table_id: 0
         };
         await this.writeGlobalMetadata();
       } else {
         throw error;
       }
     }
+  }
+
+  async writeGlobalMetadata() {
+    const metadataPath = path.join(this.baseDir, this.writerId, 'metadata.json');
+    const tempPath = `${metadataPath}.tmp`;
+    try {
+      await fs.promises.writeFile(tempPath, JSON.stringify(this.metadata, null, 2));
+      await fs.promises.rename(tempPath, metadataPath);
+    } catch (error) {
+      try {
+        await fs.promises.unlink(tempPath);
+      } catch (e) {
+        // Ignore cleanup errors
+      }
+      throw error;
+    }
+  }
+
+  async getTypeMetadata(type) {
+    const metadataPath = this.getTypeMetadataPath(type);
+    try {
+      const data = await fs.promises.readFile(metadataPath, 'utf8');
+      return JSON.parse(data);
+    } catch (error) {
+      if (error.code === 'ENOENT') {
+        // Initialize new type metadata
+        const metadata = {
+          type,
+          parquet_size_bytes: 0,
+          row_count: 0,
+          min_time: null,
+          max_time: null,
+          wal_sequence: 0,
+          files: [] // Array of file entries
+        };
+        await this.writeTypeMetadata(type, metadata);
+        return metadata;
+      }
+      throw error;
+    }
+  }
+
+  async getFilePath(type, timestamp) {
+    const typeMetadata = await this.getTypeMetadata(type);
+    const date = new Date(timestamp);
+    const datePath = date.toISOString().split('T')[0];
+    const hour = date.getHours().toString().padStart(2, '0');
+    const minute = Math.floor(date.getMinutes() / 10) * 10;
+    const minutePath = minute.toString().padStart(2, '0');
+    
+    return path.join(
+      this.baseDir,
+      this.writerId,
+      'dbs',
+      `hep-${this.metadata.next_db_id}`,
+      `hep_${type}-${this.metadata.next_table_id}`,
+      datePath,
+      `${hour}-${minutePath}`,
+      `${typeMetadata.wal_sequence.toString().padStart(10, '0')}.parquet`
+    );
   }
 
   add(type, data) {
@@ -97,60 +142,44 @@ class ParquetBufferManager {
     }, this.flushInterval);
   }
 
-  getFilePath(type, timestamp) {
-    const date = new Date(timestamp);
-    const datePath = date.toISOString().split('T')[0];
-    const hour = date.getHours().toString().padStart(2, '0');
-    const minute = Math.floor(date.getMinutes() / 10) * 10;
-    const minutePath = minute.toString().padStart(2, '0');
-    
-    return path.join(
-      this.baseDir,
-      this.writerId,
-      'dbs',
-      `hep-${this.metadata.next_db_id}`,
-      `hep_${type}-${this.metadata.next_table_id}`,
-      datePath,
-      `${hour}-${minutePath}`,
-      `${this.metadata.wal_file_sequence_number.toString().padStart(10, '0')}.parquet`
-    );
-  }
-
   async flush(type) {
     const buffer = this.buffers.get(type);
     if (!buffer?.length) return;
-
+    
     try {
-      const timestamps = [];
-      const rcinfos = [];
-      const payloads = [];
-
-      buffer.forEach(data => {
-        timestamps.push(new Date(data.create_date));
-        rcinfos.push(JSON.stringify(data.protocol_header));
-        payloads.push(data.raw || '');
-      });
-
-      const table = arrow.tableFromArrays({
-        timestamp: timestamps,
-        rcinfo: rcinfos,
-        payload: payloads
-      });
-
-      const wasmTable = Table.fromIPCStream(arrow.tableToIPC(table, "stream"));
-      const parquetData = writeParquet(wasmTable, this.writerProperties);
-
-      // Get file path based on first timestamp
-      const filePath = this.getFilePath(type, timestamps[0]);
-      
-      // Ensure directory exists
+      const filePath = await this.getFilePath(type, buffer[0].create_date);
       await fs.promises.mkdir(path.dirname(filePath), { recursive: true });
-      
-      // Write parquet file
-      await fs.promises.writeFile(filePath, parquetData);
 
+      // Create writer
+      const writer = await parquet.ParquetWriter.openFile(
+        this.schema,
+        filePath,
+        this.writerOptions
+      );
+
+      // Write rows
+      for (const data of buffer) {
+        await writer.appendRow({
+          timestamp: new Date(data.create_date),
+          rcinfo: JSON.stringify(data.protocol_header),
+          payload: data.raw || ''
+        });
+      }
+
+      // Close writer to flush data
+      await writer.close();
+
+      // Get file stats
+      const stats = await fs.promises.stat(filePath);
+      
       // Update metadata
-      this.updateMetadata(type, filePath, parquetData.length, buffer.length, timestamps);
+      await this.updateMetadata(
+        type, 
+        filePath, 
+        stats.size, 
+        buffer.length, 
+        buffer.map(d => new Date(d.create_date))
+      );
       
       // Clear buffer
       this.buffers.set(type, []);
@@ -161,40 +190,66 @@ class ParquetBufferManager {
     }
   }
 
-  updateMetadata(type, filePath, sizeBytes, rowCount, timestamps) {
+  getTypeMetadataPath(type) {
+    return path.join(
+      this.baseDir,
+      this.writerId,
+      'dbs',
+      `hep-${this.metadata.next_db_id}`,
+      `hep_${type}-${this.metadata.next_table_id}`,
+      'metadata.json'
+    );
+  }
+
+  async writeTypeMetadata(type, metadata) {
+    const metadataPath = this.getTypeMetadataPath(type);
+    await fs.promises.mkdir(path.dirname(metadataPath), { recursive: true });
+    
+    const tempPath = `${metadataPath}.tmp`;
+    try {
+      await fs.promises.writeFile(tempPath, JSON.stringify(metadata, null, 2));
+      await fs.promises.rename(tempPath, metadataPath);
+    } catch (error) {
+      try {
+        await fs.promises.unlink(tempPath);
+      } catch (e) {
+        // Ignore cleanup errors
+      }
+      throw error;
+    }
+  }
+
+  async updateMetadata(type, filePath, sizeBytes, rowCount, timestamps) {
     const minTime = Math.min(...timestamps.map(t => t.getTime() * 1000000));
     const maxTime = Math.max(...timestamps.map(t => t.getTime() * 1000000));
     const chunkTime = Math.floor(minTime / 600000000000) * 600000000000;
 
+    // Get current type metadata
+    const typeMetadata = await this.getTypeMetadata(type);
+
     const fileInfo = {
-      id: this.metadata.next_file_id++,
+      id: typeMetadata.files.length,
       path: filePath,
       size_bytes: sizeBytes,
       row_count: rowCount,
       chunk_time: chunkTime,
       min_time: minTime,
-      max_time: maxTime
+      max_time: maxTime,
+      type: 'raw'
     };
 
-    // Update tables map
-    const tables = this.metadata.databases[0][1].tables;
-    if (!tables.has(type)) {
-      tables.set(type, []);
-    }
-    tables.get(type).push(fileInfo);
+    // Update type metadata
+    typeMetadata.files.push(fileInfo);
+    typeMetadata.parquet_size_bytes += sizeBytes;
+    typeMetadata.row_count += rowCount;
+    typeMetadata.min_time = typeMetadata.min_time ? 
+      Math.min(typeMetadata.min_time, minTime) : minTime;
+    typeMetadata.max_time = typeMetadata.max_time ?
+      Math.max(typeMetadata.max_time, maxTime) : maxTime;
+    typeMetadata.wal_sequence++;
 
-    // Update global metadata
-    this.metadata.parquet_size_bytes += sizeBytes;
-    this.metadata.row_count += rowCount;
-    this.metadata.min_time = this.metadata.min_time ? 
-      Math.min(this.metadata.min_time, minTime) : minTime;
-    this.metadata.max_time = this.metadata.max_time ?
-      Math.max(this.metadata.max_time, maxTime) : maxTime;
-    this.metadata.wal_file_sequence_number++;
-
-    // Write metadata file
-    const metadataPath = path.join(this.baseDir, this.writerId, 'metadata.json');
-    fs.writeFileSync(metadataPath, JSON.stringify(this.metadata, null, 2));
+    // Write updated metadata
+    await this.writeTypeMetadata(type, typeMetadata);
   }
 
   async close() {
@@ -203,9 +258,18 @@ class ParquetBufferManager {
     }
   }
 
-  async writeGlobalMetadata() {
-    const metadataPath = path.join(this.baseDir, this.writerId, 'metadata.json');
-    await fs.promises.writeFile(metadataPath, JSON.stringify(this.metadata, null, 2));
+  async ensureDirectories() {
+    const metadataDir = path.join(this.baseDir, this.writerId);
+    await fs.promises.mkdir(metadataDir, { recursive: true });
+    
+    // Write initial metadata file if it doesn't exist
+    const metadataPath = path.join(metadataDir, 'metadata.json');
+    if (!fs.existsSync(metadataPath)) {
+      await fs.promises.writeFile(
+        metadataPath,
+        JSON.stringify(this.metadata, null, 2)
+      );
+    }
   }
 }
 
@@ -217,88 +281,339 @@ class CompactionManager {
       '1h': 60 * 60 * 1000,
       '24h': 24 * 60 * 60 * 1000
     };
-    
-    // Initialize DuckDB
-    this.db = new duckdb.Database(':memory:');
-    this.startCompactionJobs();
-    console.log(`Initialized DuckDB ${duckdb.version()} for compaction`);
+    this.compactionLock = new Map();
+  }
+
+  async initialize() {
+    try {
+      // Initialize DuckDB
+      this.db = await DuckDBInstance.create(':memory:');
+      console.log(`Initialized DuckDB for parquet compaction`);
+      
+      // Run initial compaction check
+      await this.checkAndCompact();
+      
+      // Start compaction jobs after initialization
+      this.startCompactionJobs();
+    } catch (error) {
+      console.error('Failed to initialize CompactionManager:', error);
+      throw error;
+    }
   }
 
   startCompactionJobs() {
     // Run compaction checks every minute
-    setInterval(() => this.checkAndCompact(), 60 * 1000);
+    this.compactionInterval = setInterval(async () => {
+      try {
+        console.log('Running scheduled compaction check...');
+        await this.checkAndCompact();
+      } catch (error) {
+        console.error('Compaction job error:', error);
+      }
+    }, 60 * 1000);
+  }
+
+  async verifyAndCleanMetadata(type, metadata) {
+    const existingFiles = [];
+    const removedFiles = [];
+    
+    for (const file of metadata.files) {
+      try {
+        await fs.promises.access(file.path);
+        existingFiles.push(file);
+      } catch (error) {
+        if (error.code === 'ENOENT') {
+          console.log(`Removing missing file from metadata: ${file.path}`);
+          removedFiles.push(file);
+        } else {
+          throw error;
+        }
+      }
+    }
+
+    if (removedFiles.length > 0) {
+      // Update metadata to remove missing files
+      metadata.files = existingFiles;
+      
+      // Recalculate totals
+      metadata.parquet_size_bytes = existingFiles.reduce((sum, f) => sum + f.size_bytes, 0);
+      metadata.row_count = existingFiles.reduce((sum, f) => sum + f.row_count, 0);
+      
+      if (existingFiles.length > 0) {
+        metadata.min_time = Math.min(...existingFiles.map(f => f.min_time));
+        metadata.max_time = Math.max(...existingFiles.map(f => f.max_time));
+      } else {
+        metadata.min_time = null;
+        metadata.max_time = null;
+      }
+
+      // Write updated metadata
+      await this.bufferManager.writeTypeMetadata(type, metadata);
+      console.log(`Cleaned up ${removedFiles.length} missing files from metadata`);
+    }
+
+    return metadata;
   }
 
   async checkAndCompact() {
-    const metadata = this.bufferManager.metadata;
-    const tables = metadata.databases[0][1].tables;
+    const typeDirs = await this.getTypeDirectories();
+    console.log('Found types for compaction:', typeDirs);
 
-    for (const [type, files] of tables.entries()) {
-      await this.compactTimeRange(type, files, '10m', '1h');
-      await this.compactTimeRange(type, files, '1h', '24h');
+    for (const type of typeDirs) {
+      if (this.compactionLock.get(type)) {
+        console.log(`Skipping compaction for type ${type} - already running`);
+        continue;
+      }
+
+      try {
+        this.compactionLock.set(type, true);
+        let metadata = await this.bufferManager.getTypeMetadata(type);
+        
+        if (!metadata.files || !metadata.files.length) {
+          console.log(`No files found in metadata for type ${type}`);
+          continue;
+        }
+
+        // Verify and clean metadata before compaction
+        metadata = await this.verifyAndCleanMetadata(type, metadata);
+        
+        if (!metadata.files.length) {
+          console.log(`No valid files remain after metadata cleanup for type ${type}`);
+          continue;
+        }
+        
+        console.log(`Type ${type} has ${metadata.files.length} files to consider for compaction`);
+        console.log('Files:', metadata.files.map(f => ({
+          path: f.path,
+          type: f.type,
+          min_time: new Date(f.min_time / 1000000).toISOString(),
+          max_time: new Date(f.max_time / 1000000).toISOString()
+        })));
+        
+        await this.compactTimeRange(type, metadata.files, '10m', '1h');
+        await this.compactTimeRange(type, metadata.files, '1h', '24h');
+      } catch (error) {
+        console.error(`Error during compaction for type ${type}:`, error);
+      } finally {
+        this.compactionLock.set(type, false);
+      }
+    }
+  }
+
+  async getTypeDirectories() {
+    const baseDir = path.join(
+      this.bufferManager.baseDir,
+      this.bufferManager.writerId,
+      'dbs'
+    );
+    
+    try {
+      const entries = await fs.promises.readdir(baseDir, { withFileTypes: true });
+      const types = new Set();
+      
+      for (const entry of entries) {
+        if (entry.isDirectory() && entry.name.startsWith('hep-')) {
+          const subEntries = await fs.promises.readdir(path.join(baseDir, entry.name));
+          for (const subEntry of subEntries) {
+            if (subEntry.startsWith('hep_')) {
+              // Extract type from hep_TYPE-ID format
+              const match = subEntry.match(/hep_(\d+)-/);
+              if (match) {
+                types.add(parseInt(match[1]));
+              }
+            }
+          }
+        }
+      }
+      
+      console.log('Found directories:', Array.from(types).map(type => ({
+        type,
+        path: path.join(baseDir, `hep-${this.bufferManager.metadata.next_db_id}`, `hep_${type}-${this.bufferManager.metadata.next_table_id}`)
+      })));
+      
+      return Array.from(types);
+    } catch (error) {
+      if (error.code === 'ENOENT') {
+        console.log('No dbs directory found at:', baseDir);
+        return [];
+      }
+      console.error('Error reading type directories:', error);
+      throw error;
     }
   }
 
   async compactTimeRange(type, files, fromRange, toRange) {
-    const now = Date.now() * 1000000; // Convert to nanoseconds
+    const now = Date.now() * 1000000;
     const interval = this.compactionIntervals[fromRange];
-    const targetInterval = this.compactionIntervals[toRange];
     
-    // Group files by their target interval
+    // Group all files (including compacted) by hour
     const groups = new Map();
     
+    console.log(`Checking ${files.length} files for ${fromRange} compaction...`);
+    
     files.forEach(file => {
-      // Skip files that are too new
-      if (now - file.max_time < interval) return;
+      const isCompacted = path.basename(file.path).startsWith('c_');
+      const fileAge = now - file.max_time;
       
-      // Calculate target group timestamp
-      const groupTime = Math.floor(file.chunk_time / targetInterval) * targetInterval;
-      if (!groups.has(groupTime)) {
-        groups.set(groupTime, []);
+      // Different rules for raw vs compacted files
+      if (isCompacted) {
+        // Compacted files are never too new, they're consolidation targets
+        console.log(`Found compacted file ${path.basename(file.path)} as potential merge target`);
+      } else {
+        // Only raw files have age restrictions
+        if (fileAge <= interval) {
+          console.log(`File ${path.basename(file.path)} is too new for compaction (age: ${fileAge / 1000000}s)`);
+          return;
+        }
+        if (fileAge > (interval * 2)) {
+          console.log(`Found orphaned raw file ${path.basename(file.path)} (age: ${fileAge / 1000000}s)`);
+        }
       }
-      groups.get(groupTime).push(file);
+      
+      // Calculate target hour timestamp (floor to hour)
+      const timestamp = new Date(file.chunk_time / 1000000);
+      const hourTime = new Date(
+        timestamp.getFullYear(),
+        timestamp.getMonth(),
+        timestamp.getDate(),
+        timestamp.getHours()
+      ).getTime();
+      
+      if (!groups.has(hourTime)) {
+        groups.set(hourTime, {
+          raw: [],
+          compacted: []
+        });
+      }
+
+      // Separate raw and compacted files
+      if (isCompacted) {
+        groups.get(hourTime).compacted.push(file);
+      } else {
+        groups.get(hourTime).raw.push(file);
+      }
     });
 
-    // Compact each group that has enough files
-    for (const [groupTime, groupFiles] of groups) {
-      if (groupFiles.length < 2) continue;
+    // Log grouping results
+    for (const [hourTime, { raw, compacted }] of groups) {
+      console.log(`Hour ${new Date(hourTime).toISOString()}: ${raw.length} raw files, ${compacted.length} compacted files`);
+    }
 
-      await this.compactFiles(type, groupFiles, toRange);
+    // Process each hour group
+    for (const [hourTime, { raw, compacted }] of groups) {
+      try {
+        let filesToCompact = [];
+        let targetCompacted = null;
+
+        // Verify files exist before including them
+        for (const file of raw) {
+          try {
+            await fs.promises.access(file.path);
+            filesToCompact.push(file);
+          } catch (error) {
+            if (error.code !== 'ENOENT') {
+              throw error;
+            }
+          }
+        }
+
+        // Find the most recent compacted file as merge target
+        for (const file of compacted.sort((a, b) => b.max_time - a.max_time)) {
+          try {
+            await fs.promises.access(file.path);
+            targetCompacted = file;
+            break;
+          } catch (error) {
+            if (error.code !== 'ENOENT') {
+              throw error;
+            }
+          }
+        }
+
+        // Decide whether to compact based on files available
+        if (filesToCompact.length >= 2 || (filesToCompact.length > 0 && targetCompacted)) {
+          if (targetCompacted) {
+            filesToCompact.push(targetCompacted);
+            console.log(`Merging ${filesToCompact.length - 1} raw files into existing compacted file ${path.basename(targetCompacted.path)}`);
+          } else {
+            console.log(`Creating new compacted file from ${filesToCompact.length} raw files`);
+          }
+          await this.compactFiles(type, filesToCompact, toRange);
+        } else {
+          console.log(`Not enough files to compact for hour ${new Date(hourTime).toISOString()}`);
+        }
+      } catch (error) {
+        console.error(`Error compacting files for hour ${new Date(hourTime).toISOString()}:`, error);
+      }
     }
   }
 
+  async getCompactedFilePath(type, timestamp, typeMetadata) {
+    const date = timestamp.toISOString().split('T')[0];
+    const hour = timestamp.getHours().toString().padStart(2, '0');
+    
+    return path.join(
+      this.bufferManager.baseDir,
+      this.bufferManager.writerId,
+      'dbs',
+      `hep-${this.bufferManager.metadata.next_db_id}`,
+      `hep_${type}-${this.bufferManager.metadata.next_table_id}`,
+      date,
+      `${hour}-00`,  // Always use top of the hour for compacted files
+      `c_${typeMetadata.wal_sequence.toString().padStart(10, '0')}.parquet`
+    );
+  }
+
   async compactFiles(type, files, targetRange) {
+    // Sort files by timestamp to ensure consistent ordering
+    files.sort((a, b) => a.min_time - b.min_time);
+    
+    const timestamp = new Date(files[0].chunk_time / 1000000);
+    const typeMetadata = await this.bufferManager.getTypeMetadata(type);
+    const newPath = await this.getCompactedFilePath(type, timestamp, typeMetadata);
+    
     try {
-      const newPath = this.getCompactedFilePath(type, new Date(files[0].chunk_time / 1000000), targetRange);
+      // Check if all source files exist before starting
+      for (const file of files) {
+        await fs.promises.access(file.path);
+      }
+
+      // Create directory for new file
       await fs.promises.mkdir(path.dirname(newPath), { recursive: true });
 
-      // Create file list for DuckDB query
-      const fileListQuery = files
-        .map(f => `'${f.path}'`)
-        .join(',');
+      // Create new writer
+      const writer = await parquet.ParquetWriter.openFile(
+        this.bufferManager.schema,
+        newPath,
+        this.bufferManager.writerOptions
+      );
 
-      // Execute merge query with time-based sorting
-      const mergeQuery = `COPY (
-        SELECT * FROM read_parquet([${fileListQuery}]) 
-        ORDER BY timestamp
-      ) TO '${newPath}' (
-        FORMAT 'parquet',
-        COMPRESSION 'ZSTD',
-        ROW_GROUP_SIZE 100000
-      );`;
+      // Track total rows for logging
+      let totalRows = 0;
 
-      await new Promise((resolve, reject) => {
-        this.db.exec(mergeQuery, (err) => {
-          if (err) reject(err);
-          else resolve();
-        });
-      });
+      // Read and merge all files
+      for (const file of files) {
+        const reader = await parquet.ParquetReader.openFile(file.path);
+        const cursor = reader.getCursor();
+        
+        let record = null;
+        while (record = await cursor.next()) {
+          await writer.appendRow(record);
+          totalRows++;
+        }
+        
+        await reader.close();
+      }
 
-      // Get stats from merged file for metadata
+      // Close writer and ensure file is written
+      await writer.close();
+      await fs.promises.access(newPath);
+
+      // Get stats from new file
       const stats = await this.getFileStats(newPath);
       
-      // Perform cleanup and metadata update atomically
-      await this.finalizeCompaction(type, files, {
+      // Update metadata first
+      await this.updateCompactionMetadata(type, files, {
         path: newPath,
         size_bytes: stats.size_bytes,
         row_count: stats.row_count,
@@ -308,83 +623,152 @@ class CompactionManager {
         range: targetRange
       });
 
-      console.log(`Compacted ${files.length} files into ${newPath} (${stats.row_count} rows)`);
+      // Write metadata
+      await this.writeMetadata();
+
+      // Only after metadata is written, clean up old files
+      await this.cleanupCompactedFiles(files);
+
+      const fileTypes = files.map(f => path.basename(f.path).startsWith('c_') ? 'compacted' : 'raw');
+      const summary = `${fileTypes.filter(t => t === 'raw').length} raw, ${fileTypes.filter(t => t === 'compacted').length} compacted`;
+      console.log(`Compacted ${files.length} files (${summary}) into ${newPath} (${totalRows} rows)`);
     } catch (error) {
       console.error(`Compaction error for type ${type}:`, error);
-      // Cleanup failed compaction file if it exists
       try {
         await fs.promises.unlink(newPath);
       } catch (e) {
         // Ignore cleanup errors
       }
+      throw error;
     }
   }
 
   async getFileStats(filePath) {
-    const statsQuery = `
-      SELECT 
-        COUNT(*) as row_count,
-        MIN(timestamp) as min_time,
-        MAX(timestamp) as max_time
-      FROM read_parquet('${filePath}');
-    `;
-
-    const stats = await new Promise((resolve, reject) => {
-      this.db.all(statsQuery, (err, rows) => {
-        if (err) reject(err);
-        else resolve(rows[0]);
-      });
-    });
-
+    const reader = await parquet.ParquetReader.openFile(filePath);
+    const cursor = reader.getCursor();
+    
+    let rowCount = 0;
+    let minTime = Infinity;
+    let maxTime = -Infinity;
+    
+    let record = null;
+    while (record = await cursor.next()) {
+      rowCount++;
+      const timestamp = record.timestamp.getTime();
+      minTime = Math.min(minTime, timestamp);
+      maxTime = Math.max(maxTime, timestamp);
+    }
+    
+    await reader.close();
+    
     const { size: sizeBytes } = await fs.promises.stat(filePath);
 
     return {
       size_bytes: sizeBytes,
-      row_count: stats.row_count,
-      min_time: new Date(stats.min_time).getTime() * 1000000,
-      max_time: new Date(stats.max_time).getTime() * 1000000
+      row_count: rowCount,
+      min_time: minTime * 1000000, // Convert to nanoseconds
+      max_time: maxTime * 1000000
     };
   }
 
-  async finalizeCompaction(type, oldFiles, newFile) {
+  async updateCompactionMetadata(type, oldFiles, newFile) {
+    const typeMetadata = await this.bufferManager.getTypeMetadata(type);
+
+    // Remove old files from metadata
+    oldFiles.forEach(oldFile => {
+      const index = typeMetadata.files.findIndex(f => f.path === oldFile.path);
+      if (index !== -1) {
+        typeMetadata.parquet_size_bytes -= oldFile.size_bytes;
+        typeMetadata.row_count -= oldFile.row_count;
+        typeMetadata.files.splice(index, 1);
+      }
+    });
+
+    // Add new compacted file
+    const newFileEntry = {
+      id: typeMetadata.files.length,
+      ...newFile,
+      type: path.basename(newFile.path).startsWith('c_') ? 'compacted' : 'raw'
+    };
+    typeMetadata.files.push(newFileEntry);
+
+    // Update global metadata
+    typeMetadata.parquet_size_bytes += newFile.size_bytes;
+    typeMetadata.row_count += newFile.row_count;
+    typeMetadata.min_time = typeMetadata.min_time ? 
+      Math.min(typeMetadata.min_time, newFile.min_time) : newFile.min_time;
+    typeMetadata.max_time = typeMetadata.max_time ?
+      Math.max(typeMetadata.max_time, newFile.max_time) : newFile.max_time;
+
+    // Write updated metadata
+    await this.bufferManager.writeTypeMetadata(type, typeMetadata);
+  }
+
+  async writeMetadata() {
+    const metadataDir = path.join(
+      this.bufferManager.baseDir, 
+      this.bufferManager.writerId
+    );
+    
+    await fs.promises.mkdir(metadataDir, { recursive: true });
+    
+    const metadataPath = path.join(metadataDir, 'metadata.json');
+    const tempPath = `${metadataPath}.tmp`;
+    
     try {
-      // Update metadata first
-      this.updateCompactionMetadata(type, oldFiles, newFile);
-
-      // Clean up old files and their parent directories
-      await this.cleanupCompactedFiles(oldFiles);
-
-      // Write updated metadata to disk
-      await this.writeMetadata();
+      // Write metadata to temp file
+      await fs.promises.writeFile(
+        tempPath, 
+        JSON.stringify(this.bufferManager.metadata, null, 2)
+      );
+      
+      // Ensure temp file exists before rename
+      await fs.promises.access(tempPath);
+      
+      // Atomic rename
+      await fs.promises.rename(tempPath, metadataPath);
+      
+      // Verify metadata file exists
+      await fs.promises.access(metadataPath);
     } catch (error) {
-      console.error('Error during compaction finalization:', error);
-      // Attempt to rollback by removing the new file
+      // Cleanup temp file if it exists
       try {
-        await fs.promises.unlink(newFile.path);
+        await fs.promises.unlink(tempPath);
       } catch (e) {
-        console.error('Error during rollback:', e);
+        // Ignore cleanup errors
       }
       throw error;
     }
   }
 
   async cleanupCompactedFiles(files) {
-    const dirsToCheck = new Set();
-
     // Delete files first
-    await Promise.all(files.map(async (file) => {
+    for (const file of files) {
       try {
+        await fs.promises.access(file.path);
         await fs.promises.unlink(file.path);
-        // Add parent directories for cleanup check
-        let dirPath = path.dirname(file.path);
-        while (dirPath.startsWith(this.bufferManager.baseDir)) {
-          dirsToCheck.add(dirPath);
-          dirPath = path.dirname(dirPath);
-        }
       } catch (error) {
-        console.error(`Error deleting file ${file.path}:`, error);
+        if (error.code !== 'ENOENT') {
+          console.error(`Error deleting file ${file.path}:`, error);
+        }
       }
-    }));
+    }
+
+    // Collect directories to check
+    const dirsToCheck = new Set();
+    files.forEach(file => {
+      let dirPath = path.dirname(file.path);
+      while (dirPath.startsWith(this.bufferManager.baseDir)) {
+        dirsToCheck.add(dirPath);
+        dirPath = path.dirname(dirPath);
+      }
+    });
+
+    // Get current hour for comparison
+    const now = new Date();
+    const currentDate = now.toISOString().split('T')[0];
+    const currentHour = now.getHours().toString().padStart(2, '0');
+    const currentHourPath = `${currentDate}/${currentHour}`;
 
     // Clean up empty directories from deepest to shallowest
     const sortedDirs = Array.from(dirsToCheck)
@@ -392,97 +776,54 @@ class CompactionManager {
 
     for (const dir of sortedDirs) {
       try {
+        // Skip if this is the current hour's directory
+        if (dir.includes(currentHourPath)) {
+          console.log(`Skipping cleanup of current hour directory: ${dir}`);
+          continue;
+        }
+
         const files = await fs.promises.readdir(dir);
+        
+        // For hour directories, also check if it's from a past hour
+        if (dir.match(/\d{4}-\d{2}-\d{2}\/\d{2}-\d{2}/)) {
+          const dirDate = path.basename(path.dirname(dir));
+          const dirHour = dir.split('/').pop().split('-')[0];
+          const dirPath = `${dirDate}/${dirHour}`;
+          
+          if (dirPath >= currentHourPath) {
+            console.log(`Skipping cleanup of current or future hour directory: ${dir}`);
+            continue;
+          }
+        }
+
         if (files.length === 0) {
           await fs.promises.rmdir(dir);
+          console.log(`Cleaned up empty directory: ${dir}`);
+        } else {
+          console.log(`Directory not empty, skipping cleanup: ${dir} (${files.length} files)`);
         }
       } catch (error) {
-        // Ignore errors during directory cleanup
+        if (error.code !== 'ENOENT') {
+          console.error(`Error cleaning up directory ${dir}:`, error);
+        }
       }
     }
   }
 
-  updateCompactionMetadata(type, oldFiles, newFile) {
-    const tables = this.bufferManager.metadata.databases[0][1].tables;
-    const fileList = tables.get(type);
-
-    // Remove old files from metadata
-    oldFiles.forEach(oldFile => {
-      const index = fileList.findIndex(f => f.path === oldFile.path);
-      if (index !== -1) {
-        // Subtract old file stats from global metadata
-        this.bufferManager.metadata.parquet_size_bytes -= oldFile.size_bytes;
-        this.bufferManager.metadata.row_count -= oldFile.row_count;
-        fileList.splice(index, 1);
-      }
-    });
-
-    // Add new compacted file
-    const newFileEntry = {
-      id: this.bufferManager.metadata.next_file_id++,
-      ...newFile,
-      compaction_level: newFile.range
-    };
-    fileList.push(newFileEntry);
-
-    // Update global metadata
-    this.bufferManager.metadata.parquet_size_bytes += newFile.size_bytes;
-    this.bufferManager.metadata.row_count += newFile.row_count;
-    this.bufferManager.metadata.min_time = this.bufferManager.metadata.min_time ? 
-      Math.min(this.bufferManager.metadata.min_time, newFile.min_time) : newFile.min_time;
-    this.bufferManager.metadata.max_time = this.bufferManager.metadata.max_time ?
-      Math.max(this.bufferManager.metadata.max_time, newFile.max_time) : newFile.max_time;
-  }
-
-  async writeMetadata() {
-    const metadataPath = path.join(
-      this.bufferManager.baseDir, 
-      this.bufferManager.writerId, 
-      'metadata.json'
-    );
-    
-    // Write to temporary file first
-    const tempPath = `${metadataPath}.tmp`;
-    await fs.promises.writeFile(
-      tempPath, 
-      JSON.stringify(this.bufferManager.metadata, null, 2)
-    );
-    
-    // Atomic rename
-    await fs.promises.rename(tempPath, metadataPath);
-  }
-
-  getCompactedFilePath(type, timestamp, range) {
-    const date = timestamp.toISOString().split('T')[0];
-    const hour = timestamp.getHours().toString().padStart(2, '0');
-    
-    return path.join(
-      this.bufferManager.baseDir,
-      this.bufferManager.writerId,
-      'compacted',
-      range,
-      `hep-${this.bufferManager.metadata.next_db_id}`,
-      `hep_${type}-${this.bufferManager.metadata.next_table_id}`,
-      date,
-      hour,
-      `${this.bufferManager.metadata.wal_file_sequence_number.toString().padStart(10, '0')}.parquet`
-    );
-  }
-
   async close() {
-    return new Promise((resolve, reject) => {
-      this.db.close((err) => {
-        if (err) reject(err);
-        else resolve();
-      });
-    });
+    if (this.compactionInterval) {
+      clearInterval(this.compactionInterval);
+    }
+    if (this.db) {
+      await this.db.close();
+    }
   }
 }
 
 class HEPServer {
   constructor(config = {}) {
     this.debug = config.debug || false;
-    this.queryClient = null;
+    this.queryClient = null;  // Add queryClient property
   }
 
   async initialize() {
@@ -493,6 +834,7 @@ class HEPServer {
       this.compaction = new CompactionManager(this.buffer);
       await this.compaction.initialize();
 
+      // Initialize query client
       this.queryClient = new QueryClient(this.buffer.baseDir);
       await this.queryClient.initialize();
       
@@ -507,88 +849,98 @@ class HEPServer {
     const port = parseInt(process.env.PORT) || 9069;
     const httpPort = parseInt(process.env.HTTP_PORT) || (port + 1);
     const host = process.env.HOST || "0.0.0.0";
+    const retryAttempts = 3;
+    const retryDelay = 1000;
 
-    try {
-      // Start HEP servers (TCP/UDP)
-      const tcpServer = Bun.listen({
-        hostname: host,
-        port: port,
-        socket: {
-          data: (socket, data) => this.handleData(data, socket),
-          error: (socket, error) => console.error('TCP error:', error),
-        }
-      });
-
-      const udpServer = Bun.udpSocket({
-        hostname: host,
-        port: port,
-        udp: true,
-        socket: {
-          data: (socket, data) => this.handleData(data, socket),
-          error: (socket, error) => console.error('UDP error:', error),
-        }
-      });
-
-      // Start HTTP server for queries
-      const self = this; // Store reference to this
-      const httpServer = Bun.serve({
-        hostname: host,
-        port: httpPort,
-        async fetch(req) {
-          const url = new URL(req.url);
-          
-          // Handle query endpoint
-          if (url.pathname === '/query') {
-            try {
-              let query;
-              
-              if (req.method === 'GET') {
-                query = url.searchParams.get('q');
-                if (!query) {
-                  return new Response('Missing query parameter "q"', { status: 400 });
-                }
-              } else if (req.method === 'POST') {
-                const body = await req.json();
-                query = body.query;
-                if (!query) {
-                  return new Response('Missing query in request body', { status: 400 });
-                }
-              } else {
-                return new Response('Method not allowed', { status: 405 });
-              }
-
-              const result = await self.queryClient.query(query);
-              return new Response(JSON.stringify(result), {
-                headers: { 'Content-Type': 'application/json' }
-              });
-            } catch (error) {
-              console.error('Query error:', error);
-              return new Response(JSON.stringify({ error: error.message }), {
-                status: 500,
-                headers: { 'Content-Type': 'application/json' }
-              });
-            }
+    for (let attempt = 1; attempt <= retryAttempts; attempt++) {
+      try {
+        // Create TCP Server
+        const tcpServer = Bun.listen({
+          hostname: host,
+          port: port,
+          socket: {
+            data: (socket, data) => this.handleData(data, socket),
+            error: (socket, error) => console.error('TCP error:', error),
           }
+        });
 
-          // Handle other endpoints or 404
-          return new Response('Not found', { status: 404 });
+        // Create UDP Server
+        const udpServer = Bun.udpSocket({
+          hostname: host,
+          port: port,
+          udp: true,
+          socket: {
+            data: (socket, data) => this.handleData(data, socket),
+            error: (socket, error) => console.error('UDP error:', error),
+          }
+        });
+
+        // Create HTTP Server for queries
+        const self = this;
+        const httpServer = Bun.serve({
+          hostname: host,
+          port: httpPort,
+          async fetch(req) {
+            const url = new URL(req.url);
+            
+            if (url.pathname === '/query') {
+              try {
+                let query;
+                
+                if (req.method === 'GET') {
+                  query = url.searchParams.get('q');
+                  if (!query) {
+                    return new Response('Missing query parameter "q"', { status: 400 });
+                  }
+                } else if (req.method === 'POST') {
+                  const body = await req.json();
+                  query = body.query;
+                  if (!query) {
+                    return new Response('Missing query in request body', { status: 400 });
+                  }
+                } else {
+                  return new Response('Method not allowed', { status: 405 });
+                }
+
+                const result = await self.queryClient.query(query);
+                return new Response(JSON.stringify(result), {
+                  headers: { 'Content-Type': 'application/json' }
+                });
+              } catch (error) {
+                console.error('Query error:', error);
+                return new Response(JSON.stringify({ error: error.message }), {
+                  status: 500,
+                  headers: { 'Content-Type': 'application/json' }
+                });
+              }
+            }
+
+            return new Response('Not found', { status: 404 });
+          }
+        });
+
+        console.log(`HEP Server listening on ${host}:${port} (TCP/UDP)`);
+        console.log(`Query API listening on ${host}:${httpPort} (HTTP)`);
+        
+        // Store server references
+        this.tcpServer = tcpServer;
+        this.udpServer = udpServer;
+        this.httpServer = httpServer;
+
+        // Handle graceful shutdown
+        process.on('SIGTERM', this.shutdown.bind(this));
+        process.on('SIGINT', this.shutdown.bind(this));
+        
+        return;
+      } catch (error) {
+        console.error(`Attempt ${attempt}/${retryAttempts} failed:`, error);
+        
+        if (attempt === retryAttempts) {
+          throw new Error(`Failed to start server after ${retryAttempts} attempts: ${error.message}`);
         }
-      });
-
-      console.log(`HEP Server listening on ${host}:${port} (TCP/UDP)`);
-      console.log(`Query API listening on ${host}:${httpPort} (HTTP)`);
-
-      // Store server references
-      this.tcpServer = tcpServer;
-      this.udpServer = udpServer;
-      this.httpServer = httpServer;
-
-      // Handle graceful shutdown
-      process.on('SIGTERM', this.shutdown.bind(this));
-      process.on('SIGINT', this.shutdown.bind(this));
-    } catch (error) {
-      console.error('Failed to start servers:', error);
-      throw error;
+        
+        await new Promise(resolve => setTimeout(resolve, retryDelay));
+      }
     }
   }
 
@@ -608,10 +960,8 @@ class HEPServer {
 
   handleData(data, socket) {
     try {
-      console.log(`Received ${data.length} bytes from ${socket.remoteAddress}`);
       const processed = this.processHep(data, socket);
       const type = processed.type;
-      console.log(`Processed HEP type ${type}, adding to buffer`);
       this.buffer.add(type, processed);
     } catch (error) {
       console.error('Handle data error:', error);
@@ -648,7 +998,7 @@ class HEPServer {
 // Create and initialize server
 async function startServer() {
   try {
-    const server = new HEPServer({ debug: true });
+const server = new HEPServer({ debug: true });
     await server.initialize();  // Now we properly wait for initialization
     return server;
   } catch (error) {
