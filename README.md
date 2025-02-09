@@ -183,4 +183,4 @@ SELECT * FROM 'data/writer1/dbs/hep-0/hep_1-*/*/*/c_0000000001.parquet' LIMIT 10
 
 
 ## License
-MIT
+©️ QXIP BV - Released under the AGPLv3 Open Source License.
