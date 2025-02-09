@@ -814,14 +814,6 @@ class CompactionManager {
     if (this.compactionInterval) {
       clearInterval(this.compactionInterval);
     }
-    if (this.db) {
-      try {
-        // DuckDB instance uses stop() not close()
-        await this.db.stop();
-      } catch (error) {
-        console.error('Error stopping DuckDB:', error);
-      }
-    }
   }
 }
 
@@ -988,13 +980,11 @@ class HEPServer {
       }
     }
     
-    // Close other resources
+    // Flush any remaining data
     try {
       await this.buffer.close();
-      await this.compaction.close();
-      await this.queryClient.close();
     } catch (error) {
-      console.error('Error closing resources:', error);
+      console.error('Error flushing buffers:', error);
     }
     
     console.log('Server shutdown complete');

@@ -228,10 +228,7 @@ class QueryClient {
   }
 
   async close() {
-    if (this.db) {
-      await this.db.close();
-      this.db = null;
-    }
+    // Nothing to clean up
   }
 }
 
