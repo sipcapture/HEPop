@@ -713,9 +713,14 @@ class CompactionManager {
       // Create directory for new file
       await fs.promises.mkdir(path.dirname(newPath), { recursive: true });
 
-      // Create new writer
+      // Determine if this is Line Protocol data by checking first file's schema
+      const firstReader = await parquet.ParquetReader.openFile(files[0].path);
+      const schema = firstReader.getSchema();
+      await firstReader.close();
+
+      // Create new writer with appropriate schema
       const writer = await parquet.ParquetWriter.openFile(
-        this.bufferManager.schema,
+        schema,  // Use the schema from the source files
         newPath,
         this.bufferManager.writerOptions
       );
