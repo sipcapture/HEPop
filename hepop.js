@@ -133,11 +133,17 @@ class ParquetBufferManager {
 
   add(type, data) {
     if (!this.buffers.has(type)) {
-      this.buffers.set(type, []);
+      this.buffers.set(type, {
+        rows: [],
+        schema: this.schema,  // Use HEP schema
+        isLineProtocol: false // Mark as HEP data
+      });
     }
-    this.buffers.get(type).push(data);
+
+    const buffer = this.buffers.get(type);
+    buffer.rows.push(data);
     
-    if (this.buffers.get(type).length >= this.bufferSize) {
+    if (buffer.rows.length >= this.bufferSize) {
       this.flush(type);
     }
   }
@@ -161,7 +167,7 @@ class ParquetBufferManager {
 
       // Create writer with appropriate schema
       const writer = await parquet.ParquetWriter.openFile(
-        buffer.schema || this.schema,
+        buffer.schema,
         filePath,
         this.writerOptions
       );
