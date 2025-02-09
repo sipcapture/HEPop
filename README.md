@@ -1,17 +1,23 @@
-# <img src="https://user-images.githubusercontent.com/1423657/55069501-8348c400-5084-11e9-9931-fefe0f9874a7.png" height=100/><img src="https://github.com/user-attachments/assets/c8e858ea-bb21-45f3-82ac-a1cd955f30cf" height=100>
+# <img src="https://user-images.githubusercontent.com/1423657/55069501-8348c400-5084-11e9-9931-fefe0f9874a7.png" height=100/><img src="https://github.com/user-attachments/assets/c8e858ea-bb21-45f3-82ac-a1cd955f30cf" height=150>
 
-**HEPop** is a prototype stand-alone [HEP](https://github.com/sipcapture/hep) Capture Server in Bun designed for [HOMER](https://github.com/sipcapture/homer)
+> **HEPop** is a high-performance [HEP](https://github.com/sipcapture/hep) Capture Server built with DuckDB, Bun and Apache Arrow/Parquet
 
-> This is a work in progress. Do not use it!
 
 ##### Features
 
-- [x] Bun Server
-  - [x] hep-js sockets
-  - [ ] parsip extractor
-- [x] InfluxDB3/FlightSQL API
-  - [x] Object Storage, Parquet
-- [ ] HOMER Search API
+- [x] High-Performance HEP Server
+  - [x] HEPv3/EEP Support (UDP/TCP)
+- [x] Apache Parquet Writer
+  - [x] Parquet Columnar WAL + Storage
+  - [x] Automatic Rotation + Compaction
+  - [x] Automatic Metadata Management
+- [x] DuckDB Integration
+  - [x] Parquet Data Compaction
+  - [x] Query Execution
+- [x] Search API
+  - [x] GET/POST Query API 
+  - [x] Metadata Table/Range Selection 
+
 
 ```mermaid
 %%{
@@ -29,71 +35,143 @@
 }%%
 
   graph TD;
-      HEP-Client-- hep -->server;
-      HEPop:9069-- gRPC -->IOx:8181;
-      server-->Storage;
-      server-->Parquet-Compactor;
-      Parquet-Compactor-->Storage;
+      HEP-Client-- UDP/TCP -->HEPop;
+      HEPop-->ParquetWriter;
+      ParquetWriter-->Storage;
+      ParquetWriter-->Metadata;
+      Storage-->Compactor;
+      Compactor-->Storage;
+      Compactor-->Metadata;
+      Storage-.->LocalFS;
       Storage-.->S3;
-      Storage-.->Filesystem;
+      Query-API-- GET/POST --> HEPop;
+      DuckDB-->Storage;
+      DuckDB-->Metadata;
 
-      subgraph server
-        HEPop:9069
-        IOx:8181
+      subgraph HEPop[HEPop Server]
+        ParquetWriter
+        Compactor
+        Metadata;
+        DuckDB;
       end
 
 ```
 
+### Install & Start
 
-### Install & Build
-
-Use Bun to generate a bundled standalone binary for `hepop`
+Use Bun to install, build and run `hepop`
 
 ```bash
 bun install
-bun build ./hepop.js --compile --outfile hepop
+bun start
 ```
 
-### Run
-Configure the client using ENV variables
+### Configuration
+Configure HEPop using Environment variables:
+- `PORT`: HEP server port _(default: 9069)_
+- `HTTP_PORT`: Query API port _(default: PORT + 1)_
+- `HOST`: Bind address _(default: "0.0.0.0")_
+- `PARQUET_DIR`: Data directory _(default: "./data")_
+- `WRITER_ID`: Instance identifier _(default: hostname)_
+
+
+### Storage Structure
+HEPop organizes data in a time-based directory structure:
 ```
-  INFLUX_HOST: "http://influxdb3:8181"
-  INFLUX_TOKEN: "optional"
-  INFLUX_DATABASE: "hep"
-```
-Run the HEP Server
-```bash
-./hepop
+data/
+└── writer1/
+    └── dbs/
+        └── hep-0/
+            ├── hep_1-0/
+            │   └── 2025-02-08/
+            │       ├── 19-00/
+            │       │   └── c_0000000001.parquet
+            │       ├── 19-10/
+            │       │   └── 0000000002.parquet
+            │       └── metadata.json
+            └── hep_100-0/
+                └── ...
 ```
 
-## Example
-The repository includes a stand-alone example using hepop and influxdb3 with file storage
-```
-docker compose up
-```
+- Each HEP type gets its own directory structure
+- Generated Parquet files are organized by date and hour
+- Compacted sets (c_) consolidate files for fast access
+- Metadata tracks all files, compaction and statistics
 
-### Ingestion
-Just send hep to the server using UDP/TCP. Each HEP type will generate a table _(hep_1, hep_100, etc)_
-
-### Query
-Query the HEP data using the HTTP API or Flight SQL
-#### API
-```bash
-curl http://127.0.0.1:8181/api/v3/query_sql --data '{"db": "hep", "q": "select * from hep_1 limit 1"}'
-```
 ```json
-[{"capture_id":2001,"capture_pass":"myHep","correlation_id":"067d3@127.0.0.1","dst_ip":"192.168.1.2","dst_port":5060,"ip_family":2,"payload":"OPTIONS sip:127.0.0.1 SIP/2.0Call-ID: 067d3@127.0.0.1CSeq: 9999 OPTIONSFrom: <sip:nodejs@127.0.0.1>;tag=2628881569To: <sip:nodejs@127.0.0.1>Via: SIP/2.0/UDP 127.0.0.1:48495;branch=z9hG4bK9b82aa8fb4c7705466a3456dfff7f384333332Max-Forwards: 70User-Agent: HEPGEN-UACContent-Length: 0","proto_type":0,"protocol":17,"src_ip":"192.168.1.1","src_port":5060,"time":"2025-01-26T18:44:07.120","time_sec":1737917047,"time_usec":120000,"type":"1"}]
+{
+  "type": 1,
+  "parquet_size_bytes": 379739,
+  "row_count": 359,
+  "min_time": 1739043338978000000,
+  "max_time": 1739043934193000000,
+  "wal_sequence": 32,
+  "files": [
+    {
+      "id": 0,
+      "path": "data/writer1/dbs/hep-0/hep_1-0/2025-02-08/19-00/c_0000000032.parquet",
+      "size_bytes": 379739,
+      "row_count": 359,
+      "chunk_time": 1739043000000000000,
+      "min_time": 1739043338978000000,
+      "max_time": 1739043934193000000,
+      "range": "1h",
+      "type": "compacted"
+    }
+  ]
+}
+
 ```
-#### Flight
-```sql
-influxdb3 query --database hep "SELECT * FROM hep_1 limit 1"
+
+
+### Query API
+Query the HEP data using the HTTP API. The server provides both GET and POST endpoints for querying data.
+
+#### Query Features
+- **Time Range**: If not specified, defaults to last 10 minutes
+- **Dynamic Columns**: Select specific columns or use * for all
+- **Filtering**: WHERE clause supports standard SQL conditions
+- **Sorting**: ORDER BY supports all columns
+- **Pagination**: Use LIMIT and OFFSET for paging
+- **Multiple Types**: Query different HEP types (hep_1, hep_100, etc.)
+
+
+#### Available Fields:
+- `timestamp/time`: Event timestamp
+- `rcinfo`: Raw HEP protocol header _(JSON)_
+- `payload`: HEP Protocol payload
+- `src_ip`: Source IP _(extracted from rcinfo)_
+- `dst_ip`: Destination IP _(extracted from rcinfo)_
+- `src_port`: Source port _(extracted from rcinfo)_
+- `dst_port`: Destination port _(extracted from rcinfo)_
+
+
+#### GET /query
+```bash
+# Query last 10 minutes of SIP messages
+curl "http://localhost:9070/query?q=SELECT time,src_ip,dst_ip,payload FROM hep_1 LIMIT 10"
+
+#### POST /query
+```bash
+# Simple query with POST
+curl -X POST http://localhost:9070/query \
+  -H "Content-Type: application/json" \
+  -d '{
+    "query": "SELECT time, src_ip, dst_ip FROM hep_1 LIMIT 10"
+  }'
+
+# Complex query with time range and conditions
+curl -X POST http://localhost:9070/query \
+  -H "Content-Type: application/json" \
+  -d '{
+    "query": "SELECT time, src_ip, dst_ip, payload FROM hep_1 WHERE time >= '\''2025-02-08T19:00:00'\'' AND payload LIKE '\''%INVITE%'\'' ORDER BY time DESC"
+  }'
 ```
+
+#### OLAP Query
+Query HEP data using DuckDB, ClickHouse, Databend or any Parquet-compatible tool:
 ```sql
-+------------+--------------+-----------------+-------------+----------+-----------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+------------+----------+-------------+----------+-------------------------+------------+-----------+------+
-| capture_id | capture_pass | correlation_id  | dst_ip      | dst_port | ip_family | payload                                                                                                                                                                                                                                                                                  | proto_type | protocol | src_ip      | src_port | time                    | time_sec   | time_usec | type |
-+------------+--------------+-----------------+-------------+----------+-----------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+------------+----------+-------------+----------+-------------------------+------------+-----------+------+
-| 2001       | myHep        | 067d3@127.0.0.1 | 192.168.1.2 | 5060     | 2         | OPTIONS sip:127.0.0.1 SIP/2.0Call-ID: 067d3@127.0.0.1CSeq: 9999 OPTIONSFrom: <sip:nodejs@127.0.0.1>;tag=2628881569To: <sip:nodejs@127.0.0.1>Via: SIP/2.0/UDP 127.0.0.1:48495;branch=z9hG4bK9b82aa8fb4c7705466a3456dfff7f384333332Max-Forwards: 70User-Agent: HEPGEN-UACContent-Length: 0 | 0          | 17       | 192.168.1.1 | 5060     | 2025-01-26T18:44:07.120 | 1737917047 | 120000    | 1    |
-+------------+--------------+-----------------+-------------+----------+-----------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+------------+----------+-------------+----------+-------------------------+------------+-----------+------+
+SELECT count() FROM 'data/writer1/dbs/hep-0/hep_1-*/*/*/c_0000000001.parquet' LIMIT 10;
 ```
 
 ### Query API
@@ -251,4 +329,5 @@ Environment variables:
 - `WRITER_ID`: Instance identifier (default: hostname)
 
 ## License
-MIT
+©️ QXIP BV - Released under the AGPLv3 Open Source License.
+

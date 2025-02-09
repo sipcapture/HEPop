@@ -1097,6 +1097,7 @@ class HEPServer {
                 console.error('Write error:', error);
                 return new Response(error.message, { status: 400 });
               }
+
             }
 
             return new Response('Not found', { status: 404 });

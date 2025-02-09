@@ -76,6 +76,7 @@ class QueryClient {
       }
     }
 
+
     // Extract time range
     const timeMatch = sql.match(/time\s*(>=|>|<=|<|=)\s*'([^']+)'/i);
     let timeRange;
@@ -99,6 +100,8 @@ class QueryClient {
           break;
       }
     } else {
+
+      // Default to last 10 minutes
       const now = Date.now() * 1000000;
       timeRange = {
         start: now - this.defaultTimeRange,
