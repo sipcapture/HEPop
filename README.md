@@ -37,6 +37,7 @@
       HEP-Client-- UDP/TCP -->HEPop;
       HEPop-->ParquetWriter;
       ParquetWriter-->Storage;
+      ParquetWriter-->Metadata;
       Storage-->Compactor;
       Compactor-->Storage;
       Compactor-->Metadata;
