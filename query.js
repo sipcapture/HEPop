@@ -140,57 +140,40 @@ class QueryClient {
 
       console.log(`Found ${files.length} relevant files`);
 
-      // Create a connection to use for querying
-      const conn = await this.db.connect();
+      // Build the query using the parsed components
+      const timeRangeCondition = `timestamp >= TIMESTAMP '${new Date(parsed.timeRange.start / 1000000).toISOString()}'
+        AND timestamp <= TIMESTAMP '${new Date(parsed.timeRange.end / 1000000).toISOString()}'`;
+      
+      const query = `
+        WITH source AS (
+          ${files.map(f => `SELECT 
+            timestamp as time,
+            rcinfo::json->>'srcIp' as src_ip,
+            rcinfo::json->>'dstIp' as dst_ip,
+            rcinfo::json->>'srcPort' as src_port,
+            rcinfo::json->>'dstPort' as dst_port,
+            rcinfo::json->>'timeSeconds' as time_sec,
+            rcinfo::json->>'timeUseconds' as time_usec,
+            payload
+          FROM read_parquet('${f.path}')`).join('\nUNION ALL\n')}
+        )
+        SELECT ${parsed.columns}
+        FROM source
+        WHERE ${timeRangeCondition} ${parsed.conditions}
+        ${parsed.orderBy}
+        ${parsed.limit}
+      `;
 
-      try {
-        // Register each file for querying
-        for (const file of files) {
-          await conn.query(`CREATE VIEW IF NOT EXISTS parquet_${file.id} AS SELECT * FROM parquet_scan('${file.path}')`);
+      console.log('Executing query:', query);
+      const result = await this.db.all(query);
+
+      return result.map(row => {
+        const obj = {};
+        for (const key in row) {
+          obj[key] = row[key];
         }
-
-        // Build the query using the parsed components
-        const timeRangeCondition = `timestamp >= TIMESTAMP '${new Date(parsed.timeRange.start / 1000000).toISOString()}'
-          AND timestamp <= TIMESTAMP '${new Date(parsed.timeRange.end / 1000000).toISOString()}'`;
-        
-        const query = `
-          WITH source AS (
-            ${files.map(f => `SELECT 
-              timestamp as time,
-              rcinfo::json->>'srcIp' as src_ip,
-              rcinfo::json->>'dstIp' as dst_ip,
-              rcinfo::json->>'srcPort' as src_port,
-              rcinfo::json->>'dstPort' as dst_port,
-              rcinfo::json->>'timeSeconds' as time_sec,
-              rcinfo::json->>'timeUseconds' as time_usec,
-              payload
-            FROM parquet_${f.id}`).join('\nUNION ALL\n')}
-          )
-          SELECT ${parsed.columns}
-          FROM source
-          WHERE ${timeRangeCondition} ${parsed.conditions}
-          ${parsed.orderBy}
-          ${parsed.limit}
-        `;
-
-        console.log('Executing query:', query);
-        const result = await conn.query(query);
-
-        // Clean up views
-        for (const file of files) {
-          await conn.query(`DROP VIEW IF EXISTS parquet_${file.id}`);
-        }
-
-        return result.toArray().map(row => {
-          const obj = {};
-          for (const key in row) {
-            obj[key] = row[key];
-          }
-          return obj;
-        });
-      } finally {
-        await conn.close();
-      }
+        return obj;
+      });
     } catch (error) {
       console.error('Query error:', error);
       throw error;
