@@ -3,6 +3,10 @@
   "module": "hepop.js",
   "version": "0.1.0", 
   "type": "module",
+   "scripts": {
+    "start": "bun hepop.js",
+    "postinstall": "cp patches/bun_duckdb.js node_modules/@duckdb/node-bindings/duckdb.js",
+   },
   "devDependencies": {
     "@types/bun": "latest"
   },
