@@ -815,7 +815,12 @@ class CompactionManager {
       clearInterval(this.compactionInterval);
     }
     if (this.db) {
-      await this.db.close();
+      try {
+        // DuckDB instance uses stop() not close()
+        await this.db.stop();
+      } catch (error) {
+        console.error('Error stopping DuckDB:', error);
+      }
     }
   }
 }
@@ -956,7 +961,7 @@ class HEPServer {
     // Stop TCP server
     if (this.tcpServer) {
       try {
-        this.tcpServer.stop(true);  // true to close active connections
+        this.tcpServer.stop(true);
         this.tcpServer.unref();
       } catch (error) {
         console.error('Error stopping TCP server:', error);
@@ -966,8 +971,8 @@ class HEPServer {
     // Stop UDP server
     if (this.udpServer) {
       try {
-        this.udpServer.stop(true);
-        this.udpServer.unref();
+        // UDP sockets use close() not stop()
+        this.udpServer.close();
       } catch (error) {
         console.error('Error stopping UDP server:', error);
       }
