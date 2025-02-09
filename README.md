@@ -9,12 +9,13 @@
 - [x] Apache Parquet Writer
   - [x] Parquet Columnar WAL + Storage
   - [x] Automatic Rotation + Compaction
-  - [x] Time-Based Directory Structure
-  - [x] Metadata Management
+  - [x] Automatic Metadata Management
 - [x] DuckDB Integration
   - [x] Parquet Data Compaction
   - [x] Query Execution
 - [x] Search API
+  - [x] GET/POST Query API 
+  - [x] Metadata Table/Range Selection 
 
 
 ```mermaid
