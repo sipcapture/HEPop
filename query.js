@@ -157,9 +157,10 @@ class QueryClient {
       try {
         // Get schema info using DuckDB
         const schemaQuery = `
-          SELECT column_name 
+          SELECT name as column_name 
           FROM parquet_schema('${files[0].path}')
-          ORDER BY column_name
+          WHERE name != 'name'
+          ORDER BY name
         `;
         const schemaReader = await connection.runAndReadAll(schemaQuery);
         const schemaFields = schemaReader.getRows().map(row => row[0]);
