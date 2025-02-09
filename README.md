@@ -155,16 +155,7 @@ Query the HEP data using the HTTP API. The server provides both GET and POST end
 #### GET /query
 ```bash
 # Query last 10 minutes of SIP messages
-curl "http://localhost:9070/query?q=SELECT time,src_ip,dst_ip,payload FROM hep_1"
-
-# Query specific time range with conditions
-curl "http://localhost:9070/query?q=SELECT time,src_ip,dst_ip,payload FROM hep_1 \
-  WHERE time >= '2025-02-08T19:00:00' \
-  AND time < '2025-02-08T20:00:00' \
-  AND payload LIKE '%INVITE%' \
-  ORDER BY time DESC \
-  LIMIT 100"
-```
+curl "http://localhost:9070/query?q=SELECT time,src_ip,dst_ip,payload FROM hep_1 LIMIT 10"
 
 #### POST /query
 ```bash
@@ -186,7 +177,7 @@ curl -X POST http://localhost:9070/query \
 #### OLAP Query
 Query HEP data using DuckDB, ClickHouse, Databend or any Parquet-compatible tool:
 ```sql
-SELECT * FROM 'data/writer1/dbs/hep-0/hep_1-*/*/*/c_0000000001.parquet' LIMIT 10;
+SELECT count() FROM 'data/writer1/dbs/hep-0/hep_1-*/*/*/c_0000000001.parquet' LIMIT 10;
 ```
 
 
