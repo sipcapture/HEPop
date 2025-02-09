@@ -1,7 +1,6 @@
 import { DuckDBInstance } from '@duckdb/node-api';
 import path from 'path';
 import fs from 'fs';
-import parquet from '@parquetjs/parquet';
 
 class QueryClient {
   constructor(baseDir = './data') {
@@ -152,16 +151,19 @@ class QueryClient {
         return [];
       }
 
-      // Get schema from first file to determine columns
-      const firstReader = await parquet.ParquetReader.openFile(files[0].path);
-      const schema = firstReader.getSchema();
-      const schemaFields = Object.keys(schema.fields);
-      await firstReader.close();
-
       // Get a connection
       const connection = await this.db.connect();
 
       try {
+        // Get schema info using DuckDB
+        const schemaQuery = `
+          SELECT column_name 
+          FROM parquet_schema('${files[0].path}')
+          ORDER BY column_name
+        `;
+        const schemaReader = await connection.runAndReadAll(schemaQuery);
+        const schemaFields = schemaReader.getRows().map(row => row[0]);
+
         // Build the query based on requested columns and schema
         let selectClause;
         if (parsed.columns === '*') {
@@ -174,7 +176,7 @@ class QueryClient {
             .map(col => {
               col = col.trim();
               // Only apply HEP transformations if schema has rcinfo
-              if (schema.fields.rcinfo) {
+              if (schemaFields.includes('rcinfo')) {
                 switch (col) {
                   case 'time': return 'timestamp as time';
                   case 'src_ip': return "rcinfo::json->>'srcIp' as src_ip";

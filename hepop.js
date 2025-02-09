@@ -1101,8 +1101,8 @@ class HEPServer {
             }
 
             return new Response('Not found', { status: 404 });
-          }
-        });
+      }
+    });
 
     console.log(`HEP Server listening on ${host}:${port} (TCP/UDP)`);
         console.log(`Query API listening on ${host}:${httpPort} (HTTP)`);
@@ -1164,7 +1164,7 @@ class HEPServer {
     
     // Flush any remaining data
     try {
-      await this.buffer.close();
+    await this.buffer.close();
     } catch (error) {
       console.error('Error flushing buffers:', error);
     }
