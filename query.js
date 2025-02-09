@@ -130,15 +130,11 @@ class QueryClient {
         throw new Error('Could not determine HEP type from query');
       }
 
-      console.log('Parsed query:', parsed);
-
       const files = await this.findRelevantFiles(parsed.type, parsed.timeRange);
       if (!files.length) {
         console.log('No files found matching query criteria');
         return [];
       }
-
-      console.log(`Found ${files.length} relevant files:`, files.map(f => f.path));
 
       // Get a connection
       const connection = await this.db.connect();
@@ -182,21 +178,10 @@ class QueryClient {
           ${parsed.limit}
         `;
 
-        console.log('Executing query:', query);
-        
         // Run query and get result reader
         const reader = await connection.runAndReadAll(query);
-        
-        // Debug available methods
-        console.log('Reader methods:', Object.getOwnPropertyNames(Object.getPrototypeOf(reader)));
-        
-        // Get column information
         const columnNames = reader.columnNames();
-        console.log('Column names:', columnNames);
-
-        // Get rows data
         const rows = reader.getRows();
-        console.log('Got rows:', rows.length, 'First row:', rows[0]);
 
         // Convert rows to objects with proper formatting
         const results = rows.map(row => {
@@ -222,7 +207,6 @@ class QueryClient {
           return obj;
         });
 
-        console.log(`Processed ${results.length} rows with data:`, results[0]);
         return results;
       } finally {
         await connection.close();
