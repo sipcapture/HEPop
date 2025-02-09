@@ -342,7 +342,7 @@ class CompactionManager {
       if (existingFiles.length > 0) {
         metadata.min_time = Math.min(...existingFiles.map(f => f.min_time));
         metadata.max_time = Math.max(...existingFiles.map(f => f.max_time));
-      } else {
+    } else {
         metadata.min_time = null;
         metadata.max_time = null;
       }
@@ -856,24 +856,24 @@ class HEPServer {
       try {
         // Create TCP Server
         const tcpServer = Bun.listen({
-          hostname: host,
-          port: port,
-          socket: {
-            data: (socket, data) => this.handleData(data, socket),
-            error: (socket, error) => console.error('TCP error:', error),
-          }
-        });
+      hostname: host,
+      port: port,
+      socket: {
+        data: (socket, data) => this.handleData(data, socket),
+        error: (socket, error) => console.error('TCP error:', error),
+      }
+    });
 
         // Create UDP Server
         const udpServer = Bun.udpSocket({
-          hostname: host,
-          port: port,
-          udp: true,
-          socket: {
-            data: (socket, data) => this.handleData(data, socket),
-            error: (socket, error) => console.error('UDP error:', error),
-          }
-        });
+      hostname: host,
+      port: port,
+      udp: true,
+      socket: {
+        data: (socket, data) => this.handleData(data, socket),
+        error: (socket, error) => console.error('UDP error:', error),
+      }
+    });
 
         // Create HTTP Server for queries
         const self = this;
@@ -919,7 +919,7 @@ class HEPServer {
           }
         });
 
-        console.log(`HEP Server listening on ${host}:${port} (TCP/UDP)`);
+    console.log(`HEP Server listening on ${host}:${port} (TCP/UDP)`);
         console.log(`Query API listening on ${host}:${httpPort} (HTTP)`);
         
         // Store server references
@@ -927,9 +927,9 @@ class HEPServer {
         this.udpServer = udpServer;
         this.httpServer = httpServer;
 
-        // Handle graceful shutdown
-        process.on('SIGTERM', this.shutdown.bind(this));
-        process.on('SIGINT', this.shutdown.bind(this));
+    // Handle graceful shutdown
+    process.on('SIGTERM', this.shutdown.bind(this));
+    process.on('SIGINT', this.shutdown.bind(this));
         
         return;
       } catch (error) {

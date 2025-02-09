@@ -144,17 +144,36 @@ class QueryClient {
       const connection = await this.db.connect();
 
       try {
-        // Build the query using array of files
-        const query = `
-          SELECT 
-            timestamp as time,
-            rcinfo::json->>'srcIp' as src_ip,
-            rcinfo::json->>'dstIp' as dst_ip,
-            rcinfo::json->>'srcPort' as src_port,
-            rcinfo::json->>'dstPort' as dst_port,
-            rcinfo::json->>'timeSeconds' as time_sec,
-            rcinfo::json->>'timeUseconds' as time_usec,
+        // Build the query based on requested columns
+        let selectClause;
+        if (parsed.columns === '*') {
+          selectClause = `
+            timestamp,
+            rcinfo,
             payload
+          `;
+        } else {
+          // Map specific columns to their source
+          selectClause = parsed.columns
+            .split(',')
+            .map(col => {
+              col = col.trim();
+              switch (col) {
+                case 'time': return 'timestamp as time';
+                case 'src_ip': return "rcinfo::json->>'srcIp' as src_ip";
+                case 'dst_ip': return "rcinfo::json->>'dstIp' as dst_ip";
+                case 'src_port': return "rcinfo::json->>'srcPort' as src_port";
+                case 'dst_port': return "rcinfo::json->>'dstPort' as dst_port";
+                case 'time_sec': return "rcinfo::json->>'timeSeconds' as time_sec";
+                case 'time_usec': return "rcinfo::json->>'timeUseconds' as time_usec";
+                default: return col;
+              }
+            })
+            .join(', ');
+        }
+
+        const query = `
+          SELECT ${selectClause}
           FROM read_parquet([${files.map(f => `'${f.path}'`).join(', ')}])
           ${parsed.timeRange ? `WHERE timestamp >= TIMESTAMP '${new Date(parsed.timeRange.start / 1000000).toISOString()}'
             AND timestamp <= TIMESTAMP '${new Date(parsed.timeRange.end / 1000000).toISOString()}'` : ''}
@@ -167,7 +186,6 @@ class QueryClient {
         const result = await connection.run(query);
         return result;
       } finally {
-        // Always close the connection
         await connection.close();
       }
     } catch (error) {
