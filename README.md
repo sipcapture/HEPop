@@ -331,3 +331,52 @@ Environment variables:
 ## License
 ©️ QXIP BV - Released under the AGPLv3 Open Source License.
 
+### Line Protocol API
+HEPop.js also supports InfluxDB Line Protocol ingestion for metrics and events.
+
+#### POST /write
+Send metrics using the InfluxDB Line Protocol format. Each line represents a single data point with measurement, tags, fields and optional timestamp.
+
+```bash
+# Single metric
+curl -i -XPOST "http://localhost:9070/write" --data-raw 'cpu,host=server01,region=us-west usage_idle=92.6,usage_user=7.4'
+
+# Multiple metrics
+curl -i -XPOST "http://localhost:9070/write" --data-raw '
+memory,host=server01,region=us-west used_percent=23.43,free=7.82
+disk,host=server01,region=us-west used_percent=86.45,free=21.45
+network,host=server01,region=us-west rx_bytes=7834,tx_bytes=9843
+'
+```
+
+#### Line Protocol Format
+```
+<measurement>[,<tag_key>=<tag_value>] <field_key>=<field_value>[,<field_key>=<field_value>] [timestamp]
+```
+
+- **measurement**: Name of the metric (required)
+- **tags**: Optional key-value pairs for categorizing data
+- **fields**: One or more key-value pairs of the actual metric values
+- **timestamp**: Optional timestamp in nanoseconds since Unix epoch
+
+#### Query Line Protocol Data
+Query metrics using the same SQL interface:
+
+```bash
+# Query last 10 minutes of CPU metrics
+curl -X POST http://localhost:9070/query \
+  -H "Content-Type: application/json" \
+  -d '{
+    "query": "SELECT time, host, region, usage_idle, usage_user FROM cpu WHERE time >= '\''2025-02-09T16:00:00'\''"
+  }'
+
+# Aggregate metrics by host
+curl -X POST http://localhost:9070/query \
+  -H "Content-Type: application/json" \
+  -d '{
+    "query": "SELECT host, avg(used_percent) as avg_used FROM memory GROUP BY host ORDER BY avg_used DESC"
+  }'
+```
+
+The Line Protocol data is stored in Parquet files using the same directory structure and compaction strategy as HEP data, allowing for efficient querying and storage.
+
