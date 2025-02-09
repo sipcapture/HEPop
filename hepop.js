@@ -152,29 +152,33 @@ class ParquetBufferManager {
 
   async flush(type) {
     const buffer = this.buffers.get(type);
-    if (!buffer?.length) return;
+    if (!buffer?.rows.length) return;
     
     try {
-      const filePath = await this.getFilePath(type, buffer[0].create_date);
+      const filePath = await this.getFilePath(type, buffer.isLineProtocol ? 
+        buffer.rows[0].timestamp : buffer.rows[0].create_date);
       await fs.promises.mkdir(path.dirname(filePath), { recursive: true });
 
-      // Create writer
+      // Create writer with appropriate schema
       const writer = await parquet.ParquetWriter.openFile(
-        this.schema,
+        buffer.schema || this.schema,
         filePath,
         this.writerOptions
       );
 
-      // Write rows
-      for (const data of buffer) {
-        await writer.appendRow({
-          timestamp: new Date(data.create_date),
-          rcinfo: JSON.stringify(data.protocol_header),
-          payload: data.raw || ''
-        });
+      // Write rows based on type
+      for (const data of buffer.rows) {
+        if (buffer.isLineProtocol) {
+          await writer.appendRow(data);
+        } else {
+          await writer.appendRow({
+            timestamp: new Date(data.create_date),
+            rcinfo: JSON.stringify(data.protocol_header),
+            payload: data.raw || ''
+          });
+        }
       }
 
-      // Close writer to flush data
       await writer.close();
 
       // Get file stats
@@ -185,14 +189,19 @@ class ParquetBufferManager {
         type, 
         filePath, 
         stats.size, 
-        buffer.length, 
-        buffer.map(d => new Date(d.create_date))
+        buffer.rows.length, 
+        buffer.rows.map(d => buffer.isLineProtocol ? 
+          d.timestamp : new Date(d.create_date))
       );
       
       // Clear buffer
-      this.buffers.set(type, []);
+      this.buffers.set(type, {
+        rows: [],
+        schema: buffer.schema,
+        isLineProtocol: buffer.isLineProtocol
+      });
       
-      console.log(`Wrote ${buffer.length} records to ${filePath}`);
+      console.log(`Wrote ${buffer.rows.length} records to ${filePath}`);
     } catch (error) {
       console.error(`Parquet flush error:`, error);
     }
@@ -359,7 +368,10 @@ class ParquetBufferManager {
   }
 
   async addLineProtocolBulk(measurement, rows) {
-    if (!this.buffers.has(measurement)) {
+    // Use measurement as type for directory structure
+    const type = `lp_${measurement}`;
+    
+    if (!this.buffers.has(type)) {
       // Create new schema for this measurement including its fields
       const schema = new parquet.ParquetSchema({
         timestamp: { type: 'TIMESTAMP_MILLIS' },
@@ -375,19 +387,20 @@ class ParquetBufferManager {
         }, {})
       });
 
-      this.buffers.set(measurement, {
+      this.buffers.set(type, {
         rows: [],
-        schema
+        schema,
+        isLineProtocol: true  // Mark as Line Protocol data
       });
     }
 
-    const buffer = this.buffers.get(measurement);
+    const buffer = this.buffers.get(type);
     buffer.rows.push(...rows);
 
-    console.log(`Added ${rows.length} rows to ${measurement} buffer (total: ${buffer.rows.length})`);
+    console.log(`Added ${rows.length} rows to ${type} buffer (total: ${buffer.rows.length})`);
 
     if (buffer.rows.length >= this.bufferSize) {
-      await this.flushLineProtocol(measurement);
+      await this.flush(type);  // Use the same flush method as HEP
     }
   }
 }
