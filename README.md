@@ -68,11 +68,11 @@ bun start
 
 ### Configuration
 Configure HEPop using Environment variables:
-- `PORT`: HEP server port (default: 9069)
-- `HTTP_PORT`: Query API port (default: PORT + 1)
-- `HOST`: Bind address (default: "0.0.0.0")
-- `PARQUET_DIR`: Data directory (default: "./data")
-- `WRITER_ID`: Instance identifier (default: hostname)
+- `PORT`: HEP server port _(default: 9069)_
+- `HTTP_PORT`: Query API port _(default: PORT + 1)_
+- `HOST`: Bind address _(default: "0.0.0.0")_
+- `PARQUET_DIR`: Data directory _(default: "./data")_
+- `WRITER_ID`: Instance identifier _(default: hostname)_
 
 
 ### Run
