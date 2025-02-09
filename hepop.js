@@ -6,6 +6,7 @@ import path from 'path';
 import fs from 'fs';
 import duckdb from '@duckdb/node-api';
 import QueryClient from './query.js';
+import { parse } from './lineproto.js';
 
 class ParquetBufferManager {
   constructor(flushInterval = 10000, bufferSize = 1000) {
