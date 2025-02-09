@@ -11,6 +11,7 @@ import { getSIP } from 'parsip';
 import path from 'path';
 import fs from 'fs';
 import duckdb from '@duckdb/node-api';
+import QueryClient from './query.js';
 
 class ParquetBufferManager {
   constructor(flushInterval = 10000, bufferSize = 1000) {
@@ -451,47 +452,126 @@ class CompactionManager {
 class HEPServer {
   constructor(config = {}) {
     this.debug = config.debug || false;
-    this.buffer = new ParquetBufferManager();
-    this.compaction = new CompactionManager(this.buffer);
-    this.startServers();
+    this.queryClient = null;
   }
 
-  startServers() {
+  async initialize() {
+    try {
+      this.buffer = new ParquetBufferManager();
+      await this.buffer.initialize();
+      
+      this.compaction = new CompactionManager(this.buffer);
+      await this.compaction.initialize();
+
+      this.queryClient = new QueryClient(this.buffer.baseDir);
+      await this.queryClient.initialize();
+      
+      await this.startServers();
+    } catch (error) {
+      console.error('Failed to initialize HEPServer:', error);
+      throw error;
+    }
+  }
+
+  async startServers() {
     const port = parseInt(process.env.PORT) || 9069;
+    const httpPort = parseInt(process.env.HTTP_PORT) || (port + 1);
     const host = process.env.HOST || "0.0.0.0";
 
-    // TCP Server
-    Bun.listen({
-      hostname: host,
-      port: port,
-      socket: {
-        data: (socket, data) => this.handleData(data, socket),
-        error: (socket, error) => console.error('TCP error:', error),
-      }
-    });
+    try {
+      // Start HEP servers (TCP/UDP)
+      const tcpServer = Bun.listen({
+        hostname: host,
+        port: port,
+        socket: {
+          data: (socket, data) => this.handleData(data, socket),
+          error: (socket, error) => console.error('TCP error:', error),
+        }
+      });
 
-    // UDP Server
-    Bun.udpSocket({
-      hostname: host,
-      port: port,
-      udp: true,
-      socket: {
-        data: (socket, data) => this.handleData(data, socket),
-        error: (socket, error) => console.error('UDP error:', error),
-      }
-    });
+      const udpServer = Bun.udpSocket({
+        hostname: host,
+        port: port,
+        udp: true,
+        socket: {
+          data: (socket, data) => this.handleData(data, socket),
+          error: (socket, error) => console.error('UDP error:', error),
+        }
+      });
 
-    console.log(`HEP Server listening on ${host}:${port} (TCP/UDP)`);
+      // Start HTTP server for queries
+      const httpServer = Bun.serve({
+        hostname: host,
+        port: httpPort,
+        async fetch(req) {
+          const url = new URL(req.url);
+          
+          // Handle query endpoint
+          if (url.pathname === '/query') {
+            try {
+              let query;
+              
+              if (req.method === 'GET') {
+                query = url.searchParams.get('q');
+                if (!query) {
+                  return new Response('Missing query parameter "q"', { status: 400 });
+                }
+              } else if (req.method === 'POST') {
+                const body = await req.json();
+                query = body.query;
+                if (!query) {
+                  return new Response('Missing query in request body', { status: 400 });
+                }
+              } else {
+                return new Response('Method not allowed', { status: 405 });
+              }
 
-    // Handle graceful shutdown
-    process.on('SIGTERM', this.shutdown.bind(this));
-    process.on('SIGINT', this.shutdown.bind(this));
+              const result = await this.queryClient.query(query);
+              return new Response(JSON.stringify(result), {
+                headers: { 'Content-Type': 'application/json' }
+              });
+            } catch (error) {
+              console.error('Query error:', error);
+              return new Response(JSON.stringify({ error: error.message }), {
+                status: 500,
+                headers: { 'Content-Type': 'application/json' }
+              });
+            }
+          }
+
+          // Handle other endpoints or 404
+          return new Response('Not found', { status: 404 });
+        }.bind(this)  // Bind this to access queryClient
+      });
+
+      console.log(`HEP Server listening on ${host}:${port} (TCP/UDP)`);
+      console.log(`Query API listening on ${host}:${httpPort} (HTTP)`);
+
+      // Store server references
+      this.tcpServer = tcpServer;
+      this.udpServer = udpServer;
+      this.httpServer = httpServer;
+
+      // Handle graceful shutdown
+      process.on('SIGTERM', this.shutdown.bind(this));
+      process.on('SIGINT', this.shutdown.bind(this));
+    } catch (error) {
+      console.error('Failed to start servers:', error);
+      throw error;
+    }
   }
 
   async shutdown() {
     console.log('Shutting down HEP server...');
+    
+    if (this.tcpServer) this.tcpServer.close();
+    if (this.udpServer) this.udpServer.close();
+    if (this.httpServer) this.httpServer.close();
+    
     await this.buffer.close();
     await this.compaction.close();
+    await this.queryClient.close();
+    
     process.exit(0);
   }
 
@@ -534,7 +614,18 @@ class HEPServer {
   }
 }
 
-// Start the server
-const server = new HEPServer({ debug: true });
+// Create and initialize server
+async function startServer() {
+  try {
+    const server = new HEPServer({ debug: true });
+    await server.initialize();  // Now we properly wait for initialization
+    return server;
+  } catch (error) {
+    console.error('Failed to start HEP server:', error);
+    process.exit(1);
+  }
+}
 
-export { HEPServer, hepjs };
+// Start server and export for module usage
+const serverPromise = startServer();
+export { HEPServer, hepjs, serverPromise };
