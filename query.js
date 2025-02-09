@@ -71,11 +71,12 @@ class QueryClient {
     if (timeMatch) {
       const operator = timeMatch[1];
       const timestamp = new Date(timeMatch[2]).getTime() * 1000000; // to nanoseconds
+      const now = Date.now() * 1000000;
 
       switch (operator) {
         case '>=':
         case '>':
-          timeRange = { start: timestamp, end: null };
+          timeRange = { start: timestamp, end: now };  // Use current time as end
           break;
         case '<=':
         case '<':
