@@ -105,7 +105,7 @@ data/
   "files": [
     {
       "id": 0,
-      "path": "data/de5/dbs/hep-0/hep_1-0/2025-02-08/19-00/c_0000000032.parquet",
+      "path": "data/writer1/dbs/hep-0/hep_1-0/2025-02-08/19-00/c_0000000032.parquet",
       "size_bytes": 379739,
       "row_count": 359,
       "chunk_time": 1739043000000000000,
