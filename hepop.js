@@ -368,8 +368,8 @@ class ParquetBufferManager {
   }
 
   async addLineProtocolBulk(measurement, rows) {
-    // Use measurement as type for directory structure
-    const type = `lp_${measurement}`;
+    // Use measurement directly as type (like HEP types)
+    const type = measurement;
     
     if (!this.buffers.has(type)) {
       // Create new schema for this measurement including its fields
