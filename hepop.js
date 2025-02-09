@@ -31,6 +31,13 @@ class ParquetBufferManager {
         }
       ]
     };
+
+    // Add schema for Line Protocol data
+    this.lpSchema = new parquet.ParquetSchema({
+      timestamp: { type: 'TIMESTAMP_MILLIS' },
+      tags: { type: 'UTF8' },  // JSON string of tags
+      // Dynamic fields will be added based on data
+    });
   }
 
   async initialize() {
@@ -269,6 +276,78 @@ class ParquetBufferManager {
         metadataPath,
         JSON.stringify(this.metadata, null, 2)
       );
+    }
+  }
+
+  async addLineProtocol(data) {
+    const measurement = data.measurement;
+    if (!this.buffers.has(measurement)) {
+      // Create new schema for this measurement including its fields
+      const schema = new parquet.ParquetSchema({
+        timestamp: { type: 'TIMESTAMP_MILLIS' },
+        tags: { type: 'UTF8' },
+        ...Object.entries(data.fields).reduce((acc, [key, value]) => {
+          acc[key] = { 
+            type: typeof value === 'number' ? 'DOUBLE' : 
+                  typeof value === 'boolean' ? 'BOOLEAN' : 'UTF8'
+          };
+          return acc;
+        }, {})
+      });
+
+      this.buffers.set(measurement, {
+        rows: [],
+        schema
+      });
+    }
+
+    const buffer = this.buffers.get(measurement);
+    buffer.rows.push({
+      timestamp: new Date(data.timestamp),
+      tags: JSON.stringify(data.tags),
+      ...data.fields
+    });
+
+    if (buffer.rows.length >= this.bufferSize) {
+      await this.flushLineProtocol(measurement);
+    }
+  }
+
+  async flushLineProtocol(measurement) {
+    const buffer = this.buffers.get(measurement);
+    if (!buffer?.rows.length) return;
+
+    try {
+      const filePath = await this.getFilePath(measurement, buffer.rows[0].timestamp);
+      await fs.promises.mkdir(path.dirname(filePath), { recursive: true });
+
+      // Create writer with measurement's schema
+      const writer = await parquet.ParquetWriter.openFile(
+        buffer.schema,
+        filePath,
+        this.writerOptions
+      );
+
+      // Write rows
+      for (const row of buffer.rows) {
+        await writer.appendRow(row);
+      }
+
+      await writer.close();
+
+      // Update metadata similar to HEP data
+      const stats = await fs.promises.stat(filePath);
+      await this.updateMetadata(
+        measurement,
+        filePath,
+        stats.size,
+        buffer.rows.length,
+        buffer.rows.map(r => r.timestamp)
+      );
+
+      buffer.rows = [];
+    } catch (error) {
+      console.error(`Line Protocol flush error:`, error);
     }
   }
 }
@@ -872,7 +951,7 @@ class HEPServer {
       }
     });
 
-        // Create HTTP Server for queries
+        // Create HTTP Server for queries and writes
         const self = this;
         const httpServer = Bun.serve({
           hostname: host,
@@ -915,6 +994,27 @@ class HEPServer {
                   status: 500,
                   headers: { 'Content-Type': 'application/json' }
                 });
+              }
+            } else if (url.pathname === '/write' && req.method === 'POST') {
+              try {
+                const body = await req.text();
+                const lines = body.split('\n').filter(line => line.trim());
+                
+                const config = {
+                  addTimestamp: true,
+                  typeMappings: [],
+                  defaultTypeMapping: 'float'
+                };
+
+                for (const line of lines) {
+                  const parsed = parse(line, config);
+                  await self.buffer.addLineProtocol(parsed);
+                }
+
+                return new Response('OK', { status: 200 });
+              } catch (error) {
+                console.error('Write error:', error);
+                return new Response(error.message, { status: 400 });
               }
             }
 
