@@ -1,4 +1,4 @@
-import duckdb from '@duckdb/node-api';
+import { DuckDBInstance } from '@duckdb/node-api';
 import path from 'path';
 import fs from 'fs';
 
@@ -11,7 +11,7 @@ class QueryClient {
 
   async initialize() {
     try {
-      this.db = await duckdb.instantiate();
+      this.db = await DuckDBInstance.create(':memory:');
       console.log('Initialized DuckDB for querying');
     } catch (error) {
       console.error('Failed to initialize DuckDB:', error);
