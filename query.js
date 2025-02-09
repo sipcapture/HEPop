@@ -183,7 +183,7 @@ class QueryClient {
         `;
 
         console.log('Executing query:', query);
-        const result = await connection.query(query);
+        const result = await connection.send(query);
         
         // Convert result to array of objects
         const rows = [];
