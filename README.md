@@ -57,9 +57,9 @@
 
 ```
 
-### Install & Build
+### Install & Start
 
-Use Bun to generate a bundled standalone binary for `hepop`
+Use Bun to install, build and run `hepop`
 
 ```bash
 bun install
@@ -74,12 +74,6 @@ Configure HEPop using Environment variables:
 - `PARQUET_DIR`: Data directory _(default: "./data")_
 - `WRITER_ID`: Instance identifier _(default: hostname)_
 
-
-### Run
-Start the HEP Server:
-```bash
-./hepop
-```
 
 ### Storage Structure
 HEPop organizes data in a time-based directory structure:
