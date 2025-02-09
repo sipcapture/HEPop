@@ -18,39 +18,64 @@ class ParquetBufferManager {
     this.buffers = new Map();
     this.flushInterval = flushInterval;
     this.bufferSize = bufferSize;
-    this.metadata = this.initializeMetadata();
     this.baseDir = process.env.PARQUET_DIR || './data';
-    this.writerProperties = new WriterPropertiesBuilder()
-      .setCompression(Compression.ZSTD)
-      .build();
-
-    // Initialize WebAssembly
-    this.initializeWasm();
-    this.startFlushInterval();
+    this.writerId = process.env.WRITER_ID || require('os').hostname();
+    this.writerProperties = null;  // Will be initialized later
   }
 
-  async initializeWasm() {
-    await initWasm();
-    console.log('Parquet WASM initialized');
+  async initialize() {
+    try {
+      // Initialize WebAssembly
+      await initWasm();
+      console.log('Parquet WASM initialized');
+
+      // Initialize writer properties after WASM is ready
+      this.writerProperties = new WriterPropertiesBuilder()
+        .setCompression(Compression.ZSTD)
+        .build();
+
+      // Ensure base directories exist
+      await this.ensureDirectories();
+      
+      // Load or create metadata
+      await this.initializeMetadata();
+      
+      // Start flush interval after initialization
+      this.startFlushInterval();
+
+      console.log('ParquetBufferManager initialized');
+    } catch (error) {
+      console.error('Failed to initialize ParquetBufferManager:', error);
+      throw error;
+    }
   }
 
-  initializeMetadata() {
-    const hostname = process.env.WRITER_ID || require('os').hostname();
-    return {
-      writer_id: hostname,
-      next_file_id: 0,
-      next_db_id: 0,
-      next_table_id: 0,
-      next_column_id: 0,
-      snapshot_sequence_number: 1,
-      wal_file_sequence_number: 0,
-      catalog_sequence_number: 0,
-      parquet_size_bytes: 0,
-      row_count: 0,
-      min_time: null,
-      max_time: null,
-      databases: [[0, { tables: new Map() }]]
-    };
+  async ensureDirectories() {
+    const baseDir = path.join(this.baseDir, this.writerId);
+    await fs.promises.mkdir(baseDir, { recursive: true });
+    return baseDir;
+  }
+
+  async initializeMetadata() {
+    const metadataPath = path.join(this.baseDir, this.writerId, 'metadata.json');
+    try {
+      const data = await fs.promises.readFile(metadataPath, 'utf8');
+      this.metadata = JSON.parse(data);
+    } catch (error) {
+      if (error.code === 'ENOENT') {
+        this.metadata = {
+          writer_id: this.writerId,
+          next_db_id: 0,
+          next_table_id: 0,
+          next_file_id: 0,
+          wal_file_sequence_number: 0,
+          databases: [[0, { tables: new Map() }]]
+        };
+        await this.writeGlobalMetadata();
+      } else {
+        throw error;
+      }
+    }
   }
 
   add(type, data) {
@@ -81,7 +106,7 @@ class ParquetBufferManager {
     
     return path.join(
       this.baseDir,
-      this.metadata.writer_id,
+      this.writerId,
       'dbs',
       `hep-${this.metadata.next_db_id}`,
       `hep_${type}-${this.metadata.next_table_id}`,
@@ -168,7 +193,7 @@ class ParquetBufferManager {
     this.metadata.wal_file_sequence_number++;
 
     // Write metadata file
-    const metadataPath = path.join(this.baseDir, this.metadata.writer_id, 'metadata.json');
+    const metadataPath = path.join(this.baseDir, this.writerId, 'metadata.json');
     fs.writeFileSync(metadataPath, JSON.stringify(this.metadata, null, 2));
   }
 
@@ -176,6 +201,11 @@ class ParquetBufferManager {
     for (const type of this.buffers.keys()) {
       await this.flush(type);
     }
+  }
+
+  async writeGlobalMetadata() {
+    const metadataPath = path.join(this.baseDir, this.writerId, 'metadata.json');
+    await fs.promises.writeFile(metadataPath, JSON.stringify(this.metadata, null, 2));
   }
 }
 
@@ -407,7 +437,7 @@ class CompactionManager {
   async writeMetadata() {
     const metadataPath = path.join(
       this.bufferManager.baseDir, 
-      this.bufferManager.metadata.writer_id, 
+      this.bufferManager.writerId, 
       'metadata.json'
     );
     
@@ -428,7 +458,7 @@ class CompactionManager {
     
     return path.join(
       this.bufferManager.baseDir,
-      this.bufferManager.metadata.writer_id,
+      this.bufferManager.writerId,
       'compacted',
       range,
       `hep-${this.bufferManager.metadata.next_db_id}`,
