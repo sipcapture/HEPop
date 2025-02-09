@@ -1,6 +1,7 @@
 import { DuckDBInstance } from '@duckdb/node-api';
 import path from 'path';
 import fs from 'fs';
+import parquet from '@parquetjs/parquet';
 
 class QueryClient {
   constructor(baseDir = './data') {
@@ -142,10 +143,8 @@ class QueryClient {
     try {
       const parsed = this.parseQuery(sql);
       if (!parsed.type) {
-        throw new Error('Could not determine HEP type from query');
+        throw new Error('Could not determine type from query');
       }
-
-      console.log('Parsed query:', parsed);  // Useful for debugging query parsing
 
       const files = await this.findRelevantFiles(parsed.type, parsed.timeRange);
       if (!files.length) {
@@ -153,35 +152,41 @@ class QueryClient {
         return [];
       }
 
-      console.log(`Found ${files.length} relevant files:`, files.map(f => f.path));  // Useful for debugging file selection
+      // Get schema from first file to determine columns
+      const firstReader = await parquet.ParquetReader.openFile(files[0].path);
+      const schema = firstReader.getSchema();
+      const schemaFields = Object.keys(schema.fields);
+      await firstReader.close();
 
       // Get a connection
       const connection = await this.db.connect();
 
       try {
-        // Build the query based on requested columns
+        // Build the query based on requested columns and schema
         let selectClause;
         if (parsed.columns === '*') {
-          selectClause = `
-            timestamp,
-            rcinfo,
-            payload
-          `;
+          // Use all columns from schema
+          selectClause = schemaFields.join(', ');
         } else {
           // Map specific columns to their source
           selectClause = parsed.columns
             .split(',')
             .map(col => {
               col = col.trim();
-              switch (col) {
-                case 'time': return 'timestamp as time';
-                case 'src_ip': return "rcinfo::json->>'srcIp' as src_ip";
-                case 'dst_ip': return "rcinfo::json->>'dstIp' as dst_ip";
-                case 'src_port': return "rcinfo::json->>'srcPort' as src_port";
-                case 'dst_port': return "rcinfo::json->>'dstPort' as dst_port";
-                case 'time_sec': return "rcinfo::json->>'timeSeconds' as time_sec";
-                case 'time_usec': return "rcinfo::json->>'timeUseconds' as time_usec";
-                default: return col;
+              // Only apply HEP transformations if schema has rcinfo
+              if (schema.fields.rcinfo) {
+                switch (col) {
+                  case 'time': return 'timestamp as time';
+                  case 'src_ip': return "rcinfo::json->>'srcIp' as src_ip";
+                  case 'dst_ip': return "rcinfo::json->>'dstIp' as dst_ip";
+                  case 'src_port': return "rcinfo::json->>'srcPort' as src_port";
+                  case 'dst_port': return "rcinfo::json->>'dstPort' as dst_port";
+                  case 'time_sec': return "rcinfo::json->>'timeSeconds' as time_sec";
+                  case 'time_usec': return "rcinfo::json->>'timeUseconds' as time_usec";
+                  default: return col;
+                }
+              } else {
+                return col;
               }
             })
             .join(', ');
@@ -197,7 +202,7 @@ class QueryClient {
           ${parsed.limit}
         `;
 
-        console.log('Executing query:', query);  // Useful for debugging SQL execution
+        console.log('Executing query:', query);
 
         // Run query and get result reader
         const reader = await connection.runAndReadAll(query);

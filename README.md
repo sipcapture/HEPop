@@ -45,6 +45,7 @@
       Storage-.->LocalFS;
       Storage-.->S3;
       HTTP-API-- GET/POST --> HEPop;
+      HTTP-API-- GET/POST --> HEPop;
       DuckDB-->Storage;
       DuckDB-->Metadata;
 
@@ -165,6 +166,8 @@ Query HEP data using DuckDB, ClickHouse, Databend or any Parquet-compatible tool
 SELECT count() FROM 'data/writer1/dbs/hep-0/hep_1-*/*/*/c_0000000001.parquet' LIMIT 10;
 ```
 
+
+<br>
 
 <br>
 
