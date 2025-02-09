@@ -187,24 +187,24 @@ class QueryClient {
         // Run query and get result reader
         const reader = await connection.runAndReadAll(query);
         
-        // Get column information - call the function to get names
+        // Debug available methods
+        console.log('Reader methods:', Object.getOwnPropertyNames(Object.getPrototypeOf(reader)));
+        
+        // Get column information
         const columnNames = reader.columnNames();
         console.log('Column names:', columnNames);
 
-        // Get raw data as array of vectors
-        const vectors = reader.getVectors();
-        console.log('Got vectors:', vectors.length);
+        // Get rows data
+        const rows = reader.getRows();
+        console.log('Got rows:', rows.length, 'First row:', rows[0]);
 
-        // Convert vector-based data to row objects
-        const results = [];
-        const rowCount = vectors[0]?.itemCount || 0;
-
-        for (let rowIndex = 0; rowIndex < rowCount; rowIndex++) {
+        // Convert rows to objects with proper formatting
+        const results = rows.map(row => {
           const obj = {};
           
           for (let colIndex = 0; colIndex < columnNames.length; colIndex++) {
             const key = columnNames[colIndex];
-            const value = vectors[colIndex].getItem(rowIndex);
+            const value = row[colIndex];
 
             if (key === 'timestamp') {
               obj[key] = new Date(value).toISOString();
@@ -219,8 +219,8 @@ class QueryClient {
             }
           }
           
-          results.push(obj);
-        }
+          return obj;
+        });
 
         console.log(`Processed ${results.length} rows with data:`, results[0]);
         return results;
