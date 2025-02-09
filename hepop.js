@@ -549,9 +549,9 @@ class CompactionManager {
           for (const subEntry of subEntries) {
             if (subEntry.startsWith('hep_')) {
               // Extract type from hep_TYPE-ID format
-              const match = subEntry.match(/hep_(\d+)-/);
+              const match = subEntry.match(/hep_([^-]+)-/);
               if (match) {
-                types.add(parseInt(match[1]));
+                types.add(match[1]); // Store the full type/measurement name
               }
             }
           }
@@ -1081,7 +1081,7 @@ class HEPServer {
 
                 // Bulk insert by measurement
                 for (const [measurement, rows] of bulkData) {
-                  console.log(`Writing ${rows.length} rows to measurement ${measurement}`);
+                  // console.log(`Writing ${rows.length} rows to measurement ${measurement}`);
                   await self.buffer.addLineProtocolBulk(measurement, rows);
                 }
 

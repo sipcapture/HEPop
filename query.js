@@ -60,9 +60,21 @@ class QueryClient {
     const selectMatch = sql.match(/SELECT\s+(.*?)\s+FROM/i);
     const columns = selectMatch ? selectMatch[1].trim() : '*';
 
-    // Extract type
-    const typeMatch = sql.match(/FROM\s+hep_(\d+)/i);
-    const type = typeMatch ? parseInt(typeMatch[1]) : null;
+    // Extract type/measurement name
+    const fromMatch = sql.match(/FROM\s+([a-zA-Z0-9_]+)/i);
+    let type = null;
+
+    if (fromMatch) {
+      const tableName = fromMatch[1];
+      // Check if it's a HEP type (hep_NUMBER)
+      const hepMatch = tableName.match(/^hep_(\d+)$/i);
+      if (hepMatch) {
+        type = parseInt(hepMatch[1]);
+      } else {
+        // It's a Line Protocol measurement name
+        type = tableName;
+      }
+    }
 
     // Extract time range
     const timeMatch = sql.match(/time\s*(>=|>|<=|<|=)\s*'([^']+)'/i);
@@ -70,13 +82,13 @@ class QueryClient {
 
     if (timeMatch) {
       const operator = timeMatch[1];
-      const timestamp = new Date(timeMatch[2]).getTime() * 1000000; // to nanoseconds
+      const timestamp = new Date(timeMatch[2]).getTime() * 1000000;
       const now = Date.now() * 1000000;
 
       switch (operator) {
         case '>=':
         case '>':
-          timeRange = { start: timestamp, end: now };  // Use current time as end
+          timeRange = { start: timestamp, end: now };
           break;
         case '<=':
         case '<':
@@ -87,7 +99,6 @@ class QueryClient {
           break;
       }
     } else {
-      // Default to last 10 minutes
       const now = Date.now() * 1000000;
       timeRange = {
         start: now - this.defaultTimeRange,
