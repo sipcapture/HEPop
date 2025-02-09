@@ -147,56 +147,13 @@ class QueryClient {
 
       const files = await this.findRelevantFiles(parsed.type, parsed.timeRange);
       if (!files.length) {
-        console.log('No files found matching query criteria');
         return [];
       }
 
-      // Get a connection
       const connection = await this.db.connect();
-
       try {
-        // Get schema info using DuckDB
-        const schemaQuery = `
-          SELECT name as column_name 
-          FROM parquet_schema('${files[0].path}')
-          WHERE name != 'name'
-          ORDER BY name
-        `;
-        const schemaReader = await connection.runAndReadAll(schemaQuery);
-        const schemaFields = schemaReader.getRows().map(row => row[0]);
-
-        // Build the query based on requested columns and schema
-        let selectClause;
-        if (parsed.columns === '*') {
-          // Use all columns from schema
-          selectClause = schemaFields.join(', ');
-        } else {
-          // Map specific columns to their source
-          selectClause = parsed.columns
-            .split(',')
-            .map(col => {
-              col = col.trim();
-              // Only apply HEP transformations if schema has rcinfo
-              if (schemaFields.includes('rcinfo')) {
-                switch (col) {
-                  case 'time': return 'timestamp as time';
-                  case 'src_ip': return "rcinfo::json->>'srcIp' as src_ip";
-                  case 'dst_ip': return "rcinfo::json->>'dstIp' as dst_ip";
-                  case 'src_port': return "rcinfo::json->>'srcPort' as src_port";
-                  case 'dst_port': return "rcinfo::json->>'dstPort' as dst_port";
-                  case 'time_sec': return "rcinfo::json->>'timeSeconds' as time_sec";
-                  case 'time_usec': return "rcinfo::json->>'timeUseconds' as time_usec";
-                  default: return col;
-                }
-              } else {
-                return col;
-              }
-            })
-            .join(', ');
-        }
-
         const query = `
-          SELECT ${selectClause}
+          SELECT ${parsed.columns}
           FROM read_parquet([${files.map(f => `'${f.path}'`).join(', ')}])
           ${parsed.timeRange ? `WHERE timestamp >= TIMESTAMP '${new Date(parsed.timeRange.start / 1000000).toISOString()}'
             AND timestamp <= TIMESTAMP '${new Date(parsed.timeRange.end / 1000000).toISOString()}'` : ''}
@@ -205,41 +162,14 @@ class QueryClient {
           ${parsed.limit}
         `;
 
-        console.log('Executing query:', query);
-
-        // Run query and get result reader
         const reader = await connection.runAndReadAll(query);
-        const columnNames = reader.columnNames();
-        const rows = reader.getRows();
-
-        // Convert rows to objects with proper formatting
-        const results = rows.map(row => {
+        return reader.getRows().map(row => {
           const obj = {};
-          
-          for (let colIndex = 0; colIndex < columnNames.length; colIndex++) {
-            const key = columnNames[colIndex];
-            const value = row[colIndex];
-
-            if (key === 'timestamp') {
-              obj[key] = new Date(value).toISOString();
-            } else if (key === 'rcinfo' && typeof value === 'string') {
-              try {
-                obj[key] = JSON.parse(value);
-              } catch (e) {
-                obj[key] = value;
-              }
-            } else if (typeof value === 'bigint') {
-              // Convert BigInt to string
-              obj[key] = value.toString();
-            } else {
-              obj[key] = value;
-            }
-          }
-          
+          reader.columnNames().forEach((col, i) => {
+            obj[col] = row[i];
+          });
           return obj;
         });
-
-        return results;
       } finally {
         await connection.close();
       }
