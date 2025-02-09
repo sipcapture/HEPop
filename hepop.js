@@ -500,6 +500,7 @@ class HEPServer {
       });
 
       // Start HTTP server for queries
+      const self = this; // Store reference to this
       const httpServer = Bun.serve({
         hostname: host,
         port: httpPort,
@@ -526,7 +527,7 @@ class HEPServer {
                 return new Response('Method not allowed', { status: 405 });
               }
 
-              const result = await this.queryClient.query(query);
+              const result = await self.queryClient.query(query);
               return new Response(JSON.stringify(result), {
                 headers: { 'Content-Type': 'application/json' }
               });
@@ -541,7 +542,7 @@ class HEPServer {
 
           // Handle other endpoints or 404
           return new Response('Not found', { status: 404 });
-        }.bind(this)  // Bind this to access queryClient
+        }
       });
 
       console.log(`HEP Server listening on ${host}:${port} (TCP/UDP)`);
