@@ -89,11 +89,36 @@ data/
                 └── ...
 ```
 
-- Each HEP type gets its own directory
-- Files are organized by date and hour
-- Raw files are written every 10 minutes
-- Compacted files (c_) consolidate older data
-- Metadata tracks all files and statistics
+- Each HEP type gets its own directory structure
+- Generated Parquet files are organized by date and hour
+- Compacted sets (c_) consolidate files for fast access
+- Metadata tracks all files, compaction and statistics
+
+```json
+{
+  "type": 1,
+  "parquet_size_bytes": 379739,
+  "row_count": 359,
+  "min_time": 1739043338978000000,
+  "max_time": 1739043934193000000,
+  "wal_sequence": 32,
+  "files": [
+    {
+      "id": 0,
+      "path": "data/de5/dbs/hep-0/hep_1-0/2025-02-08/19-00/c_0000000032.parquet",
+      "size_bytes": 379739,
+      "row_count": 359,
+      "chunk_time": 1739043000000000000,
+      "min_time": 1739043338978000000,
+      "max_time": 1739043934193000000,
+      "range": "1h",
+      "type": "compacted"
+    }
+  ]
+}
+
+```
+
 
 ### Features
 - **Automatic Compaction**: Older files are automatically compacted for better storage efficiency
