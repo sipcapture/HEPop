@@ -33,10 +33,17 @@ class QueryClient {
       );
 
       try {
+        // Always read fresh metadata
         const metadataPath = path.join(typePath, 'metadata.json');
         const metadata = JSON.parse(await fs.promises.readFile(metadataPath, 'utf8'));
 
+        // Only use files that exist and match time range
         const relevantFiles = metadata.files.filter(file => {
+          // Skip files that don't exist
+          if (!fs.existsSync(file.path)) {
+            return false;
+          }
+
           const { start, end } = timeRange;
           const fileStart = file.min_time;
           const fileEnd = file.max_time;
