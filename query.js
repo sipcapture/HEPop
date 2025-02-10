@@ -60,9 +60,22 @@ class QueryClient {
     const selectMatch = sql.match(/SELECT\s+(.*?)\s+FROM/i);
     const columns = selectMatch ? selectMatch[1].trim() : '*';
 
-    // Extract type
-    const typeMatch = sql.match(/FROM\s+hep_(\d+)/i);
-    const type = typeMatch ? parseInt(typeMatch[1]) : null;
+    // Extract type/measurement name
+    const fromMatch = sql.match(/FROM\s+([a-zA-Z0-9_]+)/i);
+    let type = null;
+
+    if (fromMatch) {
+      const tableName = fromMatch[1];
+      // Check if it's a HEP type (hep_NUMBER)
+      const hepMatch = tableName.match(/^hep_(\d+)$/i);
+      if (hepMatch) {
+        type = parseInt(hepMatch[1]);
+      } else {
+        // It's a Line Protocol measurement name
+        type = tableName;
+      }
+    }
+
 
     // Extract time range
     const timeMatch = sql.match(/time\s*(>=|>|<=|<|=)\s*'([^']+)'/i);
@@ -70,13 +83,13 @@ class QueryClient {
 
     if (timeMatch) {
       const operator = timeMatch[1];
-      const timestamp = new Date(timeMatch[2]).getTime() * 1000000; // to nanoseconds
+      const timestamp = new Date(timeMatch[2]).getTime() * 1000000;
       const now = Date.now() * 1000000;
 
       switch (operator) {
         case '>=':
         case '>':
-          timeRange = { start: timestamp, end: now };  // Use current time as end
+          timeRange = { start: timestamp, end: now };
           break;
         case '<=':
         case '<':
@@ -87,6 +100,7 @@ class QueryClient {
           break;
       }
     } else {
+
       // Default to last 10 minutes
       const now = Date.now() * 1000000;
       timeRange = {
@@ -128,53 +142,18 @@ class QueryClient {
     try {
       const parsed = this.parseQuery(sql);
       if (!parsed.type) {
-        throw new Error('Could not determine HEP type from query');
+        throw new Error('Could not determine type from query');
       }
-
-      console.log('Parsed query:', parsed);  // Useful for debugging query parsing
 
       const files = await this.findRelevantFiles(parsed.type, parsed.timeRange);
       if (!files.length) {
-        console.log('No files found matching query criteria');
         return [];
       }
 
-      console.log(`Found ${files.length} relevant files:`, files.map(f => f.path));  // Useful for debugging file selection
-
-      // Get a connection
       const connection = await this.db.connect();
-
       try {
-        // Build the query based on requested columns
-        let selectClause;
-        if (parsed.columns === '*') {
-          selectClause = `
-            timestamp,
-            rcinfo,
-            payload
-          `;
-        } else {
-          // Map specific columns to their source
-          selectClause = parsed.columns
-            .split(',')
-            .map(col => {
-              col = col.trim();
-              switch (col) {
-                case 'time': return 'timestamp as time';
-                case 'src_ip': return "rcinfo::json->>'srcIp' as src_ip";
-                case 'dst_ip': return "rcinfo::json->>'dstIp' as dst_ip";
-                case 'src_port': return "rcinfo::json->>'srcPort' as src_port";
-                case 'dst_port': return "rcinfo::json->>'dstPort' as dst_port";
-                case 'time_sec': return "rcinfo::json->>'timeSeconds' as time_sec";
-                case 'time_usec': return "rcinfo::json->>'timeUseconds' as time_usec";
-                default: return col;
-              }
-            })
-            .join(', ');
-        }
-
         const query = `
-          SELECT ${selectClause}
+          SELECT ${parsed.columns}
           FROM read_parquet([${files.map(f => `'${f.path}'`).join(', ')}])
           ${parsed.timeRange ? `WHERE timestamp >= TIMESTAMP '${new Date(parsed.timeRange.start / 1000000).toISOString()}'
             AND timestamp <= TIMESTAMP '${new Date(parsed.timeRange.end / 1000000).toISOString()}'` : ''}
@@ -183,41 +162,14 @@ class QueryClient {
           ${parsed.limit}
         `;
 
-        console.log('Executing query:', query);  // Useful for debugging SQL execution
-
-        // Run query and get result reader
         const reader = await connection.runAndReadAll(query);
-        const columnNames = reader.columnNames();
-        const rows = reader.getRows();
-
-        // Convert rows to objects with proper formatting
-        const results = rows.map(row => {
+        return reader.getRows().map(row => {
           const obj = {};
-          
-          for (let colIndex = 0; colIndex < columnNames.length; colIndex++) {
-            const key = columnNames[colIndex];
-            const value = row[colIndex];
-
-            if (key === 'timestamp') {
-              obj[key] = new Date(value).toISOString();
-            } else if (key === 'rcinfo' && typeof value === 'string') {
-              try {
-                obj[key] = JSON.parse(value);
-              } catch (e) {
-                obj[key] = value;
-              }
-            } else if (typeof value === 'bigint') {
-              // Convert BigInt to string
-              obj[key] = value.toString();
-            } else {
-              obj[key] = value;
-            }
-          }
-          
+          reader.columnNames().forEach((col, i) => {
+            obj[col] = row[i];
+          });
           return obj;
         });
-
-        return results;
       } finally {
         await connection.close();
       }

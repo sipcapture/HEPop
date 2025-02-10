@@ -6,6 +6,7 @@ import path from 'path';
 import fs from 'fs';
 import duckdb from '@duckdb/node-api';
 import QueryClient from './query.js';
+import { parse } from './lineproto.js';
 
 class ParquetBufferManager {
   constructor(flushInterval = 10000, bufferSize = 1000) {
@@ -31,6 +32,13 @@ class ParquetBufferManager {
         }
       ]
     };
+
+    // Add schema for Line Protocol data
+    this.lpSchema = new parquet.ParquetSchema({
+      timestamp: { type: 'TIMESTAMP_MILLIS' },
+      tags: { type: 'UTF8' },  // JSON string of tags
+      // Dynamic fields will be added based on data
+    });
   }
 
   async initialize() {
@@ -125,11 +133,17 @@ class ParquetBufferManager {
 
   add(type, data) {
     if (!this.buffers.has(type)) {
-      this.buffers.set(type, []);
+      this.buffers.set(type, {
+        rows: [],
+        schema: this.schema,  // Use HEP schema
+        isLineProtocol: false // Mark as HEP data
+      });
     }
-    this.buffers.get(type).push(data);
+
+    const buffer = this.buffers.get(type);
+    buffer.rows.push(data);
     
-    if (this.buffers.get(type).length >= this.bufferSize) {
+    if (buffer.rows.length >= this.bufferSize) {
       this.flush(type);
     }
   }
@@ -144,29 +158,33 @@ class ParquetBufferManager {
 
   async flush(type) {
     const buffer = this.buffers.get(type);
-    if (!buffer?.length) return;
+    if (!buffer?.rows.length) return;
     
     try {
-      const filePath = await this.getFilePath(type, buffer[0].create_date);
+      const filePath = await this.getFilePath(type, buffer.isLineProtocol ? 
+        buffer.rows[0].timestamp : buffer.rows[0].create_date);
       await fs.promises.mkdir(path.dirname(filePath), { recursive: true });
 
-      // Create writer
+      // Create writer with appropriate schema
       const writer = await parquet.ParquetWriter.openFile(
-        this.schema,
+        buffer.schema,
         filePath,
         this.writerOptions
       );
 
-      // Write rows
-      for (const data of buffer) {
-        await writer.appendRow({
-          timestamp: new Date(data.create_date),
-          rcinfo: JSON.stringify(data.protocol_header),
-          payload: data.raw || ''
-        });
+      // Write rows based on type
+      for (const data of buffer.rows) {
+        if (buffer.isLineProtocol) {
+          await writer.appendRow(data);
+        } else {
+          await writer.appendRow({
+            timestamp: new Date(data.create_date),
+            rcinfo: JSON.stringify(data.protocol_header),
+            payload: data.raw || ''
+          });
+        }
       }
 
-      // Close writer to flush data
       await writer.close();
 
       // Get file stats
@@ -177,14 +195,19 @@ class ParquetBufferManager {
         type, 
         filePath, 
         stats.size, 
-        buffer.length, 
-        buffer.map(d => new Date(d.create_date))
+        buffer.rows.length, 
+        buffer.rows.map(d => buffer.isLineProtocol ? 
+          d.timestamp : new Date(d.create_date))
       );
       
       // Clear buffer
-      this.buffers.set(type, []);
+      this.buffers.set(type, {
+        rows: [],
+        schema: buffer.schema,
+        isLineProtocol: buffer.isLineProtocol
+      });
       
-      console.log(`Wrote ${buffer.length} records to ${filePath}`);
+      console.log(`Wrote ${buffer.rows.length} records to ${filePath}`);
     } catch (error) {
       console.error(`Parquet flush error:`, error);
     }
@@ -265,10 +288,123 @@ class ParquetBufferManager {
     // Write initial metadata file if it doesn't exist
     const metadataPath = path.join(metadataDir, 'metadata.json');
     if (!fs.existsSync(metadataPath)) {
+      const initialMetadata = {
+        writer_id: this.writerId,
+        next_db_id: 0,
+        next_table_id: 0
+      };
+      
       await fs.promises.writeFile(
         metadataPath,
-        JSON.stringify(this.metadata, null, 2)
+        JSON.stringify(initialMetadata, null, 2)
       );
+    }
+  }
+
+  async addLineProtocol(data) {
+    const measurement = data.measurement;
+    if (!this.buffers.has(measurement)) {
+      // Create new schema for this measurement including its fields
+      const schema = new parquet.ParquetSchema({
+        timestamp: { type: 'TIMESTAMP_MILLIS' },
+        tags: { type: 'UTF8' },
+        ...Object.entries(data.fields).reduce((acc, [key, value]) => {
+          acc[key] = { 
+            type: typeof value === 'number' ? 'DOUBLE' : 
+                  typeof value === 'boolean' ? 'BOOLEAN' : 'UTF8'
+          };
+          return acc;
+        }, {})
+      });
+
+      this.buffers.set(measurement, {
+        rows: [],
+        schema
+      });
+    }
+
+    const buffer = this.buffers.get(measurement);
+    buffer.rows.push({
+      timestamp: new Date(data.timestamp),
+      tags: JSON.stringify(data.tags),
+      ...data.fields
+    });
+
+    if (buffer.rows.length >= this.bufferSize) {
+      await this.flushLineProtocol(measurement);
+    }
+  }
+
+  async flushLineProtocol(measurement) {
+    const buffer = this.buffers.get(measurement);
+    if (!buffer?.rows.length) return;
+
+    try {
+      const filePath = await this.getFilePath(measurement, buffer.rows[0].timestamp);
+      await fs.promises.mkdir(path.dirname(filePath), { recursive: true });
+
+      // Create writer with measurement's schema
+      const writer = await parquet.ParquetWriter.openFile(
+        buffer.schema,
+        filePath,
+        this.writerOptions
+      );
+
+      // Write rows
+      for (const row of buffer.rows) {
+        await writer.appendRow(row);
+      }
+
+      await writer.close();
+
+      // Update metadata similar to HEP data
+      const stats = await fs.promises.stat(filePath);
+      await this.updateMetadata(
+        measurement,
+        filePath,
+        stats.size,
+        buffer.rows.length,
+        buffer.rows.map(r => r.timestamp)
+      );
+
+      buffer.rows = [];
+    } catch (error) {
+      console.error(`Line Protocol flush error:`, error);
+    }
+  }
+
+  async addLineProtocolBulk(measurement, rows) {
+    // Use measurement directly as type (like HEP types)
+    const type = measurement;
+    
+    if (!this.buffers.has(type)) {
+      // Create new schema for this measurement including its fields
+      const schema = new parquet.ParquetSchema({
+        timestamp: { type: 'TIMESTAMP_MILLIS' },
+        tags: { type: 'UTF8' },
+        ...Object.entries(rows[0]).reduce((acc, [key, value]) => {
+          if (key !== 'timestamp' && key !== 'tags') {
+            acc[key] = { 
+              type: typeof value === 'number' ? 'DOUBLE' : 
+                    typeof value === 'boolean' ? 'BOOLEAN' : 'UTF8'
+            };
+          }
+          return acc;
+        }, {})
+      });
+
+      this.buffers.set(type, {
+        rows: [],
+        schema,
+        isLineProtocol: true  // Mark as Line Protocol data
+      });
+    }
+
+    const buffer = this.buffers.get(type);
+    buffer.rows.push(...rows);
+
+    if (buffer.rows.length >= this.bufferSize) {
+      await this.flush(type);  // Use the same flush method as HEP
     }
   }
 }
@@ -417,9 +553,9 @@ class CompactionManager {
           for (const subEntry of subEntries) {
             if (subEntry.startsWith('hep_')) {
               // Extract type from hep_TYPE-ID format
-              const match = subEntry.match(/hep_(\d+)-/);
+              const match = subEntry.match(/hep_([^-]+)-/);
               if (match) {
-                types.add(parseInt(match[1]));
+                types.add(match[1]); // Store the full type/measurement name
               }
             }
           }
@@ -581,9 +717,14 @@ class CompactionManager {
       // Create directory for new file
       await fs.promises.mkdir(path.dirname(newPath), { recursive: true });
 
-      // Create new writer
+      // Determine if this is Line Protocol data by checking first file's schema
+      const firstReader = await parquet.ParquetReader.openFile(files[0].path);
+      const schema = firstReader.getSchema();
+      await firstReader.close();
+
+      // Create new writer with appropriate schema
       const writer = await parquet.ParquetWriter.openFile(
-        this.bufferManager.schema,
+        schema,  // Use the schema from the source files
         newPath,
         this.bufferManager.writerOptions
       );
@@ -872,7 +1013,7 @@ class HEPServer {
       }
     });
 
-        // Create HTTP Server for queries
+        // Create HTTP Server for queries and writes
         const self = this;
         const httpServer = Bun.serve({
           hostname: host,
@@ -916,11 +1057,52 @@ class HEPServer {
                   headers: { 'Content-Type': 'application/json' }
                 });
               }
+            } else if (url.pathname === '/write' && req.method === 'POST') {
+              try {
+                const body = await req.text();
+                const lines = body.split('\n').filter(line => line.trim());
+                                
+                const config = {
+                  addTimestamp: true,
+                  typeMappings: [],
+                  defaultTypeMapping: 'float'
+                };
+
+                // Process lines in bulk
+                const bulkData = new Map(); // measurement -> rows
+                
+                for (const line of lines) {
+                  const parsed = parse(line, config);
+                  const measurement = parsed.measurement;
+                  
+                  if (!bulkData.has(measurement)) {
+                    bulkData.set(measurement, []);
+                  }
+                  
+                  bulkData.get(measurement).push({
+                    timestamp: new Date(parsed.timestamp),
+                    tags: JSON.stringify(parsed.tags),
+                    ...parsed.fields
+                  });
+                }
+
+                // Bulk insert by measurement
+                for (const [measurement, rows] of bulkData) {
+                  // console.log(`Writing ${rows.length} rows to measurement ${measurement}`);
+                  await self.buffer.addLineProtocolBulk(measurement, rows);
+                }
+
+                return new Response(null, { status: 201 });
+              } catch (error) {
+                console.error('Write error:', error);
+                return new Response(error.message, { status: 400 });
+              }
+
             }
 
             return new Response('Not found', { status: 404 });
-          }
-        });
+      }
+    });
 
     console.log(`HEP Server listening on ${host}:${port} (TCP/UDP)`);
         console.log(`Query API listening on ${host}:${httpPort} (HTTP)`);
@@ -982,7 +1164,7 @@ class HEPServer {
     
     // Flush any remaining data
     try {
-      await this.buffer.close();
+    await this.buffer.close();
     } catch (error) {
       console.error('Error flushing buffers:', error);
     }

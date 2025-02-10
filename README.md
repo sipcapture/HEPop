@@ -44,7 +44,7 @@
       Compactor-->Metadata;
       Storage-.->LocalFS;
       Storage-.->S3;
-      Query-API-- GET/POST --> HEPop;
+      HTTP-API-- GET/POST --> HEPop;
       DuckDB-->Storage;
       DuckDB-->Metadata;
 
@@ -133,32 +133,23 @@ Query the HEP data using the HTTP API. The server provides both GET and POST end
 - **Filtering**: WHERE clause supports standard SQL conditions
 - **Sorting**: ORDER BY supports all columns
 - **Pagination**: Use LIMIT and OFFSET for paging
-- **Multiple Types**: Query different HEP types (hep_1, hep_100, etc.)
 
 
-#### Available Fields:
+#### Available HEP Fields:
+HEP virtual fields are automatically exploded at query time
 - `timestamp/time`: Event timestamp
 - `rcinfo`: Raw HEP protocol header _(JSON)_
 - `payload`: HEP Protocol payload
-- `src_ip`: Source IP _(extracted from rcinfo)_
-- `dst_ip`: Destination IP _(extracted from rcinfo)_
-- `src_port`: Source port _(extracted from rcinfo)_
-- `dst_port`: Destination port _(extracted from rcinfo)_
+- `src_ip`: Source IP _(rcinfo)_
+- `dst_ip`: Destination IP _(rcinfo)_
+- `src_port`: Source port _(rcinfo)_
+- `dst_port`: Destination port _(rcinfo)_
 
 
 #### GET /query
 ```bash
 # Query last 10 minutes of SIP messages
 curl "http://localhost:9070/query?q=SELECT time,src_ip,dst_ip,payload FROM hep_1 LIMIT 10"
-
-#### POST /query
-```bash
-# Simple query with POST
-curl -X POST http://localhost:9070/query \
-  -H "Content-Type: application/json" \
-  -d '{
-    "query": "SELECT time, src_ip, dst_ip FROM hep_1 LIMIT 10"
-  }'
 
 # Complex query with time range and conditions
 curl -X POST http://localhost:9070/query \
@@ -175,6 +166,58 @@ SELECT count() FROM 'data/writer1/dbs/hep-0/hep_1-*/*/*/c_0000000001.parquet' LI
 ```
 
 
+<br>
+
+<br>
+
+### Line Protocol API
+HEPop.js also supports InfluxDB Line Protocol ingestion for metrics and events.
+
+#### POST /write
+Send metrics using the InfluxDB Line Protocol format. Each line represents a single data point with measurement, tags, fields and optional timestamp.
+
+```bash
+# Single metric
+curl -i -XPOST "http://localhost:9070/write" --data-raw 'cpu,host=server01,region=us-west usage_idle=92.6,usage_user=7.4'
+
+# Multiple metrics
+curl -i -XPOST "http://localhost:9070/write" --data-raw '
+memory,host=server01,region=us-west used_percent=23.43,free=7.82
+disk,host=server01,region=us-west used_percent=86.45,free=21.45
+network,host=server01,region=us-west rx_bytes=7834,tx_bytes=9843
+'
+```
+
+#### Line Protocol Format
+```
+<measurement>[,<tag_key>=<tag_value>] <field_key>=<field_value>[,<field_key>=<field_value>] [timestamp]
+```
+
+- **measurement**: Name of the metric (required)
+- **tags**: Optional key-value pairs for categorizing data
+- **fields**: One or more key-value pairs of the actual metric values
+- **timestamp**: Optional timestamp in nanoseconds since Unix epoch
+
+#### Query Line Protocol Data
+Query metrics using the same SQL interface:
+
+```bash
+# Query last 10 minutes of CPU metrics
+curl -X POST http://localhost:9070/query \
+  -H "Content-Type: application/json" \
+  -d '{
+    "query": "SELECT time, host, region, usage_idle, usage_user FROM cpu WHERE time >= '\''2025-02-09T16:00:00'\''"
+  }'
+
+# Aggregate metrics by host
+curl -X POST http://localhost:9070/query \
+  -H "Content-Type: application/json" \
+  -d '{
+    "query": "SELECT host, avg(used_percent) as avg_used FROM memory GROUP BY host ORDER BY avg_used DESC"
+  }'
+```
+
+> The Line Protocol data is stored in Parquet files using the same directory structure and compaction strategy as HEP data, allowing for efficient querying and storage.
 
 ## License
 ©️ QXIP BV - Released under the AGPLv3 Open Source License.
