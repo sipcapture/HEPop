@@ -201,14 +201,18 @@ class QueryClient {
                 ${parsed.timeRange ? `WHERE timestamp >= TIMESTAMP '${new Date(parsed.timeRange.start / 1000000).toISOString()}'
                   AND timestamp <= TIMESTAMP '${new Date(parsed.timeRange.end / 1000000).toISOString()}'` : ''}
                 ${parsed.conditions}
+              ),
+              buffer_data_selected AS (
+                SELECT ${parsed.columns}
+                FROM buffer_data
+                WHERE timestamp >= TIMESTAMP '${new Date(parsed.timeRange.start / 1000000).toISOString()}'
+                AND timestamp <= TIMESTAMP '${new Date(parsed.timeRange.end / 1000000).toISOString()}'
+                ${parsed.conditions}
               )
               SELECT * FROM (
                 SELECT * FROM parquet_data
                 UNION ALL
-                SELECT ${parsed.columns} FROM buffer_data
-                WHERE timestamp >= TIMESTAMP '${new Date(parsed.timeRange.start / 1000000).toISOString()}'
-                AND timestamp <= TIMESTAMP '${new Date(parsed.timeRange.end / 1000000).toISOString()}'
-                ${parsed.conditions}
+                SELECT * FROM buffer_data_selected
               )
               ${parsed.orderBy}
               ${parsed.limit}
