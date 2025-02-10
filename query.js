@@ -153,21 +153,60 @@ class QueryClient {
       }
 
       const files = await this.findRelevantFiles(parsed.type, parsed.timeRange);
-      if (!files.length) {
-        return [];
-      }
-
       const connection = await this.db.connect();
+
       try {
-        const query = `
-          SELECT ${parsed.columns}
-          FROM read_parquet([${files.map(f => `'${f.path}'`).join(', ')}])
-          ${parsed.timeRange ? `WHERE timestamp >= TIMESTAMP '${new Date(parsed.timeRange.start / 1000000).toISOString()}'
-            AND timestamp <= TIMESTAMP '${new Date(parsed.timeRange.end / 1000000).toISOString()}'` : ''}
-          ${parsed.conditions}
-          ${parsed.orderBy}
-          ${parsed.limit}
-        `;
+        // Get buffered data for this type
+        const buffer = this.buffer?.buffers.get(parsed.type);
+        let query;
+
+        if (buffer?.rows?.length) {
+          // Create temp table from buffer
+          await connection.query(`
+            CREATE TEMP TABLE buffer_data AS 
+            SELECT * FROM (
+              VALUES ${buffer.rows.map(row => `(
+                ${buffer.isLineProtocol ? 
+                  `'${row.timestamp.toISOString()}', '${row.tags}', ${Object.entries(row).filter(([k]) => !['timestamp', 'tags'].includes(k)).map(([,v]) => typeof v === 'string' ? `'${v}'` : v).join(', ')}` :
+                  `'${new Date(row.create_date).toISOString()}', '${JSON.stringify(row.protocol_header)}', '${row.raw || ''}'`}
+              )`).join(', ')}
+            ) t(${buffer.isLineProtocol ? 
+              `timestamp, tags, ${Object.keys(buffer.rows[0]).filter(k => !['timestamp', 'tags'].includes(k)).join(', ')}` : 
+              'timestamp, rcinfo, payload'})
+          `);
+
+          // Union buffer with parquet data
+          query = `
+            WITH parquet_data AS (
+              SELECT ${parsed.columns}
+              FROM read_parquet([${files.map(f => `'${f.path}'`).join(', ')}])
+              ${parsed.timeRange ? `WHERE timestamp >= TIMESTAMP '${new Date(parsed.timeRange.start / 1000000).toISOString()}'
+                AND timestamp <= TIMESTAMP '${new Date(parsed.timeRange.end / 1000000).toISOString()}'` : ''}
+              ${parsed.conditions}
+            )
+            SELECT * FROM (
+              SELECT * FROM parquet_data
+              UNION ALL
+              SELECT ${parsed.columns} FROM buffer_data
+              WHERE timestamp >= TIMESTAMP '${new Date(parsed.timeRange.start / 1000000).toISOString()}'
+              AND timestamp <= TIMESTAMP '${new Date(parsed.timeRange.end / 1000000).toISOString()}'
+              ${parsed.conditions}
+            )
+            ${parsed.orderBy}
+            ${parsed.limit}
+          `;
+        } else {
+          // No buffer data, just query parquet
+          query = `
+            SELECT ${parsed.columns}
+            FROM read_parquet([${files.map(f => `'${f.path}'`).join(', ')}])
+            ${parsed.timeRange ? `WHERE timestamp >= TIMESTAMP '${new Date(parsed.timeRange.start / 1000000).toISOString()}'
+              AND timestamp <= TIMESTAMP '${new Date(parsed.timeRange.end / 1000000).toISOString()}'` : ''}
+            ${parsed.conditions}
+            ${parsed.orderBy}
+            ${parsed.limit}
+          `;
+        }
 
         const reader = await connection.runAndReadAll(query);
         return reader.getRows().map(row => {
