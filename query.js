@@ -201,22 +201,23 @@ class QueryClient {
                 ${parsed.timeRange ? `WHERE timestamp >= TIMESTAMP '${new Date(parsed.timeRange.start / 1000000).toISOString()}'
                   AND timestamp <= TIMESTAMP '${new Date(parsed.timeRange.end / 1000000).toISOString()}'` : ''}
                 ${parsed.conditions}
-              ),
-              buffer_data_selected AS (
-                SELECT ${parsed.columns}
-                FROM buffer_data
-                WHERE timestamp >= TIMESTAMP '${new Date(parsed.timeRange.start / 1000000).toISOString()}'
-                AND timestamp <= TIMESTAMP '${new Date(parsed.timeRange.end / 1000000).toISOString()}'
-                ${parsed.conditions}
               )
               SELECT * FROM (
-                SELECT * FROM parquet_data
+                (SELECT * FROM parquet_data)
                 UNION ALL
-                SELECT * FROM buffer_data_selected
+                (SELECT ${parsed.columns} 
+                 FROM buffer_data
+                 WHERE timestamp >= TIMESTAMP '${new Date(parsed.timeRange.start / 1000000).toISOString()}'
+                 AND timestamp <= TIMESTAMP '${new Date(parsed.timeRange.end / 1000000).toISOString()}'
+                 ${parsed.conditions})
               )
               ${parsed.orderBy}
               ${parsed.limit}
             `;
+
+            console.log('Generated query:', query);
+            console.log('Buffer rows:', buffer.rows.length);
+            console.log('Parquet files:', files.length);
           } else {
             // Only query buffer data
             query = `
