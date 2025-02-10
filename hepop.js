@@ -953,7 +953,9 @@ class CompactionManager {
 class HEPServer {
   constructor(config = {}) {
     this.debug = config.debug || false;
-    this.queryClient = null;  // Add queryClient property
+    this.queryClient = null;
+    this.buffer = null;
+    this.compaction = null;
   }
 
   async initialize() {
@@ -963,7 +965,7 @@ class HEPServer {
       await this.buffer.initialize();
 
       // Initialize compaction manager with debug flag
-      this.compaction = new CompactionManager(this.buffer, this.debug);
+      this.compaction = new CompactionManager(this.buffer, true); // Always show compaction logs
       await this.compaction.initialize();
 
       // Initialize query client with buffer manager
@@ -1127,6 +1129,11 @@ class HEPServer {
   async shutdown() {
     console.log('Shutting down HEP server...');
     
+    // Stop compaction first
+    if (this.compaction) {
+      await this.compaction.close();
+    }
+
     // Stop TCP server
     if (this.tcpServer) {
       try {
