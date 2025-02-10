@@ -36,18 +36,20 @@ while true; do
        --data-raw "$data_payload"
 
   # Print the payload for debugging
-  echo "Payload sent: $data_payload"
+  # echo "Payload sent: $data_payload"
 
   # Increment counter
   ((counter++))
 
   # Every 10 inserts, check the total count
-  if (( counter % 10 == 0 )); then
+  if (( counter % 50 == 0 )); then
     query_payload=$(jq -n --arg time "$start_time" '{query: "SELECT count() as count, avg(temp) as temp FROM home WHERE time >= '\''\($time)'\'' LIMIT 1"}')
     response=$(curl -s -X POST "$QUERY_URL" -H "Content-Type: application/json" -d "$query_payload")
     echo "Total count: $response"
+    echo "Total sent: $counter"
   fi
 
   # Wait for 1 second before sending the next request
-  sleep 1
+  read -t 0.5
+
 done
