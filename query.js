@@ -193,27 +193,51 @@ class QueryClient {
           await connection.runAndReadAll(valuesQuery);
 
           if (files.length > 0) {
-            // Union buffer with parquet data
-            query = `
-              WITH parquet_data AS (
+            // For aggregate queries, combine data before aggregating
+            const isAggregateQuery = parsed.columns.toLowerCase().includes('count(') || 
+                                   parsed.columns.toLowerCase().includes('avg(');
+            
+            if (isAggregateQuery) {
+              query = `
+                WITH all_data AS (
+                  SELECT * FROM read_parquet([${files.map(f => `'${f.path}'`).join(', ')}])
+                  WHERE timestamp >= TIMESTAMP '${new Date(parsed.timeRange.start / 1000000).toISOString()}'
+                  AND timestamp <= TIMESTAMP '${new Date(parsed.timeRange.end / 1000000).toISOString()}'
+                  ${parsed.conditions}
+                  UNION ALL
+                  SELECT * FROM buffer_data
+                  WHERE timestamp >= TIMESTAMP '${new Date(parsed.timeRange.start / 1000000).toISOString()}'
+                  AND timestamp <= TIMESTAMP '${new Date(parsed.timeRange.end / 1000000).toISOString()}'
+                  ${parsed.conditions}
+                )
                 SELECT ${parsed.columns}
-                FROM read_parquet([${files.map(f => `'${f.path}'`).join(', ')}])
-                ${parsed.timeRange ? `WHERE timestamp >= TIMESTAMP '${new Date(parsed.timeRange.start / 1000000).toISOString()}'
-                  AND timestamp <= TIMESTAMP '${new Date(parsed.timeRange.end / 1000000).toISOString()}'` : ''}
-                ${parsed.conditions}
-              )
-              SELECT * FROM (
-                (SELECT * FROM parquet_data)
-                UNION ALL
-                (SELECT ${parsed.columns} 
-                 FROM buffer_data
-                 WHERE timestamp >= TIMESTAMP '${new Date(parsed.timeRange.start / 1000000).toISOString()}'
-                 AND timestamp <= TIMESTAMP '${new Date(parsed.timeRange.end / 1000000).toISOString()}'
-                 ${parsed.conditions})
-              )
-              ${parsed.orderBy}
-              ${parsed.limit}
-            `;
+                FROM all_data
+                ${parsed.orderBy}
+                ${parsed.limit}
+              `;
+            } else {
+              // Original query for non-aggregate queries
+              query = `
+                WITH parquet_data AS (
+                  SELECT ${parsed.columns}
+                  FROM read_parquet([${files.map(f => `'${f.path}'`).join(', ')}])
+                  WHERE timestamp >= TIMESTAMP '${new Date(parsed.timeRange.start / 1000000).toISOString()}'
+                    AND timestamp <= TIMESTAMP '${new Date(parsed.timeRange.end / 1000000).toISOString()}'
+                  ${parsed.conditions}
+                )
+                SELECT * FROM (
+                  (SELECT * FROM parquet_data)
+                  UNION ALL
+                  (SELECT ${parsed.columns} 
+                   FROM buffer_data
+                   WHERE timestamp >= TIMESTAMP '${new Date(parsed.timeRange.start / 1000000).toISOString()}'
+                   AND timestamp <= TIMESTAMP '${new Date(parsed.timeRange.end / 1000000).toISOString()}'
+                   ${parsed.conditions})
+                )
+                ${parsed.orderBy}
+                ${parsed.limit}
+              `;
+            }
 
             console.log('Generated query:', query);
             console.log('Buffer rows:', buffer.rows.length);
