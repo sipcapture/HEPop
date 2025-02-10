@@ -1146,7 +1146,7 @@ class HEPServer {
     if (this.udpServer) {
       try {
         // UDP sockets use close() not stop()
-        this.udpServer.close();
+        if (this.udpSever?.close) this.udpServer.close();
       } catch (error) {
         console.error('Error stopping UDP server:', error);
       }
