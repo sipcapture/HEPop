@@ -192,28 +192,40 @@ class QueryClient {
 
           await connection.runAndReadAll(valuesQuery);
 
-          // Union buffer with parquet data
-          query = `
-            WITH parquet_data AS (
-              SELECT ${parsed.columns}
-              FROM read_parquet([${files.map(f => `'${f.path}'`).join(', ')}])
-              ${parsed.timeRange ? `WHERE timestamp >= TIMESTAMP '${new Date(parsed.timeRange.start / 1000000).toISOString()}'
-                AND timestamp <= TIMESTAMP '${new Date(parsed.timeRange.end / 1000000).toISOString()}'` : ''}
-              ${parsed.conditions}
-            )
-            SELECT * FROM (
-              SELECT * FROM parquet_data
-              UNION ALL
+          if (files.length > 0) {
+            // Union buffer with parquet data
+            query = `
+              WITH parquet_data AS (
+                SELECT ${parsed.columns}
+                FROM read_parquet([${files.map(f => `'${f.path}'`).join(', ')}])
+                ${parsed.timeRange ? `WHERE timestamp >= TIMESTAMP '${new Date(parsed.timeRange.start / 1000000).toISOString()}'
+                  AND timestamp <= TIMESTAMP '${new Date(parsed.timeRange.end / 1000000).toISOString()}'` : ''}
+                ${parsed.conditions}
+              )
+              SELECT * FROM (
+                SELECT * FROM parquet_data
+                UNION ALL
+                SELECT ${parsed.columns} FROM buffer_data
+                WHERE timestamp >= TIMESTAMP '${new Date(parsed.timeRange.start / 1000000).toISOString()}'
+                AND timestamp <= TIMESTAMP '${new Date(parsed.timeRange.end / 1000000).toISOString()}'
+                ${parsed.conditions}
+              )
+              ${parsed.orderBy}
+              ${parsed.limit}
+            `;
+          } else {
+            // Only query buffer data
+            query = `
               SELECT ${parsed.columns} FROM buffer_data
               WHERE timestamp >= TIMESTAMP '${new Date(parsed.timeRange.start / 1000000).toISOString()}'
               AND timestamp <= TIMESTAMP '${new Date(parsed.timeRange.end / 1000000).toISOString()}'
               ${parsed.conditions}
-            )
-            ${parsed.orderBy}
-            ${parsed.limit}
-          `;
-        } else {
-          // No buffer data, just query parquet
+              ${parsed.orderBy}
+              ${parsed.limit}
+            `;
+          }
+        } else if (files.length > 0) {
+          // Only query parquet files
           query = `
             SELECT ${parsed.columns}
             FROM read_parquet([${files.map(f => `'${f.path}'`).join(', ')}])
@@ -223,6 +235,9 @@ class QueryClient {
             ${parsed.orderBy}
             ${parsed.limit}
           `;
+        } else {
+          // No data available
+          return [];
         }
 
         const reader = await connection.runAndReadAll(query);
