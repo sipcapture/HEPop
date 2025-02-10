@@ -200,12 +200,14 @@ class QueryClient {
             if (isAggregateQuery) {
               query = `
                 WITH all_data AS (
-                  SELECT * FROM read_parquet([${files.map(f => `'${f.path}'`).join(', ')}])
+                  SELECT ${buffer.isLineProtocol ? '*' : 'timestamp, rcinfo, payload'} 
+                  FROM read_parquet([${files.map(f => `'${f.path}'`).join(', ')}])
                   WHERE timestamp >= TIMESTAMP '${new Date(parsed.timeRange.start / 1000000).toISOString()}'
                   AND timestamp <= TIMESTAMP '${new Date(parsed.timeRange.end / 1000000).toISOString()}'
                   ${parsed.conditions}
                   UNION ALL
-                  SELECT * FROM buffer_data
+                  SELECT ${buffer.isLineProtocol ? '*' : 'timestamp, rcinfo, payload'}
+                  FROM buffer_data
                   WHERE timestamp >= TIMESTAMP '${new Date(parsed.timeRange.start / 1000000).toISOString()}'
                   AND timestamp <= TIMESTAMP '${new Date(parsed.timeRange.end / 1000000).toISOString()}'
                   ${parsed.conditions}
@@ -238,10 +240,6 @@ class QueryClient {
                 ${parsed.limit}
               `;
             }
-
-            console.log('Generated query:', query);
-            console.log('Buffer rows:', buffer.rows.length);
-            console.log('Parquet files:', files.length);
           } else {
             // Only query buffer data
             query = `
