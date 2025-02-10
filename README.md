@@ -45,7 +45,6 @@
       Storage-.->LocalFS;
       Storage-.->S3;
       HTTP-API-- GET/POST --> HEPop;
-      HTTP-API-- GET/POST --> HEPop;
       DuckDB-->Storage;
       DuckDB-->Metadata;
 
@@ -134,17 +133,17 @@ Query the HEP data using the HTTP API. The server provides both GET and POST end
 - **Filtering**: WHERE clause supports standard SQL conditions
 - **Sorting**: ORDER BY supports all columns
 - **Pagination**: Use LIMIT and OFFSET for paging
-- **Multiple Types**: Query different HEP types (hep_1, hep_100, etc.)
 
 
-#### Available Fields:
+#### Available HEP Fields:
+HEP virtual fields are automatically exploded at query time
 - `timestamp/time`: Event timestamp
 - `rcinfo`: Raw HEP protocol header _(JSON)_
 - `payload`: HEP Protocol payload
-- `src_ip`: Source IP _(extracted from rcinfo)_
-- `dst_ip`: Destination IP _(extracted from rcinfo)_
-- `src_port`: Source port _(extracted from rcinfo)_
-- `dst_port`: Destination port _(extracted from rcinfo)_
+- `src_ip`: Source IP _(rcinfo)_
+- `dst_ip`: Destination IP _(rcinfo)_
+- `src_port`: Source port _(rcinfo)_
+- `dst_port`: Destination port _(rcinfo)_
 
 
 #### GET /query
@@ -218,7 +217,7 @@ curl -X POST http://localhost:9070/query \
   }'
 ```
 
-The Line Protocol data is stored in Parquet files using the same directory structure and compaction strategy as HEP data, allowing for efficient querying and storage.
+> The Line Protocol data is stored in Parquet files using the same directory structure and compaction strategy as HEP data, allowing for efficient querying and storage.
 
 ## License
 ©️ QXIP BV - Released under the AGPLv3 Open Source License.
