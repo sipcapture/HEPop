@@ -3,10 +3,11 @@ import path from 'path';
 import fs from 'fs';
 
 class QueryClient {
-  constructor(baseDir = './data') {
+  constructor(baseDir = './data', bufferManager = null) {
     this.baseDir = baseDir;
     this.db = null;
     this.defaultTimeRange = 10 * 60 * 1000000000; // 10 minutes in nanoseconds
+    this.buffer = bufferManager; // Store reference to buffer manager
   }
 
   async initialize() {

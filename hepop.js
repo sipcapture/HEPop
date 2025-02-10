@@ -966,19 +966,18 @@ class HEPServer {
 
   async initialize() {
     try {
+      // Initialize buffer manager
       this.buffer = new ParquetBufferManager();
       await this.buffer.initialize();
-      
-      this.compaction = new CompactionManager(this.buffer);
-      await this.compaction.initialize();
 
-      // Initialize query client
-      this.queryClient = new QueryClient(this.buffer.baseDir);
+      // Initialize query client with buffer manager
+      this.queryClient = new QueryClient(this.buffer.baseDir, this.buffer);
       await this.queryClient.initialize();
-      
+
+      // Start servers
       await this.startServers();
     } catch (error) {
-      console.error('Failed to initialize HEPServer:', error);
+      console.error('Failed to initialize HEP server:', error);
       throw error;
     }
   }
