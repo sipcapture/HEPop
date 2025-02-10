@@ -410,7 +410,7 @@ class ParquetBufferManager {
 }
 
 class CompactionManager {
-  constructor(bufferManager) {
+  constructor(bufferManager, debug = false) {
     this.bufferManager = bufferManager;
     this.compactionIntervals = {
       '10m': 10 * 60 * 1000,
@@ -418,6 +418,7 @@ class CompactionManager {
       '24h': 24 * 60 * 60 * 1000
     };
     this.compactionLock = new Map();
+    this.debug = debug;
   }
 
   async initialize() {
@@ -493,7 +494,9 @@ class CompactionManager {
 
   async checkAndCompact() {
     const typeDirs = await this.getTypeDirectories();
-    console.log('Found types for compaction:', typeDirs);
+    if (this.debug || typeDirs.length > 0) {
+      console.log('Found types for compaction:', typeDirs);
+    }
 
     for (const type of typeDirs) {
       if (this.compactionLock.get(type)) {
@@ -506,28 +509,17 @@ class CompactionManager {
         let metadata = await this.bufferManager.getTypeMetadata(type);
         
         if (!metadata.files || !metadata.files.length) {
-          console.log(`No files found in metadata for type ${type}`);
+          if (this.debug) console.log(`No files found in metadata for type ${type}`);
           continue;
         }
 
-        // Verify and clean metadata before compaction
         metadata = await this.verifyAndCleanMetadata(type, metadata);
         
-        if (!metadata.files.length) {
-          console.log(`No valid files remain after metadata cleanup for type ${type}`);
-          continue;
+        if (metadata.files.length > 0) {
+          console.log(`Type ${type} has ${metadata.files.length} files to consider for compaction`);
+          await this.compactTimeRange(type, metadata.files, '10m', '1h');
+          await this.compactTimeRange(type, metadata.files, '1h', '24h');
         }
-        
-        console.log(`Type ${type} has ${metadata.files.length} files to consider for compaction`);
-        console.log('Files:', metadata.files.map(f => ({
-          path: f.path,
-          type: f.type,
-          min_time: new Date(f.min_time / 1000000).toISOString(),
-          max_time: new Date(f.max_time / 1000000).toISOString()
-        })));
-        
-        await this.compactTimeRange(type, metadata.files, '10m', '1h');
-        await this.compactTimeRange(type, metadata.files, '1h', '24h');
       } catch (error) {
         console.error(`Error during compaction for type ${type}:`, error);
       } finally {
@@ -969,6 +961,10 @@ class HEPServer {
       // Initialize buffer manager
       this.buffer = new ParquetBufferManager();
       await this.buffer.initialize();
+
+      // Initialize compaction manager with debug flag
+      this.compaction = new CompactionManager(this.buffer, this.debug);
+      await this.compaction.initialize();
 
       // Initialize query client with buffer manager
       this.queryClient = new QueryClient(this.buffer.baseDir, this.buffer);
