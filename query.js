@@ -162,19 +162,35 @@ class QueryClient {
         let query;
 
         if (buffer?.rows?.length) {
-          // Create temp table from buffer
-          await connection.query(`
-            CREATE TEMP TABLE buffer_data AS 
-            SELECT * FROM (
-              VALUES ${buffer.rows.map(row => `(
-                ${buffer.isLineProtocol ? 
-                  `'${row.timestamp.toISOString()}', '${row.tags}', ${Object.entries(row).filter(([k]) => !['timestamp', 'tags'].includes(k)).map(([,v]) => typeof v === 'string' ? `'${v}'` : v).join(', ')}` :
-                  `'${new Date(row.create_date).toISOString()}', '${JSON.stringify(row.protocol_header)}', '${row.raw || ''}'`}
-              )`).join(', ')}
-            ) t(${buffer.isLineProtocol ? 
-              `timestamp, tags, ${Object.keys(buffer.rows[0]).filter(k => !['timestamp', 'tags'].includes(k)).join(', ')}` : 
+          // Create temp table from buffer using VALUES
+          const valuesQuery = `
+            CREATE TEMP TABLE IF NOT EXISTS buffer_data AS 
+            SELECT * FROM (VALUES ${buffer.rows.map(row => {
+              if (buffer.isLineProtocol) {
+                return `(
+                  TIMESTAMP '${row.timestamp.toISOString()}',
+                  '${row.tags}',
+                  ${Object.entries(row)
+                    .filter(([k]) => !['timestamp', 'tags'].includes(k))
+                    .map(([,v]) => typeof v === 'string' ? `'${v}'` : v)
+                    .join(', ')}
+                )`;
+              } else {
+                return `(
+                  TIMESTAMP '${new Date(row.create_date).toISOString()}',
+                  '${JSON.stringify(row.protocol_header)}',
+                  '${row.raw || ''}'
+                )`;
+              }
+            }).join(', ')}) 
+            AS t(${buffer.isLineProtocol ? 
+              `timestamp, tags, ${Object.keys(buffer.rows[0])
+                .filter(k => !['timestamp', 'tags'].includes(k))
+                .join(', ')}` : 
               'timestamp, rcinfo, payload'})
-          `);
+          `;
+
+          await connection.runAndReadAll(valuesQuery);
 
           // Union buffer with parquet data
           query = `
