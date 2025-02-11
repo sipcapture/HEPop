@@ -198,7 +198,7 @@ class ParquetBufferManager {
   }
 
   startFlushInterval() {
-    setInterval(() => {
+    this.flushInterval = setInterval(() => {
       for (const type of this.buffers.keys()) {
         this.flush(type);
       }
@@ -381,8 +381,18 @@ class ParquetBufferManager {
   }
 
   async close() {
+    // Clear flush interval first
+    if (this.flushInterval) {
+      clearInterval(this.flushInterval);
+    }
+
+    // Final flush of all buffers
     for (const type of this.buffers.keys()) {
-      await this.flush(type);
+      try {
+        await this.flush(type);
+      } catch (error) {
+        console.error(`Error flushing buffer for ${type}:`, error);
+      }
     }
   }
 
@@ -1264,50 +1274,60 @@ class HEPServer {
   async shutdown() {
     console.log('Shutting down HEP server...');
     
-    // Stop compaction first
-    if (this.compaction) {
-      await this.compaction.close();
-    }
-
-    // Stop TCP server
+    // Stop accepting new connections first
     if (this.tcpServer) {
       try {
         this.tcpServer.stop(true);
-        this.tcpServer.unref();
       } catch (error) {
         console.error('Error stopping TCP server:', error);
       }
     }
 
-    // Stop UDP server
     if (this.udpServer) {
       try {
-        // UDP sockets use close() not stop()
-        if (this.udpSever?.close) this.udpServer.close();
+        if (this.udpServer.close) this.udpServer.close();
       } catch (error) {
         console.error('Error stopping UDP server:', error);
       }
     }
 
-    // Stop HTTP server
     if (this.httpServer) {
       try {
         this.httpServer.stop(true);
-        this.httpServer.unref();
       } catch (error) {
         console.error('Error stopping HTTP server:', error);
       }
     }
-    
-    // Flush any remaining data
-    try {
-    await this.buffer.close();
-    } catch (error) {
-      console.error('Error flushing buffers:', error);
+
+    // Stop compaction and intervals
+    if (this.compaction) {
+      try {
+        await this.compaction.close();
+      } catch (error) {
+        console.error('Error stopping compaction:', error);
+      }
     }
-    
+
+    // Stop buffer manager intervals
+    if (this.buffer) {
+      try {
+        // Clear flush interval
+        if (this.buffer.flushInterval) {
+          clearInterval(this.buffer.flushInterval);
+        }
+        // Final flush
+        await this.buffer.close();
+      } catch (error) {
+        console.error('Error closing buffer manager:', error);
+      }
+    }
+
     console.log('Server shutdown complete');
-    process.exit(0);
+    // Force exit after 1 second if still running
+    setTimeout(() => {
+      console.log('Forcing exit...');
+      process.exit(0);
+    }, 1000);
   }
 
   handleData(data, socket) {
@@ -1343,7 +1363,7 @@ class HEPServer {
     return new Date(
       (rcinfo.timeSeconds * 1000) + 
       (((100000 + rcinfo.timeUseconds) / 1000) - 100)
-    );
+    ));
   }
 }
 
