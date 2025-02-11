@@ -232,7 +232,7 @@ class QueryClient {
                   WHERE timestamp >= TIMESTAMP '${new Date(parsed.timeRange.start / 1000000).toISOString()}'
                   AND timestamp <= TIMESTAMP '${new Date(parsed.timeRange.end / 1000000).toISOString()}'
                   ${parsed.conditions}
-                )
+                ) combined_data
                 ${parsed.orderBy}
                 ${parsed.limit}
               `;
