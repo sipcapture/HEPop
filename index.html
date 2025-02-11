@@ -717,23 +717,65 @@
             return;
         }
 
-        // Transform our data format to the expected format
-        const result = {
-            meta: [
-                { name: 'time', type: 'DateTime' },
-                { name: 'room', type: 'String' },
-                { name: 'temp', type: 'Float64' },
-                { name: 'light', type: 'Float64' }
-            ],
-            data: data.map(row => {
+        // Detect data type and create appropriate metadata
+        const firstRow = data[0];
+        let meta = [];
+        let transformedData = [];
+
+        if (firstRow.timestamp && firstRow.tags) {
+            // Line Protocol data
+            meta = [
+                { name: 'time', type: 'DateTime' }
+            ];
+
+            // Extract tag names from first row
+            const tags = JSON.parse(firstRow.tags);
+            Object.keys(tags).forEach(tag => {
+                meta.push({ name: tag, type: 'String' });
+            });
+
+            // Add metric columns
+            Object.keys(firstRow).forEach(key => {
+                if (key !== 'timestamp' && key !== 'tags') {
+                    meta.push({ name: key, type: 'Float64' });
+                }
+            });
+
+            // Transform data
+            transformedData = data.map(row => {
+                const values = [new Date(parseInt(row.timestamp.micros)/1000).toISOString()];
                 const tags = JSON.parse(row.tags);
+                Object.values(tags).forEach(v => values.push(v));
+                Object.keys(row).forEach(key => {
+                    if (key !== 'timestamp' && key !== 'tags') {
+                        values.push(row[key]);
+                    }
+                });
+                return values;
+            });
+        } else if (firstRow.protocol_header) {
+            // HEP data
+            meta = [
+                { name: 'time', type: 'DateTime' },
+                { name: 'src_ip', type: 'String' },
+                { name: 'dst_ip', type: 'String' },
+                { name: 'payload', type: 'String' }
+            ];
+
+            transformedData = data.map(row => {
+                const header = JSON.parse(row.protocol_header);
                 return [
-                    new Date(parseInt(row.timestamp.micros)/1000).toISOString(),
-                    tags.room,
-                    row.temp,
-                    row.light
+                    new Date(row.create_date).toISOString(),
+                    header.srcIp || '',
+                    header.dstIp || '',
+                    row.raw || ''
                 ];
-            }),
+            });
+        }
+
+        const result = {
+            meta: meta,
+            data: transformedData,
             rows: data.length,
             rows_before_limit_at_least: data.length,
             statistics: {
