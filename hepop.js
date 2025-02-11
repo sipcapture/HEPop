@@ -180,15 +180,23 @@ class ParquetBufferManager {
   }
 
   async flush(type) {
+    console.log(`Attempting to flush ${type}`);
     const buffer = this.buffers.get(type);
-    if (!buffer?.rows.length) return;
+    if (!buffer?.rows.length) {
+      console.log(`No rows to flush for ${type}`);
+      return;
+    }
     
     try {
+      console.log(`Flushing ${buffer.rows.length} rows for ${type}`);
       const filePath = await this.getFilePath(type, buffer.isLineProtocol ? 
         buffer.rows[0].timestamp : buffer.rows[0].create_date);
+      
       await fs.promises.mkdir(path.dirname(filePath), { recursive: true });
+      console.log(`Created directory for ${filePath}`);
 
       // Create writer with appropriate schema
+      console.log(`Creating writer for ${type} with schema:`, buffer.schema);
       const writer = await parquet.ParquetWriter.openFile(
         buffer.schema,
         filePath,
@@ -209,9 +217,11 @@ class ParquetBufferManager {
       }
 
       await writer.close();
+      console.log(`Closed writer for ${filePath}`);
 
       // Get file stats
       const stats = await fs.promises.stat(filePath);
+      console.log(`File stats for ${filePath}:`, stats);
       
       // Update metadata
       await this.updateMetadata(
@@ -230,9 +240,10 @@ class ParquetBufferManager {
         isLineProtocol: buffer.isLineProtocol
       });
       
-      console.log(`Wrote ${buffer.rows.length} records to ${filePath}`);
+      console.log(`Successfully wrote ${buffer.rows.length} records to ${filePath}`);
     } catch (error) {
-      console.error(`Parquet flush error:`, error);
+      console.error(`Parquet flush error for ${type}:`, error);
+      throw error;
     }
   }
 
@@ -363,26 +374,6 @@ class ParquetBufferManager {
     }
   }
 
-  async ensureDirectories() {
-    const metadataDir = path.join(this.baseDir, this.writerId);
-    await fs.promises.mkdir(metadataDir, { recursive: true });
-    
-    // Write initial metadata file if it doesn't exist
-    const metadataPath = path.join(metadataDir, 'metadata.json');
-    if (!fs.existsSync(metadataPath)) {
-      const initialMetadata = {
-        writer_id: this.writerId,
-        next_db_id: 0,
-        next_table_id: 0
-      };
-      
-      await fs.promises.writeFile(
-        metadataPath,
-        JSON.stringify(initialMetadata, null, 2)
-      );
-    }
-  }
-
   async addLineProtocol(data) {
     const measurement = data.measurement;
     if (!this.buffers.has(measurement)) {
@@ -456,72 +447,85 @@ class ParquetBufferManager {
   }
 
   async addLineProtocolBulk(measurement, rows) {
+    console.log(`Processing bulk write for ${measurement}: ${rows.length} rows`);
     const type = measurement;
     
-    if (!this.buffers.has(type)) {
-      // Get existing schema if any
-      let existingSchema = null;
-      try {
-        const typeMetadata = await this.getTypeMetadata(type);
-        if (typeMetadata.files.length > 0) {
-          const reader = await parquet.ParquetReader.openFile(typeMetadata.files[0].path);
-          existingSchema = reader.schema;
-          await reader.close();
+    try {
+      if (!this.buffers.has(type)) {
+        console.log(`Creating new buffer for ${type}`);
+        // Get existing schema if any
+        let existingSchema = null;
+        try {
+          const typeMetadata = await this.getTypeMetadata(type);
+          if (typeMetadata.files.length > 0) {
+            const reader = await parquet.ParquetReader.openFile(typeMetadata.files[0].path);
+            existingSchema = reader.schema;
+            await reader.close();
+            console.log(`Found existing schema for ${type}`);
+          }
+        } catch (error) {
+          console.log(`Creating new schema for ${type}`);
         }
-      } catch (error) {
-        console.log(`No existing schema found for ${type}, creating new one`);
+
+        // Merge schemas
+        const newFields = {};
+        rows.forEach(row => {
+          Object.entries(row).forEach(([key, value]) => {
+            if (key !== 'timestamp' && key !== 'tags') {
+              newFields[key] = { 
+                type: typeof value === 'number' ? 'DOUBLE' : 
+                      typeof value === 'boolean' ? 'BOOLEAN' : 'UTF8',
+                optional: true
+              };
+            }
+          });
+        });
+
+        const schema = new parquet.ParquetSchema({
+          timestamp: { type: 'TIMESTAMP_MILLIS' },
+          tags: { type: 'UTF8' },
+          ...newFields
+        });
+
+        console.log(`Created schema for ${type}:`, schema);
+
+        this.buffers.set(type, {
+          rows: [],
+          schema,
+          isLineProtocol: true
+        });
       }
 
-      // Merge schemas
-      const newFields = {};
-      rows.forEach(row => {
-        Object.entries(row).forEach(([key, value]) => {
-          if (key !== 'timestamp' && key !== 'tags') {
-            newFields[key] = { 
-              type: typeof value === 'number' ? 'DOUBLE' : 
-                    typeof value === 'boolean' ? 'BOOLEAN' : 'UTF8',
-              optional: true // Make all fields optional
-            };
+      const buffer = this.buffers.get(type);
+      console.log(`Current buffer size for ${type}: ${buffer.rows.length}`);
+      
+      // Ensure all rows have all fields
+      const allFields = new Set();
+      buffer.schema.fieldList.forEach(f => allFields.add(f.path[0]));
+      
+      const normalizedRows = rows.map(row => {
+        const normalized = {
+          timestamp: row.timestamp,
+          tags: row.tags
+        };
+        allFields.forEach(field => {
+          if (field !== 'timestamp' && field !== 'tags') {
+            normalized[field] = row[field] ?? null;
           }
         });
+        return normalized;
       });
 
-      const schema = new parquet.ParquetSchema({
-        timestamp: { type: 'TIMESTAMP_MILLIS' },
-        tags: { type: 'UTF8' },
-        ...newFields
-      });
+      buffer.rows.push(...normalizedRows);
+      console.log(`Buffer size after push for ${type}: ${buffer.rows.length}`);
 
-      this.buffers.set(type, {
-        rows: [],
-        schema,
-        isLineProtocol: true
-      });
-    }
-
-    const buffer = this.buffers.get(type);
-    
-    // Ensure all rows have all fields
-    const allFields = new Set();
-    buffer.schema.fieldList.forEach(f => allFields.add(f.path[0]));
-    
-    const normalizedRows = rows.map(row => {
-      const normalized = {
-        timestamp: row.timestamp,
-        tags: row.tags
-      };
-      allFields.forEach(field => {
-        if (field !== 'timestamp' && field !== 'tags') {
-          normalized[field] = row[field] ?? null;
-        }
-      });
-      return normalized;
-    });
-
-    buffer.rows.push(...normalizedRows);
-
-    if (buffer.rows.length >= this.bufferSize) {
-      await this.flush(type);
+      if (buffer.rows.length >= this.bufferSize) {
+        console.log(`Buffer full for ${type}, flushing...`);
+        await this.flush(type);
+      }
+    } catch (error) {
+      console.error(`Error in addLineProtocolBulk for ${type}:`, error);
+      throw error;
     }
   }
 }
