@@ -153,11 +153,71 @@ class QueryClient {
     }
 
     try {
-      // Get database name from options or default to 'hep'
       const dbName = options.db || 'hep';
-      
-      // Get matching files for time range and database
       const files = await this.getFilesForTimeRange(parsed.timeRange, dbName);
+
+      // Drop existing temp table if it exists
+      await this.connection.runAndReadAll(`DROP TABLE IF EXISTS buffer_data`);
+
+      // Create temp table from buffer if there's data
+      const buffer = this.buffer.buffers.get(parsed.type);
+      if (buffer?.rows?.length) {
+        // Create temp table with proper schema first
+        await this.connection.runAndReadAll(`
+          CREATE TEMP TABLE buffer_data (
+            timestamp TIMESTAMP,
+            ${buffer.isLineProtocol ? 
+              `tags VARCHAR,
+               ${Object.keys(buffer.rows[0])
+                 .filter(k => !['timestamp', 'tags'].includes(k))
+                 .join(' VARCHAR,\n               ')} VARCHAR` : 
+              `rcinfo VARCHAR,
+               payload VARCHAR`}
+          )
+        `);
+
+        // Insert data in batches to avoid query size limits
+        const batchSize = 1000;
+        for (let i = 0; i < buffer.rows.length; i += batchSize) {
+          const batch = buffer.rows.slice(i, i + batchSize);
+          await this.connection.runAndReadAll(`
+            INSERT INTO buffer_data 
+            SELECT * FROM (VALUES ${batch.map(row => {
+              if (buffer.isLineProtocol) {
+                return `(
+                  TIMESTAMP '${row.timestamp.toISOString()}',
+                  '${row.tags}',
+                  ${Object.entries(row)
+                    .filter(([k]) => !['timestamp', 'tags'].includes(k))
+                    .map(([,v]) => typeof v === 'string' ? `'${v}'` : v)
+                    .join(', ')}
+                )`;
+              } else {
+                return `(
+                  TIMESTAMP '${new Date(row.create_date).toISOString()}',
+                  '${JSON.stringify(row.protocol_header)}',
+                  '${row.raw || ''}'
+                )`;
+              }
+            }).join(', ')})
+          `);
+        }
+      } else {
+        // Create empty temp table
+        await this.connection.runAndReadAll(`
+          CREATE TEMP TABLE buffer_data (
+            timestamp TIMESTAMP,
+            ${buffer?.isLineProtocol ? 
+              `tags VARCHAR,
+               ${Object.keys(buffer?.rows?.[0] || {})
+                 .filter(k => !['timestamp', 'tags'].includes(k))
+                 .map(k => `${k} VARCHAR`)
+                 .join(',\n               ')}` : 
+              `rcinfo VARCHAR,
+               payload VARCHAR`}
+          )
+        `);
+      }
 
       // Build query with union_by_name=true
       let query;
@@ -218,7 +278,7 @@ class QueryClient {
         `;
       }
 
-      // Execute query using proper DuckDB API
+      // Execute query
       const result = await this.connection.runAndReadAll(query);
       
       // Convert result to array of objects
