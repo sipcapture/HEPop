@@ -717,15 +717,24 @@
             return;
         }
 
-        // Extract column names from first row
+        // Extract column names and types from first row
         const meta = [];
         const firstRow = data[0];
         for (let key in firstRow) {
-            // Handle nested timestamp object
             if (key === 'timestamp') {
                 meta.push({name: 'time', type: 'DateTime'});
+            } else if (key === 'tags') {
+                // Parse JSON tags to get individual columns
+                try {
+                    const tags = JSON.parse(firstRow[key]);
+                    for (let tagKey in tags) {
+                        meta.push({name: `tag_${tagKey}`, type: 'String'});
+                    }
+                } catch (e) {
+                    meta.push({name: 'tags', type: 'String'});
+                }
             } else {
-                meta.push({name: key, type: 'String'}); 
+                meta.push({name: key, type: key.match(/temp|count|sum|avg/) ? 'Float64' : 'String'});
             }
         }
 
@@ -737,6 +746,16 @@
                     // Convert microseconds to readable date
                     const micros = parseInt(row[key].micros);
                     values.push(new Date(micros/1000).toISOString());
+                } else if (key === 'tags') {
+                    // Parse and expand JSON tags
+                    try {
+                        const tags = JSON.parse(row[key]);
+                        for (let tagKey in tags) {
+                            values.push(tags[tagKey]);
+                        }
+                    } catch (e) {
+                        values.push(row[key]);
+                    }
                 } else {
                     values.push(row[key]);
                 }
@@ -1115,8 +1134,8 @@
     }
 
     // Update example queries
-    const querypresets = document.getElementById('dropdown');
-    querypresets.innerHTML = `
+    const querypreset = document.getElementById('dropdown');
+    querypreset.innerHTML = `
         <option value=""></option>
         <option value="SELECT time, host, region, usage_idle, usage_user FROM cpu WHERE time >= '2025-02-09T16:00:00'">CPU Metrics</option>
         <option value="SELECT host, avg(used_percent) as avg_used FROM memory GROUP BY host ORDER BY avg_used DESC">Memory by Host</option>
