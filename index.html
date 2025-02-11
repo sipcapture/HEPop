@@ -576,28 +576,34 @@
     }
 
     function renderResponse(status, response) {
+        // Hide hourglass when response is received
+        document.getElementById('hourglass').style.display = 'none';
+
         if (status === 200) {
             const json = JSON.parse(response);
             
             // Handle our array format
             if (Array.isArray(json)) {
                 renderResult(json); // Pass the array directly
+                // Show check mark on success
+                document.getElementById('check-mark').style.display = 'inline';
             }
             // Keep existing chart format handler
             else if (Array.isArray(json) && json.length == 2 &&
                 Array.isArray(json[0]) && Array.isArray(json[1]) && 
                 json[0].length > 1 && json[0].length == json[1].length) {
                 renderChart(json);
+                document.getElementById('check-mark').style.display = 'inline';
             } 
-            // Keep legacy format handler
-            else if (json !== undefined && json.statistics !== undefined) {
-                renderResult(json);
-            }
             else {
                 renderUnparsedResult(response);
+                // Don't show check mark for unparsed/error results
+                document.getElementById('check-mark').style.display = 'none';
             }
         } else {
             renderError(response);
+            // Hide check mark on error
+            document.getElementById('check-mark').style.display = 'none';
         }
     }
 
