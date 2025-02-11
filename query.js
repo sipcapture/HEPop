@@ -201,7 +201,7 @@ class QueryClient {
               query = `
                 WITH all_data AS (
                   SELECT ${buffer.isLineProtocol ? '*' : 'timestamp, rcinfo, payload'} 
-                  FROM read_parquet([${files.map(f => `'${f.path}'`).join(', ')}])
+                  FROM read_parquet([${files.map(f => `'${f.path}'`).join(', ')}], union_by_name=true)
                   WHERE timestamp >= TIMESTAMP '${new Date(parsed.timeRange.start / 1000000).toISOString()}'
                   AND timestamp <= TIMESTAMP '${new Date(parsed.timeRange.end / 1000000).toISOString()}'
                   ${parsed.conditions}
@@ -218,23 +218,20 @@ class QueryClient {
                 ${parsed.limit}
               `;
             } else {
-              // Original query for non-aggregate queries
               query = `
-                WITH parquet_data AS (
-                  SELECT ${parsed.columns}
-                  FROM read_parquet([${files.map(f => `'${f.path}'`).join(', ')}])
+                SELECT ${parsed.columns}
+                FROM (
+                  SELECT ${buffer.isLineProtocol ? '*' : 'timestamp, rcinfo, payload'}
+                  FROM read_parquet([${files.map(f => `'${f.path}'`).join(', ')}], union_by_name=true)
                   WHERE timestamp >= TIMESTAMP '${new Date(parsed.timeRange.start / 1000000).toISOString()}'
-                    AND timestamp <= TIMESTAMP '${new Date(parsed.timeRange.end / 1000000).toISOString()}'
+                  AND timestamp <= TIMESTAMP '${new Date(parsed.timeRange.end / 1000000).toISOString()}'
                   ${parsed.conditions}
-                )
-                SELECT * FROM (
-                  (SELECT * FROM parquet_data)
                   UNION ALL
-                  (SELECT ${parsed.columns} 
-                   FROM buffer_data
-                   WHERE timestamp >= TIMESTAMP '${new Date(parsed.timeRange.start / 1000000).toISOString()}'
-                   AND timestamp <= TIMESTAMP '${new Date(parsed.timeRange.end / 1000000).toISOString()}'
-                   ${parsed.conditions})
+                  SELECT ${buffer.isLineProtocol ? '*' : 'timestamp, rcinfo, payload'}
+                  FROM buffer_data
+                  WHERE timestamp >= TIMESTAMP '${new Date(parsed.timeRange.start / 1000000).toISOString()}'
+                  AND timestamp <= TIMESTAMP '${new Date(parsed.timeRange.end / 1000000).toISOString()}'
+                  ${parsed.conditions}
                 )
                 ${parsed.orderBy}
                 ${parsed.limit}
@@ -243,7 +240,8 @@ class QueryClient {
           } else {
             // Only query buffer data
             query = `
-              SELECT ${parsed.columns} FROM buffer_data
+              SELECT ${parsed.columns}
+              FROM buffer_data
               WHERE timestamp >= TIMESTAMP '${new Date(parsed.timeRange.start / 1000000).toISOString()}'
               AND timestamp <= TIMESTAMP '${new Date(parsed.timeRange.end / 1000000).toISOString()}'
               ${parsed.conditions}
