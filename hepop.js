@@ -1137,7 +1137,6 @@ class HEPServer {
             } else if (url.pathname === '/write' && req.method === 'POST') {
               try {
                 const body = await req.text();
-                // Split on newlines and filter empty lines
                 const lines = body.split('\n').filter(line => line.trim());
                 
                 const config = {
@@ -1158,8 +1157,8 @@ class HEPServer {
                       bulkData.set(measurement, []);
                     }
                     
-                    // Ensure timestamp is a Date object
-                    const timestamp = new Date(parsed.timestamp);
+                    // Use let for timestamp since we might need to reassign
+                    let timestamp = new Date(parsed.timestamp);
                     if (isNaN(timestamp.getTime())) {
                       console.warn(`Invalid timestamp in line: ${line}, using current time`);
                       timestamp = new Date();
