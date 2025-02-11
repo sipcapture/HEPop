@@ -712,52 +712,44 @@
         // Parse the JSON response if needed
         const data = typeof response === 'string' ? JSON.parse(response) : response;
         
-        // If response is already in expected format, use it directly
-        if (data.meta && data.data) {
-            renderTable(data);
+        if (!Array.isArray(data) || !data.length) {
+            renderUnparsedResult("No data available");
             return;
         }
 
-        // If response is an array, transform it to expected format
-        if (Array.isArray(data)) {
-            // Get column names from first row
-            const firstRow = data[0];
-            const meta = Object.keys(firstRow).map(key => {
-                return {
-                    name: key === 'timestamp' ? 'time' : key,
-                    type: key === 'timestamp' ? 'DateTime' : 
-                          key === 'tags' ? 'String' : 
-                          typeof firstRow[key] === 'number' ? 'Float64' : 'String'
-                };
-            });
-
-            // Transform rows to arrays matching meta order
-            const rows = data.map(row => {
-                return meta.map(col => {
-                    if (col.name === 'time') {
-                        return new Date(parseInt(row.timestamp.micros)/1000).toISOString();
-                    }
-                    return row[col.name];
-                });
-            });
-
-            const result = {
-                meta: meta,
-                data: rows,
-                rows: data.length,
-                rows_before_limit_at_least: data.length,
-                statistics: {
-                    elapsed: 0,
-                    rows_read: data.length,
-                    bytes_read: response.length
-                }
+        // Get column names from first row
+        const firstRow = data[0];
+        const meta = Object.keys(firstRow).map(key => {
+            return {
+                name: key === 'timestamp' ? 'time' : key,
+                type: key === 'timestamp' ? 'DateTime' : 
+                      key === 'tags' ? 'String' : 
+                      typeof firstRow[key] === 'number' ? 'Float64' : 'String'
             };
+        });
 
-            renderTable(result);
-            return;
-        }
+        // Transform rows to arrays matching meta order
+        const rows = data.map(row => {
+            return meta.map(col => {
+                if (col.name === 'time') {
+                    return new Date(parseInt(row.timestamp.micros)/1000).toISOString();
+                }
+                return row[col.name];
+            });
+        });
 
-        renderUnparsedResult("Invalid response format");
+        const result = {
+            meta: meta,
+            data: rows,
+            rows: data.length,
+            statistics: {
+                elapsed: 0,
+                rows_read: data.length,
+                bytes_read: response.length
+            }
+        };
+
+        renderTable(result);
     }
 
     function renderCell(cell, col_idx, settings)
