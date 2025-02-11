@@ -113,7 +113,27 @@ class ParquetBufferManager {
 
   async getFilePath(type, timestamp) {
     const typeMetadata = await this.getTypeMetadata(type);
-    const date = new Date(timestamp);
+    
+    // Handle nanosecond timestamps
+    let date;
+    if (typeof timestamp === 'number') {
+      // Keep nanosecond precision by using floor division for date parts
+      const ms = Math.floor(timestamp / 1000000); // Get milliseconds
+      date = new Date(ms);
+    } else if (typeof timestamp === 'string') {
+      // Parse string timestamp
+      date = new Date(timestamp);
+    } else if (timestamp instanceof Date) {
+      date = timestamp;
+    } else {
+      throw new Error('Invalid timestamp format');
+    }
+
+    if (isNaN(date.getTime())) {
+      throw new Error(`Invalid date from timestamp: ${timestamp}`);
+    }
+
+    // Use date for directory structure only
     const datePath = date.toISOString().split('T')[0];
     const hour = date.getHours().toString().padStart(2, '0');
     const minute = Math.floor(date.getMinutes() / 10) * 10;
