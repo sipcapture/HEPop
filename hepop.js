@@ -1363,7 +1363,7 @@ class HEPServer {
     return new Date(
       (rcinfo.timeSeconds * 1000) + 
       (((100000 + rcinfo.timeUseconds) / 1000) - 100)
-    ));
+    );
   }
 }
 
