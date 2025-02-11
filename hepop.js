@@ -1018,7 +1018,17 @@ class HEPServer {
           async fetch(req) {
             const url = new URL(req.url);
             
-            if (url.pathname === '/query') {
+            if (url.pathname === '/') {
+              try {
+                const html = await Bun.file('./index.html').text();
+                return new Response(html, {
+                  headers: { 'Content-Type': 'text/html' }
+                });
+              } catch (error) {
+                console.error('Error serving index.html:', error);
+                return new Response('Error loading interface', { status: 500 });
+              }
+            } else if (url.pathname === '/query') {
               try {
                 let query;
                 
