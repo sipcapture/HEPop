@@ -30,13 +30,21 @@ function formatValue(v, numericType) {
   const STRING_REGEX = /^"(.*)"$/;
   
   function parseValue(value) {
-    if (!value) return value;
-    if (value === 'true') return true;
-    if (value === 'false') return false;
-    if (value === 'null' || value === 'NULL') return null;
-    if (value.startsWith('"')) return value.slice(1, -1);
-    const num = value.includes('.') ? parseFloat(value) : parseInt(value);
-    return isNaN(num) ? value : num;
+    if (value == null) {
+      return undefined;
+    } else if (INT_REGEX.test(value)) {
+      return parseInt(value.slice(0, -1));
+    } else if (TRUE_REGEX.test(value)) {
+      return true;
+    } else if (FALSE_REGEX.test(value)) {
+      return false;
+    } else if (STRING_REGEX.test(value)) {
+      return value.slice(1, -1);
+    } else if (!isNaN(value)) {
+      return parseFloat(value);
+    } else {
+      return undefined;
+    }
   }
   
   function joinObject(obj, withFormatting, config) {
@@ -76,48 +84,9 @@ function formatValue(v, numericType) {
     }, {});
   
     if (timestamp) {
-      // Handle different timestamp formats
-      if (/^\d{19}$/.test(timestamp)) {
-        // Nanosecond precision - store as nanoseconds and provide milliseconds
-        const nanos = BigInt(timestamp);
-        result.timestamp = nanos;
-        result.timestampMs = Number(nanos / BigInt(1000000));
-        if (process.env.DEBUG) {
-          console.log('Parsed nanosecond timestamp:', {
-            original: timestamp,
-            nanos: nanos.toString(),
-            ms: result.timestampMs,
-            date: new Date(result.timestampMs).toISOString()
-          });
-        }
-      } else if (/^\d+$/.test(timestamp)) {
-        // Regular numeric timestamp - assume milliseconds
-        result.timestampMs = parseInt(timestamp);
-        result.timestamp = BigInt(result.timestampMs) * BigInt(1000000);
-        if (process.env.DEBUG) {
-          console.log('Parsed millisecond timestamp:', {
-            original: timestamp,
-            ms: result.timestampMs,
-            date: new Date(result.timestampMs).toISOString()
-          });
-        }
-      } else {
-        // Fallback to current time
-        const now = Date.now();
-        result.timestampMs = now;
-        result.timestamp = BigInt(now) * BigInt(1000000);
-        if (process.env.DEBUG) {
-          console.log('Using current timestamp:', {
-            ms: result.timestampMs,
-            date: new Date(result.timestampMs).toISOString()
-          });
-        }
-      }
+      result.timestamp = parseInt(timestamp) / 1000000;
     } else if (config.addTimestamp) {
-      // Current time
-      const now = Date.now();
-      result.timestampMs = now;
-      result.timestamp = BigInt(now) * BigInt(1000000);
+      result.timestamp = Date.now();
     }
   
     return result;

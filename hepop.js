@@ -39,33 +39,6 @@ class ParquetBufferManager {
       tags: { type: 'UTF8' },  // JSON string of tags
       // Dynamic fields will be added based on data
     });
-
-    // Add metadata locks
-    this.metadataLocks = new Map();
-  }
-
-  async ensureDirectories() {
-    const metadataDir = path.join(this.baseDir, this.writerId);
-    await fs.promises.mkdir(metadataDir, { recursive: true });
-    
-    // Write initial metadata file if it doesn't exist
-    const metadataPath = path.join(metadataDir, 'metadata.json');
-    if (!fs.existsSync(metadataPath)) {
-      const initialMetadata = {
-        writer_id: this.writerId,
-        next_db_id: 0,
-        next_table_id: 0
-      };
-      
-      await fs.promises.writeFile(
-        metadataPath,
-        JSON.stringify(initialMetadata, null, 2)
-      );
-    }
-
-    // Create dbs directory
-    const dbsDir = path.join(metadataDir, 'dbs');
-    await fs.promises.mkdir(dbsDir, { recursive: true });
   }
 
   async initialize() {
@@ -144,9 +117,11 @@ class ParquetBufferManager {
     // Handle nanosecond timestamps
     let date;
     if (typeof timestamp === 'number') {
-      const ms = Math.floor(timestamp / 1000000);
+      // Keep nanosecond precision by using floor division for date parts
+      const ms = Math.floor(timestamp / 1000000); // Get milliseconds
       date = new Date(ms);
     } else if (typeof timestamp === 'string') {
+      // Parse string timestamp
       date = new Date(timestamp);
     } else if (timestamp instanceof Date) {
       date = timestamp;
@@ -158,15 +133,11 @@ class ParquetBufferManager {
       throw new Error(`Invalid date from timestamp: ${timestamp}`);
     }
 
-    // Use date for directory structure
+    // Use date for directory structure only
     const datePath = date.toISOString().split('T')[0];
     const hour = date.getHours().toString().padStart(2, '0');
     const minute = Math.floor(date.getMinutes() / 10) * 10;
     const minutePath = minute.toString().padStart(2, '0');
-
-    // Increment WAL sequence before creating path
-    typeMetadata.wal_sequence++;
-    await this.writeTypeMetadata(type, typeMetadata);
     
     return path.join(
       this.baseDir,
@@ -198,7 +169,7 @@ class ParquetBufferManager {
   }
 
   startFlushInterval() {
-    this.flushInterval = setInterval(() => {
+    setInterval(() => {
       for (const type of this.buffers.keys()) {
         this.flush(type);
       }
@@ -212,15 +183,16 @@ class ParquetBufferManager {
     try {
       const filePath = await this.getFilePath(type, buffer.isLineProtocol ? 
         buffer.rows[0].timestamp : buffer.rows[0].create_date);
-      
       await fs.promises.mkdir(path.dirname(filePath), { recursive: true });
 
+      // Create writer with appropriate schema
       const writer = await parquet.ParquetWriter.openFile(
         buffer.schema,
         filePath,
         this.writerOptions
       );
 
+      // Write rows based on type
       for (const data of buffer.rows) {
         if (buffer.isLineProtocol) {
           await writer.appendRow(data);
@@ -235,8 +207,10 @@ class ParquetBufferManager {
 
       await writer.close();
 
+      // Get file stats
       const stats = await fs.promises.stat(filePath);
       
+      // Update metadata
       await this.updateMetadata(
         type, 
         filePath, 
@@ -246,16 +220,16 @@ class ParquetBufferManager {
           d.timestamp : new Date(d.create_date))
       );
       
+      // Clear buffer
       this.buffers.set(type, {
         rows: [],
         schema: buffer.schema,
         isLineProtocol: buffer.isLineProtocol
       });
       
-      console.log(`Wrote ${buffer.rows.length} records to ${path.basename(filePath)}`);
+      console.log(`Wrote ${buffer.rows.length} records to ${filePath}`);
     } catch (error) {
-      console.error(`Parquet flush error for ${type}:`, error);
-      throw error;
+      console.error(`Parquet flush error:`, error);
     }
   }
 
@@ -270,129 +244,80 @@ class ParquetBufferManager {
     );
   }
 
-  async acquireMetadataLock(type) {
-    while (this.metadataLocks.get(type)) {
-      await new Promise(resolve => setTimeout(resolve, 100));
-    }
-    this.metadataLocks.set(type, true);
-  }
-
-  async releaseMetadataLock(type) {
-    this.metadataLocks.set(type, false);
-  }
-
   async writeTypeMetadata(type, metadata) {
-    await this.acquireMetadataLock(type);
+    const metadataPath = this.getTypeMetadataPath(type);
+    await fs.promises.mkdir(path.dirname(metadataPath), { recursive: true });
     
+    const tempPath = `${metadataPath}.tmp`;
     try {
-      const metadataPath = this.getTypeMetadataPath(type);
-      const dirPath = path.dirname(metadataPath);
-      
-      // Ensure directory exists
-      await fs.promises.mkdir(dirPath, { recursive: true });
-      
-      // Write to temp file first
-      const tempPath = `${metadataPath}.tmp`;
       await fs.promises.writeFile(tempPath, JSON.stringify(metadata, null, 2));
-      
-      // Verify temp file exists and is valid JSON
-      const tempContent = await fs.promises.readFile(tempPath, 'utf8');
-      JSON.parse(tempContent); // Validate JSON
-      
-      // Atomic rename
       await fs.promises.rename(tempPath, metadataPath);
-      
-      // Verify final file exists
-      await fs.promises.access(metadataPath);
-      
     } catch (error) {
-      console.error(`Error writing metadata for type ${type}:`, error);
+      try {
+        await fs.promises.unlink(tempPath);
+      } catch (e) {
+        // Ignore cleanup errors
+      }
       throw error;
-    } finally {
-      await this.releaseMetadataLock(type);
     }
   }
 
   async updateMetadata(type, filePath, sizeBytes, rowCount, timestamps) {
-    await this.acquireMetadataLock(type);
-    
-    try {
-      // Get current metadata first
-      const typeMetadata = await this.getTypeMetadata(type);
-      
-      // Process timestamps in chunks to avoid stack overflow
-      const chunkSize = 1000;
-      let minTime = Infinity;
-      let maxTime = -Infinity;
-      
-      for (let i = 0; i < timestamps.length; i += chunkSize) {
-        const chunk = timestamps.slice(i, i + chunkSize);
-        for (const timestamp of chunk) {
-          let timeNanos;
-          if (timestamp instanceof Date) {
-            timeNanos = BigInt(timestamp.getTime()) * BigInt(1000000);
-          } else if (typeof timestamp === 'bigint') {
-            timeNanos = timestamp;
-          } else {
-            timeNanos = BigInt(Math.floor(timestamp)) * BigInt(1000000);
-          }
-          
-          const timeMs = Number(timeNanos / BigInt(1000000));
-          minTime = Math.min(minTime, timeMs);
-          maxTime = Math.max(maxTime, timeMs);
-        }
-      }
+    const minTime = Math.min(...timestamps.map(t => t.getTime() * 1000000));
+    const maxTime = Math.max(...timestamps.map(t => t.getTime() * 1000000));
+    const chunkTime = Math.floor(minTime / 600000000000) * 600000000000;
 
-      // Convert back to nanoseconds
-      minTime = minTime * 1000000;
-      maxTime = maxTime * 1000000;
-      const chunkTime = Math.floor(minTime / 600000000000) * 600000000000;
+    // Get current type metadata
+    const typeMetadata = await this.getTypeMetadata(type);
 
-      const fileInfo = {
-        id: typeMetadata.files.length,
-        path: filePath,
-        size_bytes: sizeBytes,
-        row_count: rowCount,
-        chunk_time: chunkTime,
-        min_time: minTime,
-        max_time: maxTime,
-        type: 'raw'
-      };
+    const fileInfo = {
+      id: typeMetadata.files.length,
+      path: filePath,
+      size_bytes: sizeBytes,
+      row_count: rowCount,
+      chunk_time: chunkTime,
+      min_time: minTime,
+      max_time: maxTime,
+      type: 'raw'
+    };
 
-      // Update metadata
-      typeMetadata.files.push(fileInfo);
-      typeMetadata.parquet_size_bytes += sizeBytes;
-      typeMetadata.row_count += rowCount;
-      typeMetadata.min_time = typeMetadata.min_time ? 
-        Math.min(typeMetadata.min_time, minTime) : minTime;
-      typeMetadata.max_time = typeMetadata.max_time ?
-        Math.max(typeMetadata.max_time, maxTime) : maxTime;
-      typeMetadata.wal_sequence++;
+    // Update type metadata
+    typeMetadata.files.push(fileInfo);
+    typeMetadata.parquet_size_bytes += sizeBytes;
+    typeMetadata.row_count += rowCount;
+    typeMetadata.min_time = typeMetadata.min_time ? 
+      Math.min(typeMetadata.min_time, minTime) : minTime;
+    typeMetadata.max_time = typeMetadata.max_time ?
+      Math.max(typeMetadata.max_time, maxTime) : maxTime;
+    typeMetadata.wal_sequence++;
 
-      // Write updated metadata
-      await this.writeTypeMetadata(type, typeMetadata);
-      
-    } catch (error) {
-      console.error(`Error updating metadata for type ${type}:`, error);
-      throw error;
-    } finally {
-      await this.releaseMetadataLock(type);
-    }
+    // Write updated metadata
+    await this.writeTypeMetadata(type, typeMetadata);
   }
 
   async close() {
-    // Clear flush interval first
-    if (this.flushInterval) {
-      clearInterval(this.flushInterval);
-    }
-
-    // Final flush of all buffers
     for (const type of this.buffers.keys()) {
-      try {
-        await this.flush(type);
-      } catch (error) {
-        console.error(`Error flushing buffer for ${type}:`, error);
-      }
+      await this.flush(type);
+    }
+  }
+
+  async ensureDirectories() {
+    const metadataDir = path.join(this.baseDir, this.writerId);
+    await fs.promises.mkdir(metadataDir, { recursive: true });
+    
+    // Write initial metadata file if it doesn't exist
+    const metadataPath = path.join(metadataDir, 'metadata.json');
+    if (!fs.existsSync(metadataPath)) {
+      const initialMetadata = {
+        writer_id: this.writerId,
+        next_db_id: 0,
+        next_table_id: 0
+      };
+      
+      await fs.promises.writeFile(
+        metadataPath,
+        JSON.stringify(initialMetadata, null, 2)
+      );
     }
   }
 
@@ -471,75 +396,70 @@ class ParquetBufferManager {
   async addLineProtocolBulk(measurement, rows) {
     const type = measurement;
     
-    try {
-      if (!this.buffers.has(type)) {
-        // Get existing schema if any
-        let existingSchema = null;
-        try {
-          const typeMetadata = await this.getTypeMetadata(type);
-          if (typeMetadata.files.length > 0) {
-            const reader = await parquet.ParquetReader.openFile(typeMetadata.files[0].path);
-            existingSchema = reader.schema;
-            await reader.close();
-          }
-        } catch (error) {
-          // Silently create new schema
+    if (!this.buffers.has(type)) {
+      // Get existing schema if any
+      let existingSchema = null;
+      try {
+        const typeMetadata = await this.getTypeMetadata(type);
+        if (typeMetadata.files.length > 0) {
+          const reader = await parquet.ParquetReader.openFile(typeMetadata.files[0].path);
+          existingSchema = reader.schema;
+          await reader.close();
         }
-
-        // Merge schemas
-        const newFields = {};
-        rows.forEach(row => {
-          Object.entries(row).forEach(([key, value]) => {
-            if (key !== 'timestamp' && key !== 'tags') {
-              newFields[key] = { 
-                type: typeof value === 'number' ? 'DOUBLE' : 
-                      typeof value === 'boolean' ? 'BOOLEAN' : 'UTF8',
-                optional: true
-              };
-            }
-          });
-        });
-
-        const schema = new parquet.ParquetSchema({
-          timestamp: { type: 'TIMESTAMP_MILLIS' },
-          tags: { type: 'UTF8' },
-          ...newFields
-        });
-
-        this.buffers.set(type, {
-          rows: [],
-          schema,
-          isLineProtocol: true
-        });
+      } catch (error) {
+        console.log(`No existing schema found for ${type}, creating new one`);
       }
 
-      const buffer = this.buffers.get(type);
-      
-      // Ensure all fields are present
-      const allFields = new Set();
-      buffer.schema.fieldList.forEach(f => allFields.add(f.path[0]));
-      
-      const normalizedRows = rows.map(row => {
-        const normalized = {
-          timestamp: row.timestamp,
-          tags: row.tags
-        };
-        allFields.forEach(field => {
-          if (field !== 'timestamp' && field !== 'tags') {
-            normalized[field] = row[field] ?? null;
+      // Merge schemas
+      const newFields = {};
+      rows.forEach(row => {
+        Object.entries(row).forEach(([key, value]) => {
+          if (key !== 'timestamp' && key !== 'tags') {
+            newFields[key] = { 
+              type: typeof value === 'number' ? 'DOUBLE' : 
+                    typeof value === 'boolean' ? 'BOOLEAN' : 'UTF8',
+              optional: true // Make all fields optional
+            };
           }
         });
-        return normalized;
       });
 
-      buffer.rows.push(...normalizedRows);
+      const schema = new parquet.ParquetSchema({
+        timestamp: { type: 'TIMESTAMP_MILLIS' },
+        tags: { type: 'UTF8' },
+        ...newFields
+      });
 
-      if (buffer.rows.length >= this.bufferSize) {
-        await this.flush(type);
-      }
-    } catch (error) {
-      console.error(`Error in addLineProtocolBulk for ${type}:`, error);
-      throw error;
+      this.buffers.set(type, {
+        rows: [],
+        schema,
+        isLineProtocol: true
+      });
+    }
+
+    const buffer = this.buffers.get(type);
+    
+    // Ensure all rows have all fields
+    const allFields = new Set();
+    buffer.schema.fieldList.forEach(f => allFields.add(f.path[0]));
+    
+    const normalizedRows = rows.map(row => {
+      const normalized = {
+        timestamp: row.timestamp,
+        tags: row.tags
+      };
+      allFields.forEach(field => {
+        if (field !== 'timestamp' && field !== 'tags') {
+          normalized[field] = row[field] ?? null;
+        }
+      });
+      return normalized;
+    });
+
+    buffer.rows.push(...normalizedRows);
+
+    if (buffer.rows.length >= this.bufferSize) {
+      await this.flush(type);
     }
   }
 }
@@ -1222,7 +1142,7 @@ class HEPServer {
                   }
                   
                   bulkData.get(measurement).push({
-                    timestamp: new Date(parsed.timestampMs), // Use millisecond timestamp for Date
+                    timestamp: new Date(parsed.timestamp),
                     tags: JSON.stringify(parsed.tags),
                     ...parsed.fields
                   });
@@ -1274,60 +1194,50 @@ class HEPServer {
   async shutdown() {
     console.log('Shutting down HEP server...');
     
-    // Stop accepting new connections first
+    // Stop compaction first
+    if (this.compaction) {
+      await this.compaction.close();
+    }
+
+    // Stop TCP server
     if (this.tcpServer) {
       try {
         this.tcpServer.stop(true);
+        this.tcpServer.unref();
       } catch (error) {
         console.error('Error stopping TCP server:', error);
       }
     }
 
+    // Stop UDP server
     if (this.udpServer) {
       try {
-        if (this.udpServer.close) this.udpServer.close();
+        // UDP sockets use close() not stop()
+        if (this.udpSever?.close) this.udpServer.close();
       } catch (error) {
         console.error('Error stopping UDP server:', error);
       }
     }
 
+    // Stop HTTP server
     if (this.httpServer) {
       try {
         this.httpServer.stop(true);
+        this.httpServer.unref();
       } catch (error) {
         console.error('Error stopping HTTP server:', error);
       }
     }
-
-    // Stop compaction and intervals
-    if (this.compaction) {
-      try {
-        await this.compaction.close();
-      } catch (error) {
-        console.error('Error stopping compaction:', error);
-      }
+    
+    // Flush any remaining data
+    try {
+    await this.buffer.close();
+    } catch (error) {
+      console.error('Error flushing buffers:', error);
     }
-
-    // Stop buffer manager intervals
-    if (this.buffer) {
-      try {
-        // Clear flush interval
-        if (this.buffer.flushInterval) {
-          clearInterval(this.buffer.flushInterval);
-        }
-        // Final flush
-        await this.buffer.close();
-      } catch (error) {
-        console.error('Error closing buffer manager:', error);
-      }
-    }
-
+    
     console.log('Server shutdown complete');
-    // Force exit after 1 second if still running
-    setTimeout(() => {
-      console.log('Forcing exit...');
-      process.exit(0);
-    }, 1000);
+    process.exit(0);
   }
 
   handleData(data, socket) {
