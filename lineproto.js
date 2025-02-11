@@ -30,21 +30,13 @@ function formatValue(v, numericType) {
   const STRING_REGEX = /^"(.*)"$/;
   
   function parseValue(value) {
-    if (value == null) {
-      return undefined;
-    } else if (INT_REGEX.test(value)) {
-      return parseInt(value.slice(0, -1));
-    } else if (TRUE_REGEX.test(value)) {
-      return true;
-    } else if (FALSE_REGEX.test(value)) {
-      return false;
-    } else if (STRING_REGEX.test(value)) {
-      return value.slice(1, -1);
-    } else if (!isNaN(value)) {
-      return parseFloat(value);
-    } else {
-      return undefined;
-    }
+    if (!value) return value;
+    if (value === 'true') return true;
+    if (value === 'false') return false;
+    if (value === 'null' || value === 'NULL') return null;
+    if (value.startsWith('"')) return value.slice(1, -1);
+    const num = value.includes('.') ? parseFloat(value) : parseInt(value);
+    return isNaN(num) ? value : num;
   }
   
   function joinObject(obj, withFormatting, config) {
@@ -84,9 +76,25 @@ function formatValue(v, numericType) {
     }, {});
   
     if (timestamp) {
-      result.timestamp = parseInt(timestamp) / 1000000;
+      // Handle different timestamp formats
+      if (/^\d{19}$/.test(timestamp)) {
+        // Nanosecond precision - keep full value
+        result.timestamp = BigInt(timestamp);
+        if (process.env.DEBUG) {
+          console.log('Parsed nanosecond timestamp:', timestamp, 
+                     'Date:', new Date(Number(result.timestamp / 1000000n)).toISOString());
+        }
+      } else {
+        // Convert other formats to milliseconds
+        result.timestamp = parseInt(timestamp);
+        if (process.env.DEBUG) {
+          console.log('Parsed timestamp:', timestamp,
+                     'Date:', new Date(result.timestamp).toISOString());
+        }
+      }
     } else if (config.addTimestamp) {
-      result.timestamp = Date.now();
+      // Current time in milliseconds
+      result.timestamp = BigInt(Date.now()) * 1000000n;
     }
   
     return result;
