@@ -39,6 +39,9 @@ class ParquetBufferManager {
       tags: { type: 'UTF8' },  // JSON string of tags
       // Dynamic fields will be added based on data
     });
+
+    // Add metadata locks
+    this.metadataLocks = new Map();
   }
 
   async initialize() {
@@ -244,51 +247,83 @@ class ParquetBufferManager {
     );
   }
 
+  async acquireMetadataLock(type) {
+    while (this.metadataLocks.get(type)) {
+      await new Promise(resolve => setTimeout(resolve, 100));
+    }
+    this.metadataLocks.set(type, true);
+  }
+
+  async releaseMetadataLock(type) {
+    this.metadataLocks.set(type, false);
+  }
+
   async writeTypeMetadata(type, metadata) {
-    const metadataPath = this.getTypeMetadataPath(type);
-    // Ensure directory exists before writing temp file
-    await fs.promises.mkdir(path.dirname(metadataPath), { recursive: true });
+    await this.acquireMetadataLock(type);
     
-    const tempPath = `${metadataPath}.tmp`;
     try {
+      const metadataPath = this.getTypeMetadataPath(type);
+      const dirPath = path.dirname(metadataPath);
+      
+      // Ensure directory exists
+      await fs.promises.mkdir(dirPath, { recursive: true });
+      
+      // Write to temp file first
+      const tempPath = `${metadataPath}.tmp`;
       await fs.promises.writeFile(tempPath, JSON.stringify(metadata, null, 2));
+      
+      // Verify temp file exists and is valid JSON
+      const tempContent = await fs.promises.readFile(tempPath, 'utf8');
+      JSON.parse(tempContent); // Validate JSON
+      
+      // Atomic rename
       await fs.promises.rename(tempPath, metadataPath);
+      
+      // Verify final file exists
+      await fs.promises.access(metadataPath);
+      
     } catch (error) {
-      try {
-        await fs.promises.unlink(tempPath);
-      } catch (e) {
-        // Ignore cleanup errors
-      }
+      console.error(`Error writing metadata for type ${type}:`, error);
       throw error;
+    } finally {
+      await this.releaseMetadataLock(type);
     }
   }
 
   async updateMetadata(type, filePath, sizeBytes, rowCount, timestamps) {
-    // Handle timestamps safely
-    const getTimeInNanos = (timestamp) => {
-      if (timestamp instanceof Date) {
-        return BigInt(timestamp.getTime()) * BigInt(1000000);
-      }
-      // If it's already a BigInt (nanoseconds), return as is
-      if (typeof timestamp === 'bigint') {
-        return timestamp;
-      }
-      // Convert number to nanoseconds
-      return BigInt(Math.floor(timestamp)) * BigInt(1000000);
-    };
-
+    await this.acquireMetadataLock(type);
+    
     try {
-      const timeNanos = timestamps.map(getTimeInNanos);
-      const minTime = timeNanos.length > 0 ? 
-        Number(timeNanos.reduce((a, b) => a < b ? a : b)) : 
-        Date.now() * 1000000;
-      const maxTime = timeNanos.length > 0 ? 
-        Number(timeNanos.reduce((a, b) => a > b ? a : b)) : 
-        Date.now() * 1000000;
-      const chunkTime = Math.floor(minTime / 600000000000) * 600000000000;
-
-      // Get current type metadata
+      // Get current metadata first
       const typeMetadata = await this.getTypeMetadata(type);
+      
+      // Process timestamps in chunks to avoid stack overflow
+      const chunkSize = 1000;
+      let minTime = Infinity;
+      let maxTime = -Infinity;
+      
+      for (let i = 0; i < timestamps.length; i += chunkSize) {
+        const chunk = timestamps.slice(i, i + chunkSize);
+        for (const timestamp of chunk) {
+          let timeNanos;
+          if (timestamp instanceof Date) {
+            timeNanos = BigInt(timestamp.getTime()) * BigInt(1000000);
+          } else if (typeof timestamp === 'bigint') {
+            timeNanos = timestamp;
+          } else {
+            timeNanos = BigInt(Math.floor(timestamp)) * BigInt(1000000);
+          }
+          
+          const timeMs = Number(timeNanos / BigInt(1000000));
+          minTime = Math.min(minTime, timeMs);
+          maxTime = Math.max(maxTime, timeMs);
+        }
+      }
+
+      // Convert back to nanoseconds
+      minTime = minTime * 1000000;
+      maxTime = maxTime * 1000000;
+      const chunkTime = Math.floor(minTime / 600000000000) * 600000000000;
 
       const fileInfo = {
         id: typeMetadata.files.length,
@@ -301,7 +336,7 @@ class ParquetBufferManager {
         type: 'raw'
       };
 
-      // Update type metadata
+      // Update metadata
       typeMetadata.files.push(fileInfo);
       typeMetadata.parquet_size_bytes += sizeBytes;
       typeMetadata.row_count += rowCount;
@@ -313,9 +348,12 @@ class ParquetBufferManager {
 
       // Write updated metadata
       await this.writeTypeMetadata(type, typeMetadata);
+      
     } catch (error) {
-      console.error('Error updating metadata:', error);
+      console.error(`Error updating metadata for type ${type}:`, error);
       throw error;
+    } finally {
+      await this.releaseMetadataLock(type);
     }
   }
 
@@ -1297,7 +1335,7 @@ class HEPServer {
     return new Date(
       (rcinfo.timeSeconds * 1000) + 
       (((100000 + rcinfo.timeUseconds) / 1000) - 100)
-    );
+    ));
   }
 }
 
