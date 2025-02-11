@@ -576,24 +576,27 @@
     }
 
     function renderResponse(status, response) {
-        document.getElementById('hourglass').style.display = 'none';
-
         if (status === 200) {
-            let json;
-            try { json = JSON.parse(response); } catch (e) {}
-
-            if (json !== undefined && json.statistics !== undefined) {
-                renderResult(json);
-            } else if (Array.isArray(json) && json.length == 2 &&
-                Array.isArray(json[0]) && Array.isArray(json[1]) && json[0].length > 1 && json[0].length == json[1].length) {
-                /// If user requested FORMAT JSONCompactColumns, we will render it as a chart.
+            const json = JSON.parse(response);
+            
+            // Handle our array format
+            if (Array.isArray(json)) {
+                renderResult(json); // Pass the array directly
+            }
+            // Keep existing chart format handler
+            else if (Array.isArray(json) && json.length == 2 &&
+                Array.isArray(json[0]) && Array.isArray(json[1]) && 
+                json[0].length > 1 && json[0].length == json[1].length) {
                 renderChart(json);
-            } else {
+            } 
+            // Keep legacy format handler
+            else if (json !== undefined && json.statistics !== undefined) {
+                renderResult(json);
+            }
+            else {
                 renderUnparsedResult(response);
             }
-            document.getElementById('check-mark').style.display = 'inline';
         } else {
-            /// TODO: Proper rendering of network errors.
             renderError(response);
         }
     }
@@ -700,24 +703,18 @@
         return formatReadable(rows, 2, units);
     }
 
-    function renderResult(response) {
+    function renderResult(data) {
         clear();
         
-        // Parse JSON response
-        let data;
-        try {
-            data = JSON.parse(response);
-            console.log('Parsed data:', data);
-        } catch (e) {
-            console.error('Parse error:', e);
-            document.getElementById('error').innerText = 'Invalid JSON response';
-            document.getElementById('error').style.display = 'block';
+        // No need to parse again - data is already parsed
+        if (!Array.isArray(data)) {
+            console.error('Expected array data');
             return;
         }
 
         // Create table
         const table = document.getElementById('data-table');
-        table.innerHTML = ''; // Clear existing content
+        table.innerHTML = '';
         
         // Add headers
         const thead = document.createElement('thead');
