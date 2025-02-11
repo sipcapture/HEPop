@@ -246,6 +246,7 @@ class ParquetBufferManager {
 
   async writeTypeMetadata(type, metadata) {
     const metadataPath = this.getTypeMetadataPath(type);
+    // Ensure directory exists before writing temp file
     await fs.promises.mkdir(path.dirname(metadataPath), { recursive: true });
     
     const tempPath = `${metadataPath}.tmp`;
@@ -263,36 +264,59 @@ class ParquetBufferManager {
   }
 
   async updateMetadata(type, filePath, sizeBytes, rowCount, timestamps) {
-    const minTime = Math.min(...timestamps.map(t => t.getTime() * 1000000));
-    const maxTime = Math.max(...timestamps.map(t => t.getTime() * 1000000));
-    const chunkTime = Math.floor(minTime / 600000000000) * 600000000000;
-
-    // Get current type metadata
-    const typeMetadata = await this.getTypeMetadata(type);
-
-    const fileInfo = {
-      id: typeMetadata.files.length,
-      path: filePath,
-      size_bytes: sizeBytes,
-      row_count: rowCount,
-      chunk_time: chunkTime,
-      min_time: minTime,
-      max_time: maxTime,
-      type: 'raw'
+    // Handle timestamps safely
+    const getTimeInNanos = (timestamp) => {
+      if (timestamp instanceof Date) {
+        return BigInt(timestamp.getTime()) * BigInt(1000000);
+      }
+      // If it's already a BigInt (nanoseconds), return as is
+      if (typeof timestamp === 'bigint') {
+        return timestamp;
+      }
+      // Convert number to nanoseconds
+      return BigInt(Math.floor(timestamp)) * BigInt(1000000);
     };
 
-    // Update type metadata
-    typeMetadata.files.push(fileInfo);
-    typeMetadata.parquet_size_bytes += sizeBytes;
-    typeMetadata.row_count += rowCount;
-    typeMetadata.min_time = typeMetadata.min_time ? 
-      Math.min(typeMetadata.min_time, minTime) : minTime;
-    typeMetadata.max_time = typeMetadata.max_time ?
-      Math.max(typeMetadata.max_time, maxTime) : maxTime;
-    typeMetadata.wal_sequence++;
+    try {
+      const timeNanos = timestamps.map(getTimeInNanos);
+      const minTime = timeNanos.length > 0 ? 
+        Number(timeNanos.reduce((a, b) => a < b ? a : b)) : 
+        Date.now() * 1000000;
+      const maxTime = timeNanos.length > 0 ? 
+        Number(timeNanos.reduce((a, b) => a > b ? a : b)) : 
+        Date.now() * 1000000;
+      const chunkTime = Math.floor(minTime / 600000000000) * 600000000000;
 
-    // Write updated metadata
-    await this.writeTypeMetadata(type, typeMetadata);
+      // Get current type metadata
+      const typeMetadata = await this.getTypeMetadata(type);
+
+      const fileInfo = {
+        id: typeMetadata.files.length,
+        path: filePath,
+        size_bytes: sizeBytes,
+        row_count: rowCount,
+        chunk_time: chunkTime,
+        min_time: minTime,
+        max_time: maxTime,
+        type: 'raw'
+      };
+
+      // Update type metadata
+      typeMetadata.files.push(fileInfo);
+      typeMetadata.parquet_size_bytes += sizeBytes;
+      typeMetadata.row_count += rowCount;
+      typeMetadata.min_time = typeMetadata.min_time ? 
+        Math.min(typeMetadata.min_time, minTime) : minTime;
+      typeMetadata.max_time = typeMetadata.max_time ?
+        Math.max(typeMetadata.max_time, maxTime) : maxTime;
+      typeMetadata.wal_sequence++;
+
+      // Write updated metadata
+      await this.writeTypeMetadata(type, typeMetadata);
+    } catch (error) {
+      console.error('Error updating metadata:', error);
+      throw error;
+    }
   }
 
   async close() {
