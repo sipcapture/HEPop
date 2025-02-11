@@ -673,16 +673,11 @@
 
     function clear()
     {
-        clearElement('data-table');
-        clearElement('graph');
-        clearElement('chart');
-        clearElement('data-unparsed');
-        clearElement('error');
-
-        document.getElementById('check-mark').display = 'none';
-        document.getElementById('hourglass').display = 'none';
+        const table = document.getElementById('data-table');
+        while (table.firstChild) {
+            table.firstChild.remove();
+        }
         document.getElementById('stats').innerText = '';
-        document.getElementById('logo-container').style.display = 'block';
     }
 
     function formatReadable(number = 0, decimals = 2, units = []) {
@@ -709,63 +704,69 @@
         clear();
         
         // Parse JSON response
-        let data = JSON.parse(response);
-        console.log('Parsed data:', data); // Debug log
+        let data;
+        try {
+            data = JSON.parse(response);
+            console.log('Parsed data:', data);
+        } catch (e) {
+            console.error('Parse error:', e);
+            document.getElementById('error').innerText = 'Invalid JSON response';
+            document.getElementById('error').style.display = 'block';
+            return;
+        }
 
-        // Create table structure
+        // Create table
         const table = document.getElementById('data-table');
+        table.innerHTML = ''; // Clear existing content
         
-        // Create header row
+        // Add headers
         const thead = document.createElement('thead');
         const headerRow = document.createElement('tr');
-        const headers = ['Time', 'Room', 'Temperature', 'Light'];
-        
-        headers.forEach(text => {
+        ['Time', 'Room', 'Temperature', 'Light'].forEach(header => {
             const th = document.createElement('th');
-            th.textContent = text;
+            th.innerText = header;
             headerRow.appendChild(th);
         });
-        
         thead.appendChild(headerRow);
         table.appendChild(thead);
 
-        // Create data rows
+        // Add data rows
         const tbody = document.createElement('tbody');
-        
         data.forEach(row => {
-            console.log('Processing row:', row); // Debug log
             const tr = document.createElement('tr');
             
-            // Time
+            // Time column
             let td = document.createElement('td');
-            td.textContent = new Date(parseInt(row.timestamp.micros)/1000).toISOString();
+            const timestamp = new Date(parseInt(row.timestamp.micros)/1000);
+            td.innerText = timestamp.toISOString();
             tr.appendChild(td);
             
-            // Room
+            // Room column
             td = document.createElement('td');
             const tags = JSON.parse(row.tags);
-            td.textContent = tags.room;
+            td.innerText = tags.room;
             tr.appendChild(td);
             
-            // Temperature
+            // Temperature column
             td = document.createElement('td');
-            td.textContent = row.temp;
+            td.innerText = row.temp;
             td.className = 'right';
             tr.appendChild(td);
             
-            // Light
+            // Light column
             td = document.createElement('td');
-            td.textContent = row.light;
+            td.innerText = row.light;
             td.className = 'right';
             tr.appendChild(td);
             
             tbody.appendChild(tr);
         });
-        
         table.appendChild(tbody);
+
+        // Make table visible
         table.style.display = 'table';
         
-        // Update stats
+        // Update row count
         document.getElementById('stats').innerText = `${data.length} rows`;
     }
 
