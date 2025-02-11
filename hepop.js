@@ -144,11 +144,9 @@ class ParquetBufferManager {
     // Handle nanosecond timestamps
     let date;
     if (typeof timestamp === 'number') {
-      // Keep nanosecond precision by using floor division for date parts
-      const ms = Math.floor(timestamp / 1000000); // Get milliseconds
+      const ms = Math.floor(timestamp / 1000000);
       date = new Date(ms);
     } else if (typeof timestamp === 'string') {
-      // Parse string timestamp
       date = new Date(timestamp);
     } else if (timestamp instanceof Date) {
       date = timestamp;
@@ -160,11 +158,15 @@ class ParquetBufferManager {
       throw new Error(`Invalid date from timestamp: ${timestamp}`);
     }
 
-    // Use date for directory structure only
+    // Use date for directory structure
     const datePath = date.toISOString().split('T')[0];
     const hour = date.getHours().toString().padStart(2, '0');
     const minute = Math.floor(date.getMinutes() / 10) * 10;
     const minutePath = minute.toString().padStart(2, '0');
+
+    // Increment WAL sequence before creating path
+    typeMetadata.wal_sequence++;
+    await this.writeTypeMetadata(type, typeMetadata);
     
     return path.join(
       this.baseDir,
@@ -212,22 +214,21 @@ class ParquetBufferManager {
     }
     
     try {
-      console.log(`Flushing ${buffer.rows.length} rows for ${type}`);
+      // Get new file path with incremented sequence
       const filePath = await this.getFilePath(type, buffer.isLineProtocol ? 
         buffer.rows[0].timestamp : buffer.rows[0].create_date);
       
+      console.log(`Creating new file: ${filePath}`);
       await fs.promises.mkdir(path.dirname(filePath), { recursive: true });
-      console.log(`Created directory for ${filePath}`);
 
-      // Create writer with appropriate schema
-      console.log(`Creating writer for ${type} with schema:`, buffer.schema);
+      // Create writer with schema
       const writer = await parquet.ParquetWriter.openFile(
         buffer.schema,
         filePath,
         this.writerOptions
       );
 
-      // Write rows based on type
+      // Write rows
       for (const data of buffer.rows) {
         if (buffer.isLineProtocol) {
           await writer.appendRow(data);
@@ -241,13 +242,11 @@ class ParquetBufferManager {
       }
 
       await writer.close();
-      console.log(`Closed writer for ${filePath}`);
 
       // Get file stats
       const stats = await fs.promises.stat(filePath);
-      console.log(`File stats for ${filePath}:`, stats);
       
-      // Update metadata
+      // Update metadata with new file
       await this.updateMetadata(
         type, 
         filePath, 
@@ -257,7 +256,7 @@ class ParquetBufferManager {
           d.timestamp : new Date(d.create_date))
       );
       
-      // Clear buffer
+      // Clear buffer after successful write
       this.buffers.set(type, {
         rows: [],
         schema: buffer.schema,
