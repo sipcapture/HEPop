@@ -6,6 +6,7 @@ class QueryClient {
   constructor(baseDir = './data', bufferManager = null) {
     this.baseDir = baseDir;
     this.db = null;
+    this.connection = null;
     this.defaultTimeRange = 10 * 60 * 1000000000; // 10 minutes in nanoseconds
     this.buffer = bufferManager; // Store reference to buffer manager
   }
@@ -13,6 +14,8 @@ class QueryClient {
   async initialize() {
     try {
       this.db = await DuckDBInstance.create(':memory:');
+      // Create initial connection
+      this.connection = await this.db.connect();
       console.log('Initialized DuckDB for querying');
     } catch (error) {
       console.error('Failed to initialize DuckDB:', error);
@@ -145,7 +148,6 @@ class QueryClient {
   async query(sql, options = {}) {
     const parsed = this.parseQuery(sql);
     
-    // Use the buffer manager reference directly
     if (!this.buffer) {
       throw new Error('No buffer manager available');
     }
@@ -216,7 +218,18 @@ class QueryClient {
         `;
       }
 
-      return await this.db.all(query);
+      // Execute query using proper DuckDB API
+      const result = await this.connection.runAndReadAll(query);
+      
+      // Convert result to array of objects
+      return result.getRows().map(row => {
+        const obj = {};
+        result.columnNames().forEach((col, i) => {
+          obj[col] = row[i];
+        });
+        return obj;
+      });
+
     } catch (error) {
       console.error('Query error:', error);
       throw error;
@@ -265,7 +278,12 @@ class QueryClient {
   }
 
   async close() {
-    // Nothing to clean up
+    if (this.connection) {
+      await this.connection.close();
+    }
+    if (this.db) {
+      await this.db.close();
+    }
   }
 }
 
