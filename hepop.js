@@ -116,41 +116,24 @@ class ParquetBufferManager {
     
     // Handle nanosecond timestamps
     let date;
-    try {
-      if (typeof timestamp === 'number') {
-        // Handle nanosecond precision timestamps
-        const ms = Math.floor(timestamp / 1000000);
-        date = new Date(ms);
-        console.debug(`Processing numeric timestamp: ${timestamp} -> ${ms}ms -> ${date.toISOString()}`);
-      } else if (typeof timestamp === 'string') {
-        // Parse string timestamp
-        date = new Date(timestamp);
-        console.debug(`Processing string timestamp: ${timestamp} -> ${date.toISOString()}`);
-      } else if (timestamp instanceof Date) {
-        date = timestamp;
-        console.debug(`Processing Date object: ${date.toISOString()}`);
-      } else {
-        console.error('Invalid timestamp type:', typeof timestamp, timestamp);
-        throw new Error(`Invalid timestamp format: ${typeof timestamp}`);
-      }
-
-      if (isNaN(date.getTime())) {
-        console.error('Invalid date conversion:', {
-          original: timestamp,
-          type: typeof timestamp,
-          date: date
-        });
-        throw new Error(`Invalid date from timestamp: ${timestamp}`);
-      }
-    } catch (error) {
-      console.error('Timestamp processing error:', {
-        timestamp,
-        type: typeof timestamp,
-        error: error.message
-      });
-      throw error;
+    if (typeof timestamp === 'number') {
+      // Keep nanosecond precision by using floor division for date parts
+      const ms = Math.floor(timestamp / 1000000); // Get milliseconds
+      date = new Date(ms);
+    } else if (typeof timestamp === 'string') {
+      // Parse string timestamp
+      date = new Date(timestamp);
+    } else if (timestamp instanceof Date) {
+      date = timestamp;
+    } else {
+      throw new Error('Invalid timestamp format');
     }
 
+    if (isNaN(date.getTime())) {
+      throw new Error(`Invalid date from timestamp: ${timestamp}`);
+    }
+
+    // Use date for directory structure only
     const datePath = date.toISOString().split('T')[0];
     const hour = date.getHours().toString().padStart(2, '0');
     const minute = Math.floor(date.getMinutes() / 10) * 10;
@@ -318,6 +301,26 @@ class ParquetBufferManager {
     }
   }
 
+  async ensureDirectories() {
+    const metadataDir = path.join(this.baseDir, this.writerId);
+    await fs.promises.mkdir(metadataDir, { recursive: true });
+    
+    // Write initial metadata file if it doesn't exist
+    const metadataPath = path.join(metadataDir, 'metadata.json');
+    if (!fs.existsSync(metadataPath)) {
+      const initialMetadata = {
+        writer_id: this.writerId,
+        next_db_id: 0,
+        next_table_id: 0
+      };
+      
+      await fs.promises.writeFile(
+        metadataPath,
+        JSON.stringify(initialMetadata, null, 2)
+      );
+    }
+  }
+
   async addLineProtocol(data) {
     const measurement = data.measurement;
     if (!this.buffers.has(measurement)) {
@@ -391,17 +394,6 @@ class ParquetBufferManager {
   }
 
   async addLineProtocolBulk(measurement, rows) {
-    // Add debug logging for timestamp processing
-    rows.forEach(row => {
-      if (!(row.timestamp instanceof Date)) {
-        console.error('Invalid timestamp in row:', {
-          measurement,
-          timestamp: row.timestamp,
-          type: typeof row.timestamp
-        });
-      }
-    });
-
     const type = measurement;
     
     if (!this.buffers.has(type)) {
@@ -468,26 +460,6 @@ class ParquetBufferManager {
 
     if (buffer.rows.length >= this.bufferSize) {
       await this.flush(type);
-    }
-  }
-
-  async ensureDirectories() {
-    const metadataDir = path.join(this.baseDir, this.writerId);
-    await fs.promises.mkdir(metadataDir, { recursive: true });
-    
-    // Write initial metadata file if it doesn't exist
-    const metadataPath = path.join(metadataDir, 'metadata.json');
-    if (!fs.existsSync(metadataPath)) {
-      const initialMetadata = {
-        writer_id: this.writerId,
-        next_db_id: 0,
-        next_table_id: 0
-      };
-      
-      await fs.promises.writeFile(
-        metadataPath,
-        JSON.stringify(initialMetadata, null, 2)
-      );
     }
   }
 }

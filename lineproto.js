@@ -60,57 +60,76 @@ function formatValue(v, numericType) {
   }
   
   function parse(line, config = {}) {
+    // Debug timestamp parsing
+    const debugTimestamp = (ts, source) => {
+      if (process.env.DEBUG) {
+        console.log(`Parsing timestamp: ${ts} (${typeof ts}) from ${source}`);
+      }
+    };
+  
+    // Split line into measurement, tags, fields, and timestamp
+    const parts = line.split(' ');
+    const lastPart = parts[parts.length - 1];
+    let timestamp;
+  
+    // Handle nanosecond precision timestamps
+    if (/^\d{19}$/.test(lastPart)) {
+      debugTimestamp(lastPart, 'nanoseconds');
+      // Convert nanoseconds to milliseconds for Date
+      const nanos = BigInt(lastPart);
+      timestamp = Number(nanos / 1000000n); // Convert to milliseconds
+    } else if (/^\d+$/.test(lastPart)) {
+      debugTimestamp(lastPart, 'numeric');
+      // Assume milliseconds if less than 19 digits
+      timestamp = parseInt(lastPart);
+    } else {
+      debugTimestamp(lastPart, 'fallback');
+      // Use current time if no valid timestamp
+      timestamp = Date.now();
+    }
+  
     // Extract measurement and tags
-    const spaceIndex = line.indexOf(' ');
-    if (spaceIndex === -1) throw new Error('Invalid line protocol format');
-    
-    const measurementAndTags = line.substring(0, spaceIndex);
-    const rest = line.substring(spaceIndex + 1);
-    
-    // Split measurement and tags
-    const [measurement, ...tagPairs] = measurementAndTags.split(',');
-    
+    const [measurementAndTags] = parts[0].split(' ');
+    const [measurement, ...tagParts] = measurementAndTags.split(',');
+  
     // Parse tags
     const tags = {};
-    tagPairs.forEach(pair => {
-      const [key, value] = pair.split('=');
+    tagParts.forEach(tag => {
+      const [key, value] = tag.split('=');
       if (key && value) {
-        // Remove quotes if present
-        tags[key] = value.replace(/^"(.*)"$/, '$1');
+        tags[key] = value.replace(/^"(.*)"$/, '$1'); // Remove quotes
       }
     });
-
-    // Find last space which separates fields from timestamp
-    const lastSpaceIndex = rest.lastIndexOf(' ');
-    if (lastSpaceIndex === -1) throw new Error('Missing timestamp');
-    
-    // Extract fields and timestamp
-    const fieldsStr = rest.substring(0, lastSpaceIndex);
-    const timestamp = rest.substring(lastSpaceIndex + 1);
-
+  
     // Parse fields
+    const fieldString = parts.slice(1, -1).join(' ');
     const fields = {};
-    const fieldPairs = fieldsStr.split(' ').filter(Boolean);
-    fieldPairs.forEach(pair => {
-      const [key, value] = pair.split('=');
-      if (key && value) {
-        // Handle quoted strings
-        if (value.startsWith('"') && value.endsWith('"')) {
-          fields[key] = value.slice(1, -1);
-        } else if (!isNaN(value)) {
-          fields[key] = Number(value);
-        } else {
-          fields[key] = value;
-        }
+    const fieldParts = fieldString.match(/(\w+)="([^"]*)"|\w+=[^,\s]+/g) || [];
+    
+    fieldParts.forEach(field => {
+      const [key, value] = field.split('=');
+      if (key && value !== undefined) {
+        // Remove quotes if present
+        const cleanValue = value.replace(/^"(.*)"$/, '$1');
+        // Convert to number if possible
+        fields[key] = isNaN(cleanValue) ? cleanValue : parseFloat(cleanValue);
       }
     });
-
+  
+    if (process.env.DEBUG) {
+      console.log('Parsed line protocol:', {
+        measurement,
+        tags,
+        fields,
+        timestamp: new Date(timestamp).toISOString()
+      });
+    }
+  
     return {
       measurement,
       tags,
       fields,
-      // Convert nanosecond timestamp to Date
-      timestamp: new Date(Math.floor(parseInt(timestamp) / 1000000))
+      timestamp
     };
   }
   
