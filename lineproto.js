@@ -59,37 +59,59 @@ function formatValue(v, numericType) {
       .join(',');
   }
   
-  function parse(point, config) {
-    const result = {};
-  
-    const [tags_, fields_, timestamp] = point.split(' ');
-  
-    const tags = (tags_ || '').split(',');
-    const fields = (fields_ || '').split(',');
-  
-    result.measurement = tags.shift();
-  
-    result.tags = tags.reduce((out, tag) => {
-      if (!tag) return out;
-      var [key, value] = tag.split('=');
-      out[key] = value;
-      return out;
-    }, {});
-  
-    result.fields = fields.reduce((out, field) => {
-      if (!field) return out;
-      var [key, value] = field.split('=');
-      out[key] = parseValue(value);
-      return out;
-    }, {});
-  
-    if (timestamp) {
-      result.timestamp = parseInt(timestamp) / 1000000;
-    } else if (config.addTimestamp) {
-      result.timestamp = Date.now();
-    }
-  
-    return result;
+  export function parse(line, config = {}) {
+    // Extract measurement and tags
+    const spaceIndex = line.indexOf(' ');
+    if (spaceIndex === -1) throw new Error('Invalid line protocol format');
+    
+    const measurementAndTags = line.substring(0, spaceIndex);
+    const rest = line.substring(spaceIndex + 1);
+    
+    // Split measurement and tags
+    const [measurement, ...tagPairs] = measurementAndTags.split(',');
+    
+    // Parse tags
+    const tags = {};
+    tagPairs.forEach(pair => {
+      const [key, value] = pair.split('=');
+      if (key && value) {
+        // Remove quotes if present
+        tags[key] = value.replace(/^"(.*)"$/, '$1');
+      }
+    });
+
+    // Find last space which separates fields from timestamp
+    const lastSpaceIndex = rest.lastIndexOf(' ');
+    if (lastSpaceIndex === -1) throw new Error('Missing timestamp');
+    
+    // Extract fields and timestamp
+    const fieldsStr = rest.substring(0, lastSpaceIndex);
+    const timestamp = rest.substring(lastSpaceIndex + 1);
+
+    // Parse fields
+    const fields = {};
+    const fieldPairs = fieldsStr.split(' ').filter(Boolean);
+    fieldPairs.forEach(pair => {
+      const [key, value] = pair.split('=');
+      if (key && value) {
+        // Handle quoted strings
+        if (value.startsWith('"') && value.endsWith('"')) {
+          fields[key] = value.slice(1, -1);
+        } else if (!isNaN(value)) {
+          fields[key] = Number(value);
+        } else {
+          fields[key] = value;
+        }
+      }
+    });
+
+    return {
+      measurement,
+      tags,
+      fields,
+      // Convert nanosecond timestamp to Date
+      timestamp: new Date(Math.floor(parseInt(timestamp) / 1000000))
+    };
   }
   
   function format(pointJson, config) {
