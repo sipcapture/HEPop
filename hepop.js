@@ -394,37 +394,72 @@ class ParquetBufferManager {
   }
 
   async addLineProtocolBulk(measurement, rows) {
-    // Use measurement directly as type (like HEP types)
     const type = measurement;
     
     if (!this.buffers.has(type)) {
-      // Create new schema for this measurement including its fields
+      // Get existing schema if any
+      let existingSchema = null;
+      try {
+        const typeMetadata = await this.getTypeMetadata(type);
+        if (typeMetadata.files.length > 0) {
+          const reader = await parquet.ParquetReader.openFile(typeMetadata.files[0].path);
+          existingSchema = reader.schema;
+          await reader.close();
+        }
+      } catch (error) {
+        console.log(`No existing schema found for ${type}, creating new one`);
+      }
+
+      // Merge schemas
+      const newFields = {};
+      rows.forEach(row => {
+        Object.entries(row).forEach(([key, value]) => {
+          if (key !== 'timestamp' && key !== 'tags') {
+            newFields[key] = { 
+              type: typeof value === 'number' ? 'DOUBLE' : 
+                    typeof value === 'boolean' ? 'BOOLEAN' : 'UTF8',
+              optional: true // Make all fields optional
+            };
+          }
+        });
+      });
+
       const schema = new parquet.ParquetSchema({
         timestamp: { type: 'TIMESTAMP_MILLIS' },
         tags: { type: 'UTF8' },
-        ...Object.entries(rows[0]).reduce((acc, [key, value]) => {
-          if (key !== 'timestamp' && key !== 'tags') {
-            acc[key] = { 
-              type: typeof value === 'number' ? 'DOUBLE' : 
-                    typeof value === 'boolean' ? 'BOOLEAN' : 'UTF8'
-            };
-          }
-          return acc;
-        }, {})
+        ...newFields
       });
 
       this.buffers.set(type, {
         rows: [],
         schema,
-        isLineProtocol: true  // Mark as Line Protocol data
+        isLineProtocol: true
       });
     }
 
     const buffer = this.buffers.get(type);
-    buffer.rows.push(...rows);
+    
+    // Ensure all rows have all fields
+    const allFields = new Set();
+    buffer.schema.fieldList.forEach(f => allFields.add(f.path[0]));
+    
+    const normalizedRows = rows.map(row => {
+      const normalized = {
+        timestamp: row.timestamp,
+        tags: row.tags
+      };
+      allFields.forEach(field => {
+        if (field !== 'timestamp' && field !== 'tags') {
+          normalized[field] = row[field] ?? null;
+        }
+      });
+      return normalized;
+    });
+
+    buffer.rows.push(...normalizedRows);
 
     if (buffer.rows.length >= this.bufferSize) {
-      await this.flush(type);  // Use the same flush method as HEP
+      await this.flush(type);
     }
   }
 }
