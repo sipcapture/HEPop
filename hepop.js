@@ -316,26 +316,6 @@ class ParquetBufferManager {
     }
   }
 
-  async ensureDirectories() {
-    const metadataDir = path.join(this.baseDir, this.writerId);
-    await fs.promises.mkdir(metadataDir, { recursive: true });
-    
-    // Write initial metadata file if it doesn't exist
-    const metadataPath = path.join(metadataDir, 'metadata.json');
-    if (!fs.existsSync(metadataPath)) {
-      const initialMetadata = {
-        writer_id: this.writerId,
-        next_db_id: 0,
-        next_table_id: 0
-      };
-      
-      await fs.promises.writeFile(
-        metadataPath,
-        JSON.stringify(initialMetadata, null, 2)
-      );
-    }
-  }
-
   async addLineProtocol(data) {
     const measurement = data.measurement;
     if (!this.buffers.has(measurement)) {
@@ -408,7 +388,7 @@ class ParquetBufferManager {
     }
   }
 
-  async addLineProtocolBulk(measurement, rows) {
+  async addLineProtocolBulk(measurement, rows, dbName) {
     const type = measurement;
     
     if (!this.buffers.has(type)) {
@@ -1013,6 +993,72 @@ class CompactionManager {
     }
   }
 
+  async cleanupEmptyDirectories() {
+    try {
+      // Get current hour path format
+      const now = new Date();
+      const currentHourPath = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}/${String(now.getHours()).padStart(2, '0')}`;
+
+      // Get all database directories
+      const dbsDir = path.join(this.bufferManager.baseDir, this.bufferManager.writerId, 'dbs');
+      const databases = await fs.promises.readdir(dbsDir);
+
+      for (const db of databases) {
+        const dbPath = path.join(dbsDir, db);
+        const tables = await fs.promises.readdir(dbPath);
+
+        for (const table of tables) {
+          const tablePath = path.join(dbPath, table);
+          if (!(await fs.promises.stat(tablePath)).isDirectory()) continue;
+
+          // Get all date directories
+          const dates = await fs.promises.readdir(tablePath);
+          for (const date of dates) {
+            const datePath = path.join(tablePath, date);
+            if (!(await fs.promises.stat(datePath)).isDirectory()) continue;
+
+            // Get hour directories
+            const hours = await fs.promises.readdir(datePath);
+            for (const hour of hours) {
+              const hourPath = path.join(datePath, hour);
+              if (!(await fs.promises.stat(hourPath)).isDirectory()) continue;
+
+              // Skip current hour
+              const dirPath = `${date}/${hour}`;
+              if (dirPath.startsWith(currentHourPath)) {
+                continue;
+              }
+
+              // Check if directory is empty after compaction
+              const files = await fs.promises.readdir(hourPath);
+              if (files.length === 0) {
+                await fs.promises.rmdir(hourPath);
+                console.log(`Removed empty directory: ${hourPath}`);
+
+                // Try to remove parent if empty
+                const parentFiles = await fs.promises.readdir(datePath);
+                if (parentFiles.length === 0) {
+                  await fs.promises.rmdir(datePath);
+                  console.log(`Removed empty date directory: ${datePath}`);
+                }
+              }
+            }
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Error cleaning up directories:', error);
+    }
+  }
+
+  // Add to compaction interval
+  startCompactionInterval() {
+    this.compactionInterval = setInterval(async () => {
+      await this.compact();
+      await this.cleanupEmptyDirectories(); // Add cleanup after compaction
+    }, this.interval);
+  }
+
   async close() {
     if (this.compactionInterval) {
       clearInterval(this.compactionInterval);
@@ -1088,6 +1134,9 @@ class HEPServer {
           async fetch(req) {
             const url = new URL(req.url);
             
+            // Get db parameter, default to 'hep' if not provided
+            const dbName = url.searchParams.get('db') || 'hep';
+            
             if (url.pathname === '/') {
               try {
                 const html = await Bun.file('./index.html').text();
@@ -1117,7 +1166,7 @@ class HEPServer {
                   return new Response('Method not allowed', { status: 405 });
                 }
 
-                const result = await self.queryClient.query(query);
+                const result = await self.queryClient.query(query, { db: dbName });
                 
                 // Handle BigInt serialization
                 const safeResult = JSON.parse(JSON.stringify(result, (key, value) =>
@@ -1142,11 +1191,12 @@ class HEPServer {
                 const config = {
                   addTimestamp: true,
                   typeMappings: [],
-                  defaultTypeMapping: 'float'
+                  defaultTypeMapping: 'float',
+                  dbName // Pass database name to buffer manager
                 };
 
                 // Process lines in bulk
-                const bulkData = new Map(); // measurement -> rows
+                const bulkData = new Map();
                 
                 for (const line of lines) {
                   const parsed = parse(line, config);
@@ -1165,8 +1215,7 @@ class HEPServer {
 
                 // Bulk insert by measurement
                 for (const [measurement, rows] of bulkData) {
-                  // console.log(`Writing ${rows.length} rows to measurement ${measurement}`);
-                  await self.buffer.addLineProtocolBulk(measurement, rows);
+                  await self.buffer.addLineProtocolBulk(measurement, rows, dbName);
                 }
 
                 return new Response(null, { status: 201 });
