@@ -69,24 +69,32 @@ function formatValue(v, numericType) {
     
     // Most common case first: nanoseconds (19 digits)
     if (len === 19) {
-      // Fast path: direct division to ms
       return Math.floor(Number(timestamp) / 1000000);
     }
     
     // Convert once and reuse
     const num = Number(timestamp);
-    
-    // Handle other precisions
-    switch (len) {
-      case 16: // microseconds
-        return Math.floor(num / 1000);
-      case 13: // milliseconds
-        return num;
-      case 10: // seconds
-        return num * 1000;
-      default:
-        return num;
+    if (!isNaN(num)) {
+      switch (len) {
+        case 16: // microseconds
+          return Math.floor(num / 1000);
+        case 13: // milliseconds
+          return num;
+        case 10: // seconds
+          return num * 1000;
+        default:
+          return num;
+      }
     }
+    
+    // Try parsing as date string
+    const date = new Date(timestamp);
+    if (!isNaN(date.getTime())) {
+      return date.getTime();
+    }
+    
+    // Default to current time
+    return Date.now();
   }
   
   function parse(point, config) {
@@ -111,16 +119,8 @@ function formatValue(v, numericType) {
       return out;
     }, {});
 
-    // Fast path: timestamp handling
-    if (timestamp) {
-      result.timestamp = parseTimestamp(timestamp);
-      // Store original precision for parquet
-      result.timestampNano = timestamp;
-    } else if (config.addTimestamp) {
-      const now = Date.now();
-      result.timestamp = now;
-      result.timestampNano = (BigInt(now) * 1000000n).toString();
-    }
+    // Handle timestamp with fallback
+    result.timestamp = parseTimestamp(timestamp);
 
     return result;
   }

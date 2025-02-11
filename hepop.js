@@ -1137,8 +1137,9 @@ class HEPServer {
             } else if (url.pathname === '/write' && req.method === 'POST') {
               try {
                 const body = await req.text();
+                // Split on newlines and filter empty lines
                 const lines = body.split('\n').filter(line => line.trim());
-                                
+                
                 const config = {
                   addTimestamp: true,
                   typeMappings: [],
@@ -1146,27 +1147,40 @@ class HEPServer {
                 };
 
                 // Process lines in bulk
-                const bulkData = new Map(); // measurement -> rows
+                const bulkData = new Map();
                 
                 for (const line of lines) {
-                  const parsed = parse(line, config);
-                  const measurement = parsed.measurement;
-                  
-                  if (!bulkData.has(measurement)) {
-                    bulkData.set(measurement, []);
+                  try {
+                    const parsed = parse(line, config);
+                    const measurement = parsed.measurement;
+                    
+                    if (!bulkData.has(measurement)) {
+                      bulkData.set(measurement, []);
+                    }
+                    
+                    // Ensure timestamp is a Date object
+                    const timestamp = new Date(parsed.timestamp);
+                    if (isNaN(timestamp.getTime())) {
+                      console.warn(`Invalid timestamp in line: ${line}, using current time`);
+                      timestamp = new Date();
+                    }
+                    
+                    bulkData.get(measurement).push({
+                      timestamp,
+                      tags: JSON.stringify(parsed.tags),
+                      ...parsed.fields
+                    });
+                  } catch (error) {
+                    console.warn(`Error parsing line: ${line}`, error);
+                    continue; // Skip invalid lines
                   }
-                  
-                  bulkData.get(measurement).push({
-                    timestamp: new Date(parsed.timestamp),
-                    tags: JSON.stringify(parsed.tags),
-                    ...parsed.fields
-                  });
                 }
 
                 // Bulk insert by measurement
                 for (const [measurement, rows] of bulkData) {
-                  // console.log(`Writing ${rows.length} rows to measurement ${measurement}`);
-                  await self.buffer.addLineProtocolBulk(measurement, rows);
+                  if (rows.length > 0) {
+                    await self.buffer.addLineProtocolBulk(measurement, rows);
+                  }
                 }
 
                 return new Response(null, { status: 201 });
@@ -1174,7 +1188,6 @@ class HEPServer {
                 console.error('Write error:', error);
                 return new Response(error.message, { status: 400 });
               }
-
             }
 
             return new Response('Not found', { status: 404 });
