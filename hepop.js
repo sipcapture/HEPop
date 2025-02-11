@@ -206,29 +206,21 @@ class ParquetBufferManager {
   }
 
   async flush(type) {
-    console.log(`Attempting to flush ${type}`);
     const buffer = this.buffers.get(type);
-    if (!buffer?.rows.length) {
-      console.log(`No rows to flush for ${type}`);
-      return;
-    }
+    if (!buffer?.rows.length) return;
     
     try {
-      // Get new file path with incremented sequence
       const filePath = await this.getFilePath(type, buffer.isLineProtocol ? 
         buffer.rows[0].timestamp : buffer.rows[0].create_date);
       
-      console.log(`Creating new file: ${filePath}`);
       await fs.promises.mkdir(path.dirname(filePath), { recursive: true });
 
-      // Create writer with schema
       const writer = await parquet.ParquetWriter.openFile(
         buffer.schema,
         filePath,
         this.writerOptions
       );
 
-      // Write rows
       for (const data of buffer.rows) {
         if (buffer.isLineProtocol) {
           await writer.appendRow(data);
@@ -243,10 +235,8 @@ class ParquetBufferManager {
 
       await writer.close();
 
-      // Get file stats
       const stats = await fs.promises.stat(filePath);
       
-      // Update metadata with new file
       await this.updateMetadata(
         type, 
         filePath, 
@@ -256,14 +246,13 @@ class ParquetBufferManager {
           d.timestamp : new Date(d.create_date))
       );
       
-      // Clear buffer after successful write
       this.buffers.set(type, {
         rows: [],
         schema: buffer.schema,
         isLineProtocol: buffer.isLineProtocol
       });
       
-      console.log(`Successfully wrote ${buffer.rows.length} records to ${filePath}`);
+      console.log(`Wrote ${buffer.rows.length} records to ${path.basename(filePath)}`);
     } catch (error) {
       console.error(`Parquet flush error for ${type}:`, error);
       throw error;
@@ -470,12 +459,10 @@ class ParquetBufferManager {
   }
 
   async addLineProtocolBulk(measurement, rows) {
-    console.log(`Processing bulk write for ${measurement}: ${rows.length} rows`);
     const type = measurement;
     
     try {
       if (!this.buffers.has(type)) {
-        console.log(`Creating new buffer for ${type}`);
         // Get existing schema if any
         let existingSchema = null;
         try {
@@ -484,10 +471,9 @@ class ParquetBufferManager {
             const reader = await parquet.ParquetReader.openFile(typeMetadata.files[0].path);
             existingSchema = reader.schema;
             await reader.close();
-            console.log(`Found existing schema for ${type}`);
           }
         } catch (error) {
-          console.log(`Creating new schema for ${type}`);
+          // Silently create new schema
         }
 
         // Merge schemas
@@ -510,8 +496,6 @@ class ParquetBufferManager {
           ...newFields
         });
 
-        console.log(`Created schema for ${type}:`, schema);
-
         this.buffers.set(type, {
           rows: [],
           schema,
@@ -520,9 +504,8 @@ class ParquetBufferManager {
       }
 
       const buffer = this.buffers.get(type);
-      console.log(`Current buffer size for ${type}: ${buffer.rows.length}`);
       
-      // Ensure all rows have all fields
+      // Ensure all fields are present
       const allFields = new Set();
       buffer.schema.fieldList.forEach(f => allFields.add(f.path[0]));
       
@@ -540,10 +523,8 @@ class ParquetBufferManager {
       });
 
       buffer.rows.push(...normalizedRows);
-      console.log(`Buffer size after push for ${type}: ${buffer.rows.length}`);
 
       if (buffer.rows.length >= this.bufferSize) {
-        console.log(`Buffer full for ${type}, flushing...`);
         await this.flush(type);
       }
     } catch (error) {
