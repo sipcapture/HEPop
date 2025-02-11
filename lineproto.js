@@ -78,23 +78,28 @@ function formatValue(v, numericType) {
     if (timestamp) {
       // Handle different timestamp formats
       if (/^\d{19}$/.test(timestamp)) {
-        // Nanosecond precision - keep full value
-        result.timestamp = BigInt(timestamp);
+        // Nanosecond precision - store as BigInt but provide milliseconds for Date
+        const nanos = BigInt(timestamp);
+        result.timestamp = nanos; // Keep full precision
+        result.timestampMs = Number(nanos / 1000000n); // For Date operations
         if (process.env.DEBUG) {
           console.log('Parsed nanosecond timestamp:', timestamp, 
-                     'Date:', new Date(Number(result.timestamp / 1000000n)).toISOString());
+                     'Date:', new Date(result.timestampMs).toISOString());
         }
       } else {
         // Convert other formats to milliseconds
         result.timestamp = parseInt(timestamp);
+        result.timestampMs = result.timestamp;
         if (process.env.DEBUG) {
           console.log('Parsed timestamp:', timestamp,
-                     'Date:', new Date(result.timestamp).toISOString());
+                     'Date:', new Date(result.timestampMs).toISOString());
         }
       }
     } else if (config.addTimestamp) {
-      // Current time in milliseconds
-      result.timestamp = BigInt(Date.now()) * 1000000n;
+      // Current time in nanoseconds
+      const now = BigInt(Date.now());
+      result.timestamp = now * 1000000n;
+      result.timestampMs = Number(now);
     }
   
     return result;

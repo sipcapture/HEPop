@@ -1142,7 +1142,7 @@ class HEPServer {
                   }
                   
                   bulkData.get(measurement).push({
-                    timestamp: new Date(parsed.timestamp),
+                    timestamp: new Date(parsed.timestampMs), // Use millisecond timestamp for Date
                     tags: JSON.stringify(parsed.tags),
                     ...parsed.fields
                   });
