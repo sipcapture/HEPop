@@ -224,12 +224,16 @@ class QueryClient {
   }
 
   async getFilesForTimeRange(timeRange, dbName = 'hep') {
-    // Modify path to include database
+    if (!this.buffer) {
+      throw new Error('No buffer manager available');
+    }
+
+    // Use buffer manager's metadata
     const dbPath = path.join(
       this.baseDir,
-      this.writerId,
+      this.buffer.writerId,
       'dbs',
-      `${dbName}-${this.metadata.next_db_id}`
+      `${dbName}-${this.buffer.metadata.next_db_id}`
     );
 
     try {
@@ -240,7 +244,8 @@ class QueryClient {
         if (!type.startsWith('hep_')) continue;
         
         const typePath = path.join(dbPath, type);
-        const metadata = await this.getTypeMetadata(type, dbName);
+        // Use buffer manager's method to get metadata
+        const metadata = await this.buffer.getTypeMetadata(type);
         
         // Filter files within time range
         const relevantFiles = metadata.files.filter(file => {
