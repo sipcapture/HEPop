@@ -705,87 +705,59 @@
         return formatReadable(rows, 2, units);
     }
 
-    function renderResult(response)
+    function renderResult(response) 
     {
         clear();
 
         // Parse the JSON response if needed
         const data = typeof response === 'string' ? JSON.parse(response) : response;
         
-        if (!data || !data.length) {
-            renderUnparsedResult("Empty result set");
+        // If response is already in expected format, use it directly
+        if (data.meta && data.data) {
+            renderTable(data);
             return;
         }
 
-        // Detect data type and create appropriate metadata
-        const firstRow = data[0];
-        let meta = [];
-        let transformedData = [];
-
-        if (firstRow.timestamp && firstRow.tags) {
-            // Line Protocol data
-            meta = [
-                { name: 'time', type: 'DateTime' }
-            ];
-
-            // Extract tag names from first row
-            const tags = JSON.parse(firstRow.tags);
-            Object.keys(tags).forEach(tag => {
-                meta.push({ name: tag, type: 'String' });
+        // If response is an array, transform it to expected format
+        if (Array.isArray(data)) {
+            // Get column names from first row
+            const firstRow = data[0];
+            const meta = Object.keys(firstRow).map(key => {
+                return {
+                    name: key === 'timestamp' ? 'time' : key,
+                    type: key === 'timestamp' ? 'DateTime' : 
+                          key === 'tags' ? 'String' : 
+                          typeof firstRow[key] === 'number' ? 'Float64' : 'String'
+                };
             });
 
-            // Add metric columns
-            Object.keys(firstRow).forEach(key => {
-                if (key !== 'timestamp' && key !== 'tags') {
-                    meta.push({ name: key, type: 'Float64' });
-                }
-            });
-
-            // Transform data
-            transformedData = data.map(row => {
-                const values = [new Date(parseInt(row.timestamp.micros)/1000).toISOString()];
-                const tags = JSON.parse(row.tags);
-                Object.values(tags).forEach(v => values.push(v));
-                Object.keys(row).forEach(key => {
-                    if (key !== 'timestamp' && key !== 'tags') {
-                        values.push(row[key]);
+            // Transform rows to arrays matching meta order
+            const rows = data.map(row => {
+                return meta.map(col => {
+                    if (col.name === 'time') {
+                        return new Date(parseInt(row.timestamp.micros)/1000).toISOString();
                     }
+                    return row[col.name];
                 });
-                return values;
             });
-        } else if (firstRow.protocol_header) {
-            // HEP data
-            meta = [
-                { name: 'time', type: 'DateTime' },
-                { name: 'src_ip', type: 'String' },
-                { name: 'dst_ip', type: 'String' },
-                { name: 'payload', type: 'String' }
-            ];
 
-            transformedData = data.map(row => {
-                const header = JSON.parse(row.protocol_header);
-                return [
-                    new Date(row.create_date).toISOString(),
-                    header.srcIp || '',
-                    header.dstIp || '',
-                    row.raw || ''
-                ];
-            });
+            const result = {
+                meta: meta,
+                data: rows,
+                rows: data.length,
+                rows_before_limit_at_least: data.length,
+                statistics: {
+                    elapsed: 0,
+                    rows_read: data.length,
+                    bytes_read: response.length
+                }
+            };
+
+            renderTable(result);
+            return;
         }
 
-        const result = {
-            meta: meta,
-            data: transformedData,
-            rows: data.length,
-            rows_before_limit_at_least: data.length,
-            statistics: {
-                elapsed: 0,
-                rows_read: data.length,
-                bytes_read: response.length
-            }
-        };
-
-        renderTable(result);
+        renderUnparsedResult("Invalid response format");
     }
 
     function renderCell(cell, col_idx, settings)
