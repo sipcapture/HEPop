@@ -44,6 +44,30 @@ class ParquetBufferManager {
     this.metadataLocks = new Map();
   }
 
+  async ensureDirectories() {
+    const metadataDir = path.join(this.baseDir, this.writerId);
+    await fs.promises.mkdir(metadataDir, { recursive: true });
+    
+    // Write initial metadata file if it doesn't exist
+    const metadataPath = path.join(metadataDir, 'metadata.json');
+    if (!fs.existsSync(metadataPath)) {
+      const initialMetadata = {
+        writer_id: this.writerId,
+        next_db_id: 0,
+        next_table_id: 0
+      };
+      
+      await fs.promises.writeFile(
+        metadataPath,
+        JSON.stringify(initialMetadata, null, 2)
+      );
+    }
+
+    // Create dbs directory
+    const dbsDir = path.join(metadataDir, 'dbs');
+    await fs.promises.mkdir(dbsDir, { recursive: true });
+  }
+
   async initialize() {
     // Ensure base directories exist
     await this.ensureDirectories();
