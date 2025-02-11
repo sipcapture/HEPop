@@ -144,7 +144,11 @@ class QueryClient {
 
   async query(sql, options = {}) {
     const parsed = this.parseQuery(sql);
-    const buffer = await this.getBuffer();
+    
+    // Use the buffer manager reference directly
+    if (!this.buffer) {
+      throw new Error('No buffer manager available');
+    }
 
     try {
       // Get database name from options or default to 'hep'
@@ -162,13 +166,13 @@ class QueryClient {
         if (isAggregateQuery) {
           query = `
             WITH all_data AS (
-              SELECT ${buffer.isLineProtocol ? '*' : 'timestamp, rcinfo, payload'} 
+              SELECT ${this.buffer.isLineProtocol ? '*' : 'timestamp, rcinfo, payload'} 
               FROM read_parquet([${files.map(f => `'${f.path}'`).join(', ')}], union_by_name=true)
               WHERE timestamp >= TIMESTAMP '${new Date(parsed.timeRange.start / 1000000).toISOString()}'
               AND timestamp <= TIMESTAMP '${new Date(parsed.timeRange.end / 1000000).toISOString()}'
               ${parsed.conditions}
               UNION ALL
-              SELECT ${buffer.isLineProtocol ? '*' : 'timestamp, rcinfo, payload'}
+              SELECT ${this.buffer.isLineProtocol ? '*' : 'timestamp, rcinfo, payload'}
               FROM buffer_data
               WHERE timestamp >= TIMESTAMP '${new Date(parsed.timeRange.start / 1000000).toISOString()}'
               AND timestamp <= TIMESTAMP '${new Date(parsed.timeRange.end / 1000000).toISOString()}'
@@ -183,13 +187,13 @@ class QueryClient {
           query = `
             SELECT ${parsed.columns}
             FROM (
-              SELECT ${buffer.isLineProtocol ? '*' : 'timestamp, rcinfo, payload'}
+              SELECT ${this.buffer.isLineProtocol ? '*' : 'timestamp, rcinfo, payload'}
               FROM read_parquet([${files.map(f => `'${f.path}'`).join(', ')}], union_by_name=true)
               WHERE timestamp >= TIMESTAMP '${new Date(parsed.timeRange.start / 1000000).toISOString()}'
               AND timestamp <= TIMESTAMP '${new Date(parsed.timeRange.end / 1000000).toISOString()}'
               ${parsed.conditions}
               UNION ALL
-              SELECT ${buffer.isLineProtocol ? '*' : 'timestamp, rcinfo, payload'}
+              SELECT ${this.buffer.isLineProtocol ? '*' : 'timestamp, rcinfo, payload'}
               FROM buffer_data
               WHERE timestamp >= TIMESTAMP '${new Date(parsed.timeRange.start / 1000000).toISOString()}'
               AND timestamp <= TIMESTAMP '${new Date(parsed.timeRange.end / 1000000).toISOString()}'
