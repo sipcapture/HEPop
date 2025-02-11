@@ -116,37 +116,37 @@ class ParquetBufferManager {
     
     // Handle nanosecond timestamps
     let date;
-    console.log('Processing timestamp:', timestamp, typeof timestamp);
-
     try {
       if (typeof timestamp === 'number') {
-        // Convert nanoseconds to milliseconds for Date
+        // Handle nanosecond precision timestamps
         const ms = Math.floor(timestamp / 1000000);
-        console.log('Converting nanoseconds to ms:', timestamp, '->', ms);
         date = new Date(ms);
+        console.debug(`Processing numeric timestamp: ${timestamp} -> ${ms}ms -> ${date.toISOString()}`);
       } else if (typeof timestamp === 'string') {
         // Parse string timestamp
-        console.log('Parsing string timestamp:', timestamp);
         date = new Date(timestamp);
+        console.debug(`Processing string timestamp: ${timestamp} -> ${date.toISOString()}`);
       } else if (timestamp instanceof Date) {
-        console.log('Using Date object directly:', timestamp);
         date = timestamp;
+        console.debug(`Processing Date object: ${date.toISOString()}`);
       } else {
-        throw new Error(`Invalid timestamp type: ${typeof timestamp}`);
+        console.error('Invalid timestamp type:', typeof timestamp, timestamp);
+        throw new Error(`Invalid timestamp format: ${typeof timestamp}`);
       }
 
       if (isNaN(date.getTime())) {
-        throw new Error(`Invalid date conversion for timestamp: ${timestamp} (${typeof timestamp})`);
+        console.error('Invalid date conversion:', {
+          original: timestamp,
+          type: typeof timestamp,
+          date: date
+        });
+        throw new Error(`Invalid date from timestamp: ${timestamp}`);
       }
-
-      console.log('Successfully parsed timestamp to:', date.toISOString());
-
     } catch (error) {
-      console.error('Timestamp parsing error:', {
+      console.error('Timestamp processing error:', {
         timestamp,
         type: typeof timestamp,
-        error: error.message,
-        stack: error.stack
+        error: error.message
       });
       throw error;
     }
@@ -391,95 +391,83 @@ class ParquetBufferManager {
   }
 
   async addLineProtocolBulk(measurement, rows) {
-    try {
-      console.log('Adding line protocol data:', {
-        measurement,
-        rowCount: rows.length,
-        sampleRow: rows[0]
-      });
-
-      // Validate timestamps before processing
-      rows.forEach((row, index) => {
-        if (!row.timestamp || isNaN(new Date(row.timestamp).getTime())) {
-          console.error('Invalid timestamp in row:', {
-            index,
-            timestamp: row.timestamp,
-            row
-          });
-          throw new Error(`Invalid timestamp in row ${index}: ${row.timestamp}`);
-        }
-      });
-
-      const type = measurement;
-      
-      if (!this.buffers.has(type)) {
-        // Get existing schema if any
-        let existingSchema = null;
-        try {
-          const typeMetadata = await this.getTypeMetadata(type);
-          if (typeMetadata.files.length > 0) {
-            const reader = await parquet.ParquetReader.openFile(typeMetadata.files[0].path);
-            existingSchema = reader.schema;
-            await reader.close();
-          }
-        } catch (error) {
-          console.log(`No existing schema found for ${type}, creating new one`);
-        }
-
-        // Merge schemas
-        const newFields = {};
-        rows.forEach(row => {
-          Object.entries(row).forEach(([key, value]) => {
-            if (key !== 'timestamp' && key !== 'tags') {
-              newFields[key] = { 
-                type: typeof value === 'number' ? 'DOUBLE' : 
-                      typeof value === 'boolean' ? 'BOOLEAN' : 'UTF8',
-                optional: true // Make all fields optional
-              };
-            }
-          });
-        });
-
-        const schema = new parquet.ParquetSchema({
-          timestamp: { type: 'TIMESTAMP_MILLIS' },
-          tags: { type: 'UTF8' },
-          ...newFields
-        });
-
-        this.buffers.set(type, {
-          rows: [],
-          schema,
-          isLineProtocol: true
-        });
-      }
-
-      const buffer = this.buffers.get(type);
-      
-      // Ensure all rows have all fields
-      const allFields = new Set();
-      buffer.schema.fieldList.forEach(f => allFields.add(f.path[0]));
-      
-      const normalizedRows = rows.map(row => {
-        const normalized = {
+    // Add debug logging for timestamp processing
+    rows.forEach(row => {
+      if (!(row.timestamp instanceof Date)) {
+        console.error('Invalid timestamp in row:', {
+          measurement,
           timestamp: row.timestamp,
-          tags: row.tags
-        };
-        allFields.forEach(field => {
-          if (field !== 'timestamp' && field !== 'tags') {
-            normalized[field] = row[field] ?? null;
+          type: typeof row.timestamp
+        });
+      }
+    });
+
+    const type = measurement;
+    
+    if (!this.buffers.has(type)) {
+      // Get existing schema if any
+      let existingSchema = null;
+      try {
+        const typeMetadata = await this.getTypeMetadata(type);
+        if (typeMetadata.files.length > 0) {
+          const reader = await parquet.ParquetReader.openFile(typeMetadata.files[0].path);
+          existingSchema = reader.schema;
+          await reader.close();
+        }
+      } catch (error) {
+        console.log(`No existing schema found for ${type}, creating new one`);
+      }
+
+      // Merge schemas
+      const newFields = {};
+      rows.forEach(row => {
+        Object.entries(row).forEach(([key, value]) => {
+          if (key !== 'timestamp' && key !== 'tags') {
+            newFields[key] = { 
+              type: typeof value === 'number' ? 'DOUBLE' : 
+                    typeof value === 'boolean' ? 'BOOLEAN' : 'UTF8',
+              optional: true // Make all fields optional
+            };
           }
         });
-        return normalized;
       });
 
-      buffer.rows.push(...normalizedRows);
+      const schema = new parquet.ParquetSchema({
+        timestamp: { type: 'TIMESTAMP_MILLIS' },
+        tags: { type: 'UTF8' },
+        ...newFields
+      });
 
-      if (buffer.rows.length >= this.bufferSize) {
-        await this.flush(type);
-      }
-    } catch (error) {
-      console.error('Error adding line protocol bulk:', error);
-      throw error;
+      this.buffers.set(type, {
+        rows: [],
+        schema,
+        isLineProtocol: true
+      });
+    }
+
+    const buffer = this.buffers.get(type);
+    
+    // Ensure all rows have all fields
+    const allFields = new Set();
+    buffer.schema.fieldList.forEach(f => allFields.add(f.path[0]));
+    
+    const normalizedRows = rows.map(row => {
+      const normalized = {
+        timestamp: row.timestamp,
+        tags: row.tags
+      };
+      allFields.forEach(field => {
+        if (field !== 'timestamp' && field !== 'tags') {
+          normalized[field] = row[field] ?? null;
+        }
+      });
+      return normalized;
+    });
+
+    buffer.rows.push(...normalizedRows);
+
+    if (buffer.rows.length >= this.bufferSize) {
+      await this.flush(type);
     }
   }
 }
