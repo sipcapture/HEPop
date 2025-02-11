@@ -39,6 +39,9 @@ class ParquetBufferManager {
       tags: { type: 'UTF8' },  // JSON string of tags
       // Dynamic fields will be added based on data
     });
+
+    // Add metadata write queue
+    this.metadataQueue = new Map(); // type -> Promise
   }
 
   async initialize() {
@@ -245,21 +248,33 @@ class ParquetBufferManager {
   }
 
   async writeTypeMetadata(type, metadata) {
-    const metadataPath = this.getTypeMetadataPath(type);
-    await fs.promises.mkdir(path.dirname(metadataPath), { recursive: true });
-    
-    const tempPath = `${metadataPath}.tmp`;
-    try {
-      await fs.promises.writeFile(tempPath, JSON.stringify(metadata, null, 2));
-      await fs.promises.rename(tempPath, metadataPath);
-    } catch (error) {
-      try {
-        await fs.promises.unlink(tempPath);
-      } catch (e) {
-        // Ignore cleanup errors
-      }
-      throw error;
+    // Get or create queue for this type
+    if (!this.metadataQueue.has(type)) {
+      this.metadataQueue.set(type, Promise.resolve());
     }
+
+    // Add write to queue
+    const queue = this.metadataQueue.get(type);
+    const writePromise = queue.then(async () => {
+      const metadataPath = this.getTypeMetadataPath(type);
+      await fs.promises.mkdir(path.dirname(metadataPath), { recursive: true });
+      
+      const tempPath = `${metadataPath}.tmp`;
+      try {
+        await fs.promises.writeFile(tempPath, JSON.stringify(metadata, null, 2));
+        await fs.promises.rename(tempPath, metadataPath);
+      } catch (error) {
+        try {
+          await fs.promises.unlink(tempPath);
+        } catch (e) {
+          // Ignore cleanup errors
+        }
+        throw error;
+      }
+    });
+
+    this.metadataQueue.set(type, writePromise);
+    return writePromise;
   }
 
   async updateMetadata(type, filePath, sizeBytes, rowCount, timestamps) {

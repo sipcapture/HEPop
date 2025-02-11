@@ -21,6 +21,9 @@ function formatValue(v, numericType) {
   }
   
   function formatDate(date) {
+    if (typeof date === 'string' && /^\d{19}$/.test(date)) {
+      return date; // Already in nanoseconds
+    }
     return (date instanceof Date ? date.getTime() : date) * 1000000;
   }
   
@@ -59,36 +62,66 @@ function formatValue(v, numericType) {
       .join(',');
   }
   
+  // Fast timestamp parsing using length checks and single conversion
+  function parseTimestamp(timestamp) {
+    if (!timestamp) return Date.now();
+    const len = timestamp.length;
+    
+    // Most common case first: nanoseconds (19 digits)
+    if (len === 19) {
+      // Fast path: direct division to ms
+      return Math.floor(Number(timestamp) / 1000000);
+    }
+    
+    // Convert once and reuse
+    const num = Number(timestamp);
+    
+    // Handle other precisions
+    switch (len) {
+      case 16: // microseconds
+        return Math.floor(num / 1000);
+      case 13: // milliseconds
+        return num;
+      case 10: // seconds
+        return num * 1000;
+      default:
+        return num;
+    }
+  }
+  
   function parse(point, config) {
     const result = {};
-  
     const [tags_, fields_, timestamp] = point.split(' ');
-  
+    
+    // Fast path: tags parsing
     const tags = (tags_ || '').split(',');
-    const fields = (fields_ || '').split(',');
-  
     result.measurement = tags.shift();
-  
     result.tags = tags.reduce((out, tag) => {
       if (!tag) return out;
-      var [key, value] = tag.split('=');
+      const [key, value] = tag.split('=');
       out[key] = value;
       return out;
     }, {});
-  
-    result.fields = fields.reduce((out, field) => {
+
+    // Fast path: fields parsing
+    result.fields = fields_.split(',').reduce((out, field) => {
       if (!field) return out;
-      var [key, value] = field.split('=');
+      const [key, value] = field.split('=');
       out[key] = parseValue(value);
       return out;
     }, {});
-  
+
+    // Fast path: timestamp handling
     if (timestamp) {
-      result.timestamp = parseInt(timestamp) / 1000000;
+      result.timestamp = parseTimestamp(timestamp);
+      // Store original precision for parquet
+      result.timestampNano = timestamp;
     } else if (config.addTimestamp) {
-      result.timestamp = Date.now();
+      const now = Date.now();
+      result.timestamp = now;
+      result.timestampNano = (BigInt(now) * 1000000n).toString();
     }
-  
+
     return result;
   }
   
