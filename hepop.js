@@ -116,24 +116,41 @@ class ParquetBufferManager {
     
     // Handle nanosecond timestamps
     let date;
-    if (typeof timestamp === 'number') {
-      // Keep nanosecond precision by using floor division for date parts
-      const ms = Math.floor(timestamp / 1000000); // Get milliseconds
-      date = new Date(ms);
-    } else if (typeof timestamp === 'string') {
-      // Parse string timestamp
-      date = new Date(timestamp);
-    } else if (timestamp instanceof Date) {
-      date = timestamp;
-    } else {
-      throw new Error('Invalid timestamp format');
+    console.log('Processing timestamp:', timestamp, typeof timestamp);
+
+    try {
+      if (typeof timestamp === 'number') {
+        // Convert nanoseconds to milliseconds for Date
+        const ms = Math.floor(timestamp / 1000000);
+        console.log('Converting nanoseconds to ms:', timestamp, '->', ms);
+        date = new Date(ms);
+      } else if (typeof timestamp === 'string') {
+        // Parse string timestamp
+        console.log('Parsing string timestamp:', timestamp);
+        date = new Date(timestamp);
+      } else if (timestamp instanceof Date) {
+        console.log('Using Date object directly:', timestamp);
+        date = timestamp;
+      } else {
+        throw new Error(`Invalid timestamp type: ${typeof timestamp}`);
+      }
+
+      if (isNaN(date.getTime())) {
+        throw new Error(`Invalid date conversion for timestamp: ${timestamp} (${typeof timestamp})`);
+      }
+
+      console.log('Successfully parsed timestamp to:', date.toISOString());
+
+    } catch (error) {
+      console.error('Timestamp parsing error:', {
+        timestamp,
+        type: typeof timestamp,
+        error: error.message,
+        stack: error.stack
+      });
+      throw error;
     }
 
-    if (isNaN(date.getTime())) {
-      throw new Error(`Invalid date from timestamp: ${timestamp}`);
-    }
-
-    // Use date for directory structure only
     const datePath = date.toISOString().split('T')[0];
     const hour = date.getHours().toString().padStart(2, '0');
     const minute = Math.floor(date.getMinutes() / 10) * 10;
@@ -301,26 +318,6 @@ class ParquetBufferManager {
     }
   }
 
-  async ensureDirectories() {
-    const metadataDir = path.join(this.baseDir, this.writerId);
-    await fs.promises.mkdir(metadataDir, { recursive: true });
-    
-    // Write initial metadata file if it doesn't exist
-    const metadataPath = path.join(metadataDir, 'metadata.json');
-    if (!fs.existsSync(metadataPath)) {
-      const initialMetadata = {
-        writer_id: this.writerId,
-        next_db_id: 0,
-        next_table_id: 0
-      };
-      
-      await fs.promises.writeFile(
-        metadataPath,
-        JSON.stringify(initialMetadata, null, 2)
-      );
-    }
-  }
-
   async addLineProtocol(data) {
     const measurement = data.measurement;
     if (!this.buffers.has(measurement)) {
@@ -394,72 +391,95 @@ class ParquetBufferManager {
   }
 
   async addLineProtocolBulk(measurement, rows) {
-    const type = measurement;
-    
-    if (!this.buffers.has(type)) {
-      // Get existing schema if any
-      let existingSchema = null;
-      try {
-        const typeMetadata = await this.getTypeMetadata(type);
-        if (typeMetadata.files.length > 0) {
-          const reader = await parquet.ParquetReader.openFile(typeMetadata.files[0].path);
-          existingSchema = reader.schema;
-          await reader.close();
+    try {
+      console.log('Adding line protocol data:', {
+        measurement,
+        rowCount: rows.length,
+        sampleRow: rows[0]
+      });
+
+      // Validate timestamps before processing
+      rows.forEach((row, index) => {
+        if (!row.timestamp || isNaN(new Date(row.timestamp).getTime())) {
+          console.error('Invalid timestamp in row:', {
+            index,
+            timestamp: row.timestamp,
+            row
+          });
+          throw new Error(`Invalid timestamp in row ${index}: ${row.timestamp}`);
         }
-      } catch (error) {
-        console.log(`No existing schema found for ${type}, creating new one`);
+      });
+
+      const type = measurement;
+      
+      if (!this.buffers.has(type)) {
+        // Get existing schema if any
+        let existingSchema = null;
+        try {
+          const typeMetadata = await this.getTypeMetadata(type);
+          if (typeMetadata.files.length > 0) {
+            const reader = await parquet.ParquetReader.openFile(typeMetadata.files[0].path);
+            existingSchema = reader.schema;
+            await reader.close();
+          }
+        } catch (error) {
+          console.log(`No existing schema found for ${type}, creating new one`);
+        }
+
+        // Merge schemas
+        const newFields = {};
+        rows.forEach(row => {
+          Object.entries(row).forEach(([key, value]) => {
+            if (key !== 'timestamp' && key !== 'tags') {
+              newFields[key] = { 
+                type: typeof value === 'number' ? 'DOUBLE' : 
+                      typeof value === 'boolean' ? 'BOOLEAN' : 'UTF8',
+                optional: true // Make all fields optional
+              };
+            }
+          });
+        });
+
+        const schema = new parquet.ParquetSchema({
+          timestamp: { type: 'TIMESTAMP_MILLIS' },
+          tags: { type: 'UTF8' },
+          ...newFields
+        });
+
+        this.buffers.set(type, {
+          rows: [],
+          schema,
+          isLineProtocol: true
+        });
       }
 
-      // Merge schemas
-      const newFields = {};
-      rows.forEach(row => {
-        Object.entries(row).forEach(([key, value]) => {
-          if (key !== 'timestamp' && key !== 'tags') {
-            newFields[key] = { 
-              type: typeof value === 'number' ? 'DOUBLE' : 
-                    typeof value === 'boolean' ? 'BOOLEAN' : 'UTF8',
-              optional: true // Make all fields optional
-            };
+      const buffer = this.buffers.get(type);
+      
+      // Ensure all rows have all fields
+      const allFields = new Set();
+      buffer.schema.fieldList.forEach(f => allFields.add(f.path[0]));
+      
+      const normalizedRows = rows.map(row => {
+        const normalized = {
+          timestamp: row.timestamp,
+          tags: row.tags
+        };
+        allFields.forEach(field => {
+          if (field !== 'timestamp' && field !== 'tags') {
+            normalized[field] = row[field] ?? null;
           }
         });
+        return normalized;
       });
 
-      const schema = new parquet.ParquetSchema({
-        timestamp: { type: 'TIMESTAMP_MILLIS' },
-        tags: { type: 'UTF8' },
-        ...newFields
-      });
+      buffer.rows.push(...normalizedRows);
 
-      this.buffers.set(type, {
-        rows: [],
-        schema,
-        isLineProtocol: true
-      });
-    }
-
-    const buffer = this.buffers.get(type);
-    
-    // Ensure all rows have all fields
-    const allFields = new Set();
-    buffer.schema.fieldList.forEach(f => allFields.add(f.path[0]));
-    
-    const normalizedRows = rows.map(row => {
-      const normalized = {
-        timestamp: row.timestamp,
-        tags: row.tags
-      };
-      allFields.forEach(field => {
-        if (field !== 'timestamp' && field !== 'tags') {
-          normalized[field] = row[field] ?? null;
-        }
-      });
-      return normalized;
-    });
-
-    buffer.rows.push(...normalizedRows);
-
-    if (buffer.rows.length >= this.bufferSize) {
-      await this.flush(type);
+      if (buffer.rows.length >= this.bufferSize) {
+        await this.flush(type);
+      }
+    } catch (error) {
+      console.error('Error adding line protocol bulk:', error);
+      throw error;
     }
   }
 }
