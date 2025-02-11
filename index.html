@@ -712,8 +712,7 @@
     function renderResult(data) {
         clear();
         
-        // No need to parse again - data is already parsed
-        if (!Array.isArray(data)) {
+        if (!Array.isArray(data) || !data.length) {
             console.error('Expected array data');
             return;
         }
@@ -722,12 +721,16 @@
         const table = document.getElementById('data-table');
         table.innerHTML = '';
         
+        // Get columns dynamically from first row
+        const columns = Object.keys(data[0]);
+        
         // Add headers
         const thead = document.createElement('thead');
         const headerRow = document.createElement('tr');
-        ['Time', 'Room', 'Temperature', 'Light'].forEach(header => {
+        columns.forEach(header => {
             const th = document.createElement('th');
-            th.innerText = header;
+            // Clean up header names
+            th.innerText = header.replace(/[_()]/g, ' ').trim();
             headerRow.appendChild(th);
         });
         thead.appendChild(headerRow);
@@ -738,29 +741,36 @@
         data.forEach(row => {
             const tr = document.createElement('tr');
             
-            // Time column
-            let td = document.createElement('td');
-            const timestamp = new Date(parseInt(row.timestamp.micros)/1000);
-            td.innerText = timestamp.toISOString();
-            tr.appendChild(td);
-            
-            // Room column
-            td = document.createElement('td');
-            const tags = JSON.parse(row.tags);
-            td.innerText = tags.room;
-            tr.appendChild(td);
-            
-            // Temperature column
-            td = document.createElement('td');
-            td.innerText = row.temp;
-            td.className = 'right';
-            tr.appendChild(td);
-            
-            // Light column
-            td = document.createElement('td');
-            td.innerText = row.light;
-            td.className = 'right';
-            tr.appendChild(td);
+            columns.forEach(col => {
+                const td = document.createElement('td');
+                let value = row[col];
+
+                // Handle special cases
+                if (col === 'timestamp' && typeof value === 'object' && value.micros) {
+                    // Convert timestamp
+                    value = new Date(parseInt(value.micros)/1000).toISOString();
+                } else if (col === 'tags' && typeof value === 'string') {
+                    // Parse JSON tags
+                    try {
+                        const tags = JSON.parse(value);
+                        value = Object.entries(tags)
+                            .map(([k,v]) => `${k}:${v}`)
+                            .join(', ');
+                    } catch (e) {
+                        // Keep original if parsing fails
+                        value = value;
+                    }
+                }
+
+                td.innerText = value;
+                
+                // Right align numbers
+                if (typeof row[col] === 'number' || col.match(/count|sum|avg|min|max/i)) {
+                    td.className = 'right';
+                }
+                
+                tr.appendChild(td);
+            });
             
             tbody.appendChild(tr);
         });
