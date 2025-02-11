@@ -723,28 +723,61 @@
             return;
         }
 
-        // Transform our array format to table format
-        const result = {
-            meta: [
-                { name: 'time', type: 'DateTime' },
-                { name: 'tags', type: 'String' },
-                { name: 'temp', type: 'Float64' },
-                { name: 'light', type: 'Float64' }
-            ],
-            data: data.map(row => [
-                new Date(parseInt(row.timestamp.micros)/1000).toISOString(),
-                row.tags,
-                row.temp,
-                row.light
-            ]),
-            statistics: {
-                elapsed: 0,
-                rows_read: data.length,
-                bytes_read: response.length
-            }
-        };
+        // Create table elements
+        const table = document.getElementById('data-table');
+        const thead = document.createElement('thead');
+        const tbody = document.createElement('tbody');
 
-        renderTable(result);
+        // Create headers
+        const tr = document.createElement('tr');
+        ['Time', 'Room', 'Temperature', 'Light'].forEach(header => {
+            const th = document.createElement('th');
+            th.textContent = header;
+            tr.appendChild(th);
+        });
+        thead.appendChild(tr);
+        table.appendChild(thead);
+
+        // Create rows
+        data.forEach(row => {
+            const tr = document.createElement('tr');
+            
+            // Time cell
+            const timeCell = document.createElement('td');
+            timeCell.textContent = new Date(parseInt(row.timestamp.micros)/1000).toISOString();
+            tr.appendChild(timeCell);
+
+            // Room cell
+            const roomCell = document.createElement('td');
+            try {
+                const tags = JSON.parse(row.tags);
+                roomCell.textContent = tags.room;
+            } catch (e) {
+                roomCell.textContent = row.tags;
+            }
+            tr.appendChild(roomCell);
+
+            // Temperature cell
+            const tempCell = document.createElement('td');
+            tempCell.textContent = row.temp;
+            tempCell.className = 'right'; // Right align numbers
+            tr.appendChild(tempCell);
+
+            // Light cell
+            const lightCell = document.createElement('td');
+            lightCell.textContent = row.light;
+            lightCell.className = 'right'; // Right align numbers
+            tr.appendChild(lightCell);
+
+            tbody.appendChild(tr);
+        });
+
+        table.appendChild(tbody);
+        table.style.display = 'table';
+
+        // Update statistics
+        document.getElementById('stats').innerText = 
+            `${data.length} rows in set`;
     }
 
     function renderCell(cell, col_idx, settings)
