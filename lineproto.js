@@ -59,7 +59,7 @@ function formatValue(v, numericType) {
       .join(',');
   }
   
-  export function parse(line, config = {}) {
+  function parse(line, config = {}) {
     // Extract measurement and tags
     const spaceIndex = line.indexOf(' ');
     if (spaceIndex === -1) throw new Error('Invalid line protocol format');
