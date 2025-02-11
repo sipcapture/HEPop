@@ -145,6 +145,20 @@ class QueryClient {
     };
   }
 
+  // Helper to determine SQL type from JavaScript value
+  getColumnType(value) {
+    if (typeof value === 'number') {
+      if (Number.isInteger(value)) {
+        return 'BIGINT';
+      }
+      return 'DOUBLE';
+    }
+    if (typeof value === 'boolean') {
+      return 'BOOLEAN';
+    }
+    return 'VARCHAR';
+  }
+
   async query(sql, options = {}) {
     const parsed = this.parseQuery(sql);
     
@@ -156,27 +170,34 @@ class QueryClient {
       const dbName = options.db || 'hep';
       const files = await this.getFilesForTimeRange(parsed.timeRange, dbName);
 
-      // Drop existing temp table if it exists
       await this.connection.runAndReadAll(`DROP TABLE IF EXISTS buffer_data`);
 
-      // Create temp table from buffer if there's data
       const buffer = this.buffer.buffers.get(parsed.type);
       if (buffer?.rows?.length) {
-        // Create temp table with proper schema first
+        // Get column types from first row
+        const columnTypes = new Map();
+        const firstRow = buffer.rows[0];
+        Object.entries(firstRow).forEach(([key, value]) => {
+          if (!['timestamp', 'tags'].includes(key)) {
+            columnTypes.set(key, this.getColumnType(value));
+          }
+        });
+
+        // Create temp table with proper types
         await this.connection.runAndReadAll(`
           CREATE TEMP TABLE buffer_data (
             timestamp TIMESTAMP,
             ${buffer.isLineProtocol ? 
               `tags VARCHAR,
-               ${Object.keys(buffer.rows[0])
-                 .filter(k => !['timestamp', 'tags'].includes(k))
-                 .join(' VARCHAR,\n               ')} VARCHAR` : 
+               ${Array.from(columnTypes.entries())
+                 .map(([key, type]) => `${key} ${type}`)
+                 .join(',\n               ')}` : 
               `rcinfo VARCHAR,
                payload VARCHAR`}
           )
         `);
 
-        // Insert data in batches to avoid query size limits
+        // Insert data in batches
         const batchSize = 1000;
         for (let i = 0; i < buffer.rows.length; i += batchSize) {
           const batch = buffer.rows.slice(i, i + batchSize);
@@ -189,7 +210,13 @@ class QueryClient {
                   '${row.tags}',
                   ${Object.entries(row)
                     .filter(([k]) => !['timestamp', 'tags'].includes(k))
-                    .map(([,v]) => typeof v === 'string' ? `'${v}'` : v)
+                    .map(([k, v]) => {
+                      const type = columnTypes.get(k);
+                      if (type === 'VARCHAR') {
+                        return `'${v}'`;
+                      }
+                      return v === null ? 'NULL' : v;
+                    })
                     .join(', ')}
                 )`;
               } else {
@@ -203,15 +230,15 @@ class QueryClient {
           `);
         }
       } else {
-        // Create empty temp table
+        // Create empty table with proper types
         await this.connection.runAndReadAll(`
           CREATE TEMP TABLE buffer_data (
             timestamp TIMESTAMP,
             ${buffer?.isLineProtocol ? 
               `tags VARCHAR,
-               ${Object.keys(buffer?.rows?.[0] || {})
-                 .filter(k => !['timestamp', 'tags'].includes(k))
-                 .map(k => `${k} VARCHAR`)
+               ${Object.entries(buffer?.schema?.fields || {})
+                 .filter(([k]) => !['timestamp', 'tags'].includes(k))
+                 .map(([k, f]) => `${k} ${f.type === 'DOUBLE' ? 'DOUBLE' : 'VARCHAR'}`)
                  .join(',\n               ')}` : 
               `rcinfo VARCHAR,
                payload VARCHAR`}
