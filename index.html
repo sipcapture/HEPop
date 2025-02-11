@@ -705,79 +705,68 @@
         return formatReadable(rows, 2, units);
     }
 
-    function renderResult(response) 
-    {
+    function renderResult(response) {
         clear();
+        
+        // Parse JSON response
+        let data = JSON.parse(response);
+        console.log('Parsed data:', data); // Debug log
 
-        // Parse the JSON response if needed
-        let data;
-        try {
-            data = typeof response === 'string' ? JSON.parse(response) : response;
-        } catch (e) {
-            renderUnparsedResult("Invalid JSON response");
-            return;
-        }
-
-        if (!Array.isArray(data) || !data.length) {
-            renderUnparsedResult("No data available");
-            return;
-        }
-
-        // Create table elements
+        // Create table structure
         const table = document.getElementById('data-table');
+        
+        // Create header row
         const thead = document.createElement('thead');
-        const tbody = document.createElement('tbody');
-
-        // Create headers
-        const tr = document.createElement('tr');
-        ['Time', 'Room', 'Temperature', 'Light'].forEach(header => {
+        const headerRow = document.createElement('tr');
+        const headers = ['Time', 'Room', 'Temperature', 'Light'];
+        
+        headers.forEach(text => {
             const th = document.createElement('th');
-            th.textContent = header;
-            tr.appendChild(th);
+            th.textContent = text;
+            headerRow.appendChild(th);
         });
-        thead.appendChild(tr);
+        
+        thead.appendChild(headerRow);
         table.appendChild(thead);
 
-        // Create rows
+        // Create data rows
+        const tbody = document.createElement('tbody');
+        
         data.forEach(row => {
+            console.log('Processing row:', row); // Debug log
             const tr = document.createElement('tr');
             
-            // Time cell
-            const timeCell = document.createElement('td');
-            timeCell.textContent = new Date(parseInt(row.timestamp.micros)/1000).toISOString();
-            tr.appendChild(timeCell);
-
-            // Room cell
-            const roomCell = document.createElement('td');
-            try {
-                const tags = JSON.parse(row.tags);
-                roomCell.textContent = tags.room;
-            } catch (e) {
-                roomCell.textContent = row.tags;
-            }
-            tr.appendChild(roomCell);
-
-            // Temperature cell
-            const tempCell = document.createElement('td');
-            tempCell.textContent = row.temp;
-            tempCell.className = 'right'; // Right align numbers
-            tr.appendChild(tempCell);
-
-            // Light cell
-            const lightCell = document.createElement('td');
-            lightCell.textContent = row.light;
-            lightCell.className = 'right'; // Right align numbers
-            tr.appendChild(lightCell);
-
+            // Time
+            let td = document.createElement('td');
+            td.textContent = new Date(parseInt(row.timestamp.micros)/1000).toISOString();
+            tr.appendChild(td);
+            
+            // Room
+            td = document.createElement('td');
+            const tags = JSON.parse(row.tags);
+            td.textContent = tags.room;
+            tr.appendChild(td);
+            
+            // Temperature
+            td = document.createElement('td');
+            td.textContent = row.temp;
+            td.className = 'right';
+            tr.appendChild(td);
+            
+            // Light
+            td = document.createElement('td');
+            td.textContent = row.light;
+            td.className = 'right';
+            tr.appendChild(td);
+            
             tbody.appendChild(tr);
         });
-
+        
         table.appendChild(tbody);
         table.style.display = 'table';
-
-        // Update statistics
-        document.getElementById('stats').innerText = 
-            `${data.length} rows in set`;
+        
+        // Update stats
+        document.getElementById('stats').innerText = `${data.length} rows`;
     }
 
     function renderCell(cell, col_idx, settings)
