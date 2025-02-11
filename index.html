@@ -710,38 +710,33 @@
         clear();
 
         // Parse the JSON response if needed
-        const data = typeof response === 'string' ? JSON.parse(response) : response;
-        
+        let data;
+        try {
+            data = typeof response === 'string' ? JSON.parse(response) : response;
+        } catch (e) {
+            renderUnparsedResult("Invalid JSON response");
+            return;
+        }
+
         if (!Array.isArray(data) || !data.length) {
             renderUnparsedResult("No data available");
             return;
         }
 
-        // Get column names from first row
-        const firstRow = data[0];
-        const meta = Object.keys(firstRow).map(key => {
-            return {
-                name: key === 'timestamp' ? 'time' : key,
-                type: key === 'timestamp' ? 'DateTime' : 
-                      key === 'tags' ? 'String' : 
-                      typeof firstRow[key] === 'number' ? 'Float64' : 'String'
-            };
-        });
-
-        // Transform rows to arrays matching meta order
-        const rows = data.map(row => {
-            return meta.map(col => {
-                if (col.name === 'time') {
-                    return new Date(parseInt(row.timestamp.micros)/1000).toISOString();
-                }
-                return row[col.name];
-            });
-        });
-
+        // Transform our array format to table format
         const result = {
-            meta: meta,
-            data: rows,
-            rows: data.length,
+            meta: [
+                { name: 'time', type: 'DateTime' },
+                { name: 'tags', type: 'String' },
+                { name: 'temp', type: 'Float64' },
+                { name: 'light', type: 'Float64' }
+            ],
+            data: data.map(row => [
+                new Date(parseInt(row.timestamp.micros)/1000).toISOString(),
+                row.tags,
+                row.temp,
+                row.light
+            ]),
             statistics: {
                 elapsed: 0,
                 rows_read: data.length,
