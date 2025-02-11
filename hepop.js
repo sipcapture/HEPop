@@ -412,66 +412,58 @@ class ParquetBufferManager {
     const type = measurement;
     
     if (!this.buffers.has(type)) {
-      // Get existing schema if any
-      let existingSchema = null;
-      try {
-        const typeMetadata = await this.getTypeMetadata(type);
-        if (typeMetadata.files.length > 0) {
-          const reader = await parquet.ParquetReader.openFile(typeMetadata.files[0].path);
-          existingSchema = reader.schema;
-          await reader.close();
-        }
-      } catch (error) {
-        console.log(`No existing schema found for ${type}, creating new one`);
-      }
-
-      // Merge schemas
-      const newFields = {};
-      rows.forEach(row => {
-        Object.entries(row).forEach(([key, value]) => {
-          if (key !== 'timestamp' && key !== 'tags') {
-            newFields[key] = { 
-              type: typeof value === 'number' ? 'DOUBLE' : 
-                    typeof value === 'boolean' ? 'BOOLEAN' : 'UTF8',
-              optional: true // Make all fields optional
-            };
-          }
-        });
-      });
-
-      const schema = new parquet.ParquetSchema({
+      // Create schema from first row to ensure correct types
+      const firstRow = rows[0];
+      const schemaFields = {
         timestamp: { type: 'TIMESTAMP_MILLIS' },
-        tags: { type: 'UTF8' },
-        ...newFields
-      });
+        tags: { type: 'UTF8' }
+      };
 
+      // Add fields with proper types
+      Object.entries(firstRow)
+        .filter(([key]) => !['timestamp', 'tags'].includes(key))
+        .forEach(([key, value]) => {
+          schemaFields[key] = {
+            type: typeof value === 'number' ? 'DOUBLE' :
+                  typeof value === 'boolean' ? 'BOOLEAN' : 'UTF8',
+            optional: true
+          };
+        });
+
+      // Create new buffer with schema
       this.buffers.set(type, {
         rows: [],
-        schema,
+        schema: new parquet.ParquetSchema(schemaFields),
         isLineProtocol: true
       });
     }
 
     const buffer = this.buffers.get(type);
-    
-    // Ensure all rows have all fields
+
+    // Ensure all rows have all fields with proper types
     const allFields = new Set();
-    buffer.schema.fieldList.forEach(f => allFields.add(f.path[0]));
-    
-    const normalizedRows = rows.map(row => {
+    rows.forEach(row => {
+      Object.keys(row).forEach(key => {
+        if (!['timestamp', 'tags'].includes(key)) {
+          allFields.add(key);
+        }
+      });
+    });
+
+    // Add rows with normalized fields
+    buffer.rows.push(...rows.map(row => {
       const normalized = {
         timestamp: row.timestamp,
         tags: row.tags
       };
+      
+      // Add all fields, using null for missing ones
       allFields.forEach(field => {
-        if (field !== 'timestamp' && field !== 'tags') {
-          normalized[field] = row[field] ?? null;
-        }
+        normalized[field] = row[field] ?? null;
       });
-      return normalized;
-    });
 
-    buffer.rows.push(...normalizedRows);
+      return normalized;
+    }));
 
     if (buffer.rows.length >= this.bufferSize) {
       await this.flush(type);
@@ -1166,8 +1158,12 @@ class HEPServer {
                     
                     bulkData.get(measurement).push({
                       timestamp,
-                      tags: JSON.stringify(parsed.tags),
-                      ...parsed.fields
+                      tags: JSON.stringify(parsed.tags || {}),
+                      // Convert undefined values to null
+                      ...Object.fromEntries(
+                        Object.entries(parsed.fields || {})
+                          .map(([k, v]) => [k, v ?? null])
+                      )
                     });
                   } catch (error) {
                     console.warn(`Error parsing line: ${line}`, error);
