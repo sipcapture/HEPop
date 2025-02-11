@@ -78,28 +78,46 @@ function formatValue(v, numericType) {
     if (timestamp) {
       // Handle different timestamp formats
       if (/^\d{19}$/.test(timestamp)) {
-        // Nanosecond precision - store as BigInt but provide milliseconds for Date
+        // Nanosecond precision - store as nanoseconds and provide milliseconds
         const nanos = BigInt(timestamp);
-        result.timestamp = nanos; // Keep full precision
-        result.timestampMs = Number(nanos / 1000000n); // For Date operations
+        result.timestamp = nanos;
+        result.timestampMs = Number(nanos / BigInt(1000000));
         if (process.env.DEBUG) {
-          console.log('Parsed nanosecond timestamp:', timestamp, 
-                     'Date:', new Date(result.timestampMs).toISOString());
+          console.log('Parsed nanosecond timestamp:', {
+            original: timestamp,
+            nanos: nanos.toString(),
+            ms: result.timestampMs,
+            date: new Date(result.timestampMs).toISOString()
+          });
+        }
+      } else if (/^\d+$/.test(timestamp)) {
+        // Regular numeric timestamp - assume milliseconds
+        result.timestampMs = parseInt(timestamp);
+        result.timestamp = BigInt(result.timestampMs) * BigInt(1000000);
+        if (process.env.DEBUG) {
+          console.log('Parsed millisecond timestamp:', {
+            original: timestamp,
+            ms: result.timestampMs,
+            date: new Date(result.timestampMs).toISOString()
+          });
         }
       } else {
-        // Convert other formats to milliseconds
-        result.timestamp = parseInt(timestamp);
-        result.timestampMs = result.timestamp;
+        // Fallback to current time
+        const now = Date.now();
+        result.timestampMs = now;
+        result.timestamp = BigInt(now) * BigInt(1000000);
         if (process.env.DEBUG) {
-          console.log('Parsed timestamp:', timestamp,
-                     'Date:', new Date(result.timestampMs).toISOString());
+          console.log('Using current timestamp:', {
+            ms: result.timestampMs,
+            date: new Date(result.timestampMs).toISOString()
+          });
         }
       }
     } else if (config.addTimestamp) {
-      // Current time in nanoseconds
-      const now = BigInt(Date.now());
-      result.timestamp = now * 1000000n;
-      result.timestampMs = Number(now);
+      // Current time
+      const now = Date.now();
+      result.timestampMs = now;
+      result.timestamp = BigInt(now) * BigInt(1000000);
     }
   
     return result;
