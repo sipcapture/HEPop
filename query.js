@@ -142,140 +142,89 @@ class QueryClient {
     };
   }
 
-  async query(sql) {
-    if (!this.db) {
-      throw new Error('QueryClient not initialized');
+  async query(sql, options = {}) {
+    const parsed = this.parseQuery(sql);
+    
+    if (!this.buffer) {
+      throw new Error('No buffer manager available');
     }
 
     try {
-      const parsed = this.parseQuery(sql);
-      if (!parsed.type) {
-        throw new Error('Could not determine type from query');
-      }
-
+      const dbName = options.db || 'hep';
       const files = await this.findRelevantFiles(parsed.type, parsed.timeRange);
-      const connection = await this.db.connect();
 
-      try {
-        // Get buffered data for this type
-        const buffer = this.buffer?.buffers.get(parsed.type);
-        let query;
-
-        if (buffer?.rows?.length) {
-          // Create temp table from buffer using VALUES
-          const valuesQuery = `
-            CREATE TEMP TABLE IF NOT EXISTS buffer_data AS 
-            SELECT * FROM (VALUES ${buffer.rows.map(row => {
-              if (buffer.isLineProtocol) {
-                return `(
-                  TIMESTAMP '${row.timestamp.toISOString()}',
-                  '${row.tags}',
-                  ${Object.entries(row)
-                    .filter(([k]) => !['timestamp', 'tags'].includes(k))
-                    .map(([,v]) => typeof v === 'string' ? `'${v}'` : v)
-                    .join(', ')}
-                )`;
-              } else {
-                return `(
-                  TIMESTAMP '${new Date(row.create_date).toISOString()}',
-                  '${JSON.stringify(row.protocol_header)}',
-                  '${row.raw || ''}'
-                )`;
-              }
-            }).join(', ')}) 
-            AS t(${buffer.isLineProtocol ? 
-              `timestamp, tags, ${Object.keys(buffer.rows[0])
-                .filter(k => !['timestamp', 'tags'].includes(k))
-                .join(', ')}` : 
-              'timestamp, rcinfo, payload'})
-          `;
-
-          await connection.runAndReadAll(valuesQuery);
-
-          if (files.length > 0) {
-            // For aggregate queries, combine data before aggregating
-            const isAggregateQuery = parsed.columns.toLowerCase().includes('count(') || 
-                                   parsed.columns.toLowerCase().includes('avg(');
-            
-            if (isAggregateQuery) {
-              query = `
-                WITH all_data AS (
-                  SELECT ${buffer.isLineProtocol ? '*' : 'timestamp, rcinfo, payload'} 
-                  FROM read_parquet([${files.map(f => `'${f.path}'`).join(', ')}], union_by_name=true)
-                  WHERE timestamp >= TIMESTAMP '${new Date(parsed.timeRange.start / 1000000).toISOString()}'
-                  AND timestamp <= TIMESTAMP '${new Date(parsed.timeRange.end / 1000000).toISOString()}'
-                  ${parsed.conditions}
-                  UNION ALL
-                  SELECT ${buffer.isLineProtocol ? '*' : 'timestamp, rcinfo, payload'}
-                  FROM buffer_data
-                  WHERE timestamp >= TIMESTAMP '${new Date(parsed.timeRange.start / 1000000).toISOString()}'
-                  AND timestamp <= TIMESTAMP '${new Date(parsed.timeRange.end / 1000000).toISOString()}'
-                  ${parsed.conditions}
-                )
-                SELECT ${parsed.columns}
-                FROM all_data
-                ${parsed.orderBy}
-                ${parsed.limit}
-              `;
-            } else {
-              query = `
-                SELECT ${parsed.columns}
-                FROM (
-                  SELECT ${buffer.isLineProtocol ? '*' : 'timestamp, rcinfo, payload'}
-                  FROM read_parquet([${files.map(f => `'${f.path}'`).join(', ')}], union_by_name=true)
-                  WHERE timestamp >= TIMESTAMP '${new Date(parsed.timeRange.start / 1000000).toISOString()}'
-                  AND timestamp <= TIMESTAMP '${new Date(parsed.timeRange.end / 1000000).toISOString()}'
-                  ${parsed.conditions}
-                  UNION ALL
-                  SELECT ${buffer.isLineProtocol ? '*' : 'timestamp, rcinfo, payload'}
-                  FROM buffer_data
-                  WHERE timestamp >= TIMESTAMP '${new Date(parsed.timeRange.start / 1000000).toISOString()}'
-                  AND timestamp <= TIMESTAMP '${new Date(parsed.timeRange.end / 1000000).toISOString()}'
-                  ${parsed.conditions}
-                ) combined_data
-                ${parsed.orderBy}
-                ${parsed.limit}
-              `;
-            }
-          } else {
-            // Only query buffer data
-            query = `
-              SELECT ${parsed.columns}
+      // Build query with union_by_name=true
+      let query;
+      if (files.length > 0) {
+        const isAggregateQuery = parsed.columns.toLowerCase().includes('count(') || 
+                               parsed.columns.toLowerCase().includes('avg(');
+        
+        if (isAggregateQuery) {
+          // For aggregate queries, apply WHERE conditions before aggregating
+          query = `
+            WITH filtered_data AS (
+              SELECT ${this.buffer.isLineProtocol ? '*' : 'timestamp, rcinfo, payload'} 
+              FROM read_parquet([${files.map(f => `'${f.path}'`).join(', ')}], union_by_name=true)
+              WHERE timestamp >= TIMESTAMP '${new Date(parsed.timeRange.start / 1000000).toISOString()}'
+              AND timestamp <= TIMESTAMP '${new Date(parsed.timeRange.end / 1000000).toISOString()}'
+              ${parsed.conditions}
+              UNION ALL
+              SELECT ${this.buffer.isLineProtocol ? '*' : 'timestamp, rcinfo, payload'}
               FROM buffer_data
               WHERE timestamp >= TIMESTAMP '${new Date(parsed.timeRange.start / 1000000).toISOString()}'
               AND timestamp <= TIMESTAMP '${new Date(parsed.timeRange.end / 1000000).toISOString()}'
               ${parsed.conditions}
-              ${parsed.orderBy}
-              ${parsed.limit}
-            `;
-          }
-        } else if (files.length > 0) {
-          // Only query parquet files
-          query = `
+            )
             SELECT ${parsed.columns}
-            FROM read_parquet([${files.map(f => `'${f.path}'`).join(', ')}])
-            ${parsed.timeRange ? `WHERE timestamp >= TIMESTAMP '${new Date(parsed.timeRange.start / 1000000).toISOString()}'
-              AND timestamp <= TIMESTAMP '${new Date(parsed.timeRange.end / 1000000).toISOString()}'` : ''}
-            ${parsed.conditions}
+            FROM filtered_data
             ${parsed.orderBy}
             ${parsed.limit}
           `;
         } else {
-          // No data available
-          return [];
+          // Non-aggregate queries remain the same
+          query = `
+            SELECT ${parsed.columns}
+            FROM (
+              SELECT ${this.buffer.isLineProtocol ? '*' : 'timestamp, rcinfo, payload'}
+              FROM read_parquet([${files.map(f => `'${f.path}'`).join(', ')}], union_by_name=true)
+              WHERE timestamp >= TIMESTAMP '${new Date(parsed.timeRange.start / 1000000).toISOString()}'
+              AND timestamp <= TIMESTAMP '${new Date(parsed.timeRange.end / 1000000).toISOString()}'
+              ${parsed.conditions}
+              UNION ALL
+              SELECT ${this.buffer.isLineProtocol ? '*' : 'timestamp, rcinfo, payload'}
+              FROM buffer_data
+              WHERE timestamp >= TIMESTAMP '${new Date(parsed.timeRange.start / 1000000).toISOString()}'
+              AND timestamp <= TIMESTAMP '${new Date(parsed.timeRange.end / 1000000).toISOString()}'
+              ${parsed.conditions}
+            ) combined_data
+            ${parsed.orderBy}
+            ${parsed.limit}
+          `;
         }
-
-        const reader = await connection.runAndReadAll(query);
-        return reader.getRows().map(row => {
-          const obj = {};
-          reader.columnNames().forEach((col, i) => {
-            obj[col] = row[i];
-          });
-          return obj;
-        });
-      } finally {
-        await connection.close();
+      } else {
+        // Only query buffer data
+        query = `
+          SELECT ${parsed.columns}
+          FROM buffer_data
+          WHERE timestamp >= TIMESTAMP '${new Date(parsed.timeRange.start / 1000000).toISOString()}'
+          AND timestamp <= TIMESTAMP '${new Date(parsed.timeRange.end / 1000000).toISOString()}'
+          ${parsed.conditions}
+          ${parsed.orderBy}
+          ${parsed.limit}
+        `;
       }
+
+      // Execute query
+      const connection = await this.db.connect();
+      const result = await connection.runAndReadAll(query);
+      return result.getRows().map(row => {
+        const obj = {};
+        result.columnNames().forEach((col, i) => {
+          obj[col] = row[i];
+        });
+        return obj;
+      });
+
     } catch (error) {
       console.error('Query error:', error);
       throw error;
