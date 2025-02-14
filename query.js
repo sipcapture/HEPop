@@ -162,61 +162,26 @@ class QueryClient {
       const buffer = this.buffer.buffers.get(parsed.type);
       const connection = await this.db.connect();
 
-      // Determine if this is HEP or line protocol data
-      const isHepData = typeof parsed.type === 'number';
-
-      // Drop existing temp table if exists
-      await connection.runAndReadAll('DROP TABLE IF EXISTS buffer_data');
-      
       // Create temp table from buffer if there's data
       if (buffer?.rows?.length) {
+        // Drop existing temp table if exists
+        await connection.runAndReadAll('DROP TABLE IF EXISTS buffer_data');
+
+        // Create temp table with schema from first row
         const firstRow = buffer.rows[0];
         const columns = Object.keys(firstRow);
         
-        // Create schema string
-        const schemaStr = columns.map(col => {
-          const value = firstRow[col];
-          const type = typeof value === 'number' ? 'DOUBLE' :
-                      value instanceof Date ? 'TIMESTAMP' :
-                      'VARCHAR';
-          return `${col} ${type}`;
-        }).join(',\n');
-
-        // Create empty table first
         await connection.runAndReadAll(`
-          CREATE TEMP TABLE buffer_data (
-            ${schemaStr}
-          )
-        `);
-
-        // Insert data in batches
-        const batchSize = 1000;
-        for (let i = 0; i < buffer.rows.length; i += batchSize) {
-          const batch = buffer.rows.slice(i, i + batchSize);
-          await connection.runAndReadAll(`
-            INSERT INTO buffer_data 
-            SELECT * FROM (VALUES ${batch.map(row => `(
-              ${columns.map(col => {
-                const value = row[col];
-                if (value instanceof Date) return `TIMESTAMP '${value.toISOString()}'`;
-                if (typeof value === 'string') return `'${value.replace(/'/g, "''")}'`;
-                return value === null ? 'NULL' : value;
-              }).join(', ')}
-            )`).join(', ')})
-          `);
-        }
-      } else {
-        // Create empty table with basic schema
-        await connection.runAndReadAll(`
-          CREATE TEMP TABLE buffer_data (
-            timestamp TIMESTAMP,
-            ${isHepData ? 
-              `rcinfo VARCHAR,
-               payload VARCHAR` : 
-              `tags VARCHAR,
-               value DOUBLE`
-            }
-          )
+          CREATE TEMP TABLE buffer_data AS 
+          SELECT * FROM (VALUES ${buffer.rows.map(row => `(
+            ${columns.map(col => {
+              const value = row[col];
+              if (value instanceof Date) return `TIMESTAMP '${value.toISOString()}'`;
+              if (typeof value === 'string') return `'${value.replace(/'/g, "''")}'`;
+              return value === null ? 'NULL' : value;
+            }).join(', ')}
+          )`).join(', ')})
+          AS t(${columns.join(', ')})
         `);
       }
 
@@ -231,19 +196,18 @@ class QueryClient {
             WITH filtered_data AS (
               SELECT * FROM read_parquet([${files.map(f => `'${f.path}'`).join(', ')}], union_by_name=true)
               WHERE timestamp >= TIMESTAMP '${new Date(parsed.timeRange.start / 1000000).toISOString()}'
+              AND timestamp <= TIMESTAMP '${new Date(parsed.timeRange.end / 1000000).toISOString()}'
+              ${parsed.conditions}
+              ${buffer?.rows?.length ? `
+                UNION ALL
+                SELECT * FROM buffer_data
+                WHERE timestamp >= TIMESTAMP '${new Date(parsed.timeRange.start / 1000000).toISOString()}'
                 AND timestamp <= TIMESTAMP '${new Date(parsed.timeRange.end / 1000000).toISOString()}'
                 ${parsed.conditions}
-              UNION ALL
-              SELECT * FROM buffer_data
-              WHERE timestamp >= TIMESTAMP '${new Date(parsed.timeRange.start / 1000000).toISOString()}'
-                AND timestamp <= TIMESTAMP '${new Date(parsed.timeRange.end / 1000000).toISOString()}'
-                ${parsed.conditions}
+              ` : ''}
             )
             SELECT ${parsed.columns}
             FROM filtered_data
-            WHERE 1=1 ${parsed.conditions}
-            ${parsed.orderBy}
-            ${parsed.limit}
           `;
         } else {
           query = `
@@ -253,17 +217,19 @@ class QueryClient {
               WHERE timestamp >= TIMESTAMP '${new Date(parsed.timeRange.start / 1000000).toISOString()}'
               AND timestamp <= TIMESTAMP '${new Date(parsed.timeRange.end / 1000000).toISOString()}'
               ${parsed.conditions}
-              UNION ALL
-              SELECT * FROM buffer_data
-              WHERE timestamp >= TIMESTAMP '${new Date(parsed.timeRange.start / 1000000).toISOString()}'
-              AND timestamp <= TIMESTAMP '${new Date(parsed.timeRange.end / 1000000).toISOString()}'
-              ${parsed.conditions}
+              ${buffer?.rows?.length ? `
+                UNION ALL
+                SELECT * FROM buffer_data
+                WHERE timestamp >= TIMESTAMP '${new Date(parsed.timeRange.start / 1000000).toISOString()}'
+                AND timestamp <= TIMESTAMP '${new Date(parsed.timeRange.end / 1000000).toISOString()}'
+                ${parsed.conditions}
+              ` : ''}
             ) combined_data
             ${parsed.orderBy}
             ${parsed.limit}
           `;
         }
-      } else {
+      } else if (buffer?.rows?.length) {
         // Only query buffer data
         query = `
           SELECT ${parsed.columns}
@@ -274,9 +240,11 @@ class QueryClient {
           ${parsed.orderBy}
           ${parsed.limit}
         `;
+      } else {
+        // No data available
+        return [];
       }
 
-      // Execute query and return results
       const result = await connection.runAndReadAll(query);
       const rows = result.getRows().map(row => {
         const obj = {};
