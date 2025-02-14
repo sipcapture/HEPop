@@ -49,7 +49,7 @@ while true; do
     echo "Total sent: $counter"
   fi
 
-  # Wait for 1 second before sending the next request
+  # Wait for x before sending the next request
   read -t 0.5
 
 done

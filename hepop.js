@@ -39,6 +39,9 @@ class ParquetBufferManager {
       tags: { type: 'UTF8' },  // JSON string of tags
       // Dynamic fields will be added based on data
     });
+
+    // Add metadata write queue
+    this.metadataQueue = new Map(); // type -> Promise
   }
 
   async initialize() {
@@ -113,7 +116,27 @@ class ParquetBufferManager {
 
   async getFilePath(type, timestamp) {
     const typeMetadata = await this.getTypeMetadata(type);
-    const date = new Date(timestamp);
+    
+    // Handle nanosecond timestamps
+    let date;
+    if (typeof timestamp === 'number') {
+      // Keep nanosecond precision by using floor division for date parts
+      const ms = Math.floor(timestamp / 1000000); // Get milliseconds
+      date = new Date(ms);
+    } else if (typeof timestamp === 'string') {
+      // Parse string timestamp
+      date = new Date(timestamp);
+    } else if (timestamp instanceof Date) {
+      date = timestamp;
+    } else {
+      throw new Error('Invalid timestamp format');
+    }
+
+    if (isNaN(date.getTime())) {
+      throw new Error(`Invalid date from timestamp: ${timestamp}`);
+    }
+
+    // Use date for directory structure only
     const datePath = date.toISOString().split('T')[0];
     const hour = date.getHours().toString().padStart(2, '0');
     const minute = Math.floor(date.getMinutes() / 10) * 10;
@@ -225,21 +248,33 @@ class ParquetBufferManager {
   }
 
   async writeTypeMetadata(type, metadata) {
-    const metadataPath = this.getTypeMetadataPath(type);
-    await fs.promises.mkdir(path.dirname(metadataPath), { recursive: true });
-    
-    const tempPath = `${metadataPath}.tmp`;
-    try {
-      await fs.promises.writeFile(tempPath, JSON.stringify(metadata, null, 2));
-      await fs.promises.rename(tempPath, metadataPath);
-    } catch (error) {
-      try {
-        await fs.promises.unlink(tempPath);
-      } catch (e) {
-        // Ignore cleanup errors
-      }
-      throw error;
+    // Get or create queue for this type
+    if (!this.metadataQueue.has(type)) {
+      this.metadataQueue.set(type, Promise.resolve());
     }
+
+    // Add write to queue
+    const queue = this.metadataQueue.get(type);
+    const writePromise = queue.then(async () => {
+      const metadataPath = this.getTypeMetadataPath(type);
+      await fs.promises.mkdir(path.dirname(metadataPath), { recursive: true });
+      
+      const tempPath = `${metadataPath}.tmp`;
+      try {
+        await fs.promises.writeFile(tempPath, JSON.stringify(metadata, null, 2));
+        await fs.promises.rename(tempPath, metadataPath);
+      } catch (error) {
+        try {
+          await fs.promises.unlink(tempPath);
+        } catch (e) {
+          // Ignore cleanup errors
+        }
+        throw error;
+      }
+    });
+
+    this.metadataQueue.set(type, writePromise);
+    return writePromise;
   }
 
   async updateMetadata(type, filePath, sizeBytes, rowCount, timestamps) {
@@ -374,43 +409,70 @@ class ParquetBufferManager {
   }
 
   async addLineProtocolBulk(measurement, rows) {
-    // Use measurement directly as type (like HEP types)
     const type = measurement;
     
     if (!this.buffers.has(type)) {
-      // Create new schema for this measurement including its fields
-      const schema = new parquet.ParquetSchema({
+      // Create schema from first row to ensure correct types
+      const firstRow = rows[0];
+      const schemaFields = {
         timestamp: { type: 'TIMESTAMP_MILLIS' },
-        tags: { type: 'UTF8' },
-        ...Object.entries(rows[0]).reduce((acc, [key, value]) => {
-          if (key !== 'timestamp' && key !== 'tags') {
-            acc[key] = { 
-              type: typeof value === 'number' ? 'DOUBLE' : 
-                    typeof value === 'boolean' ? 'BOOLEAN' : 'UTF8'
-            };
-          }
-          return acc;
-        }, {})
-      });
+        tags: { type: 'UTF8' }
+      };
 
+      // Add fields with proper types
+      Object.entries(firstRow)
+        .filter(([key]) => !['timestamp', 'tags'].includes(key))
+        .forEach(([key, value]) => {
+          schemaFields[key] = {
+            type: typeof value === 'number' ? 'DOUBLE' :
+                  typeof value === 'boolean' ? 'BOOLEAN' : 'UTF8',
+            optional: true
+          };
+        });
+
+      // Create new buffer with schema
       this.buffers.set(type, {
         rows: [],
-        schema,
-        isLineProtocol: true  // Mark as Line Protocol data
+        schema: new parquet.ParquetSchema(schemaFields),
+        isLineProtocol: true
       });
     }
 
     const buffer = this.buffers.get(type);
-    buffer.rows.push(...rows);
+
+    // Ensure all rows have all fields with proper types
+    const allFields = new Set();
+    rows.forEach(row => {
+      Object.keys(row).forEach(key => {
+        if (!['timestamp', 'tags'].includes(key)) {
+          allFields.add(key);
+        }
+      });
+    });
+
+    // Add rows with normalized fields
+    buffer.rows.push(...rows.map(row => {
+      const normalized = {
+        timestamp: row.timestamp,
+        tags: row.tags
+      };
+      
+      // Add all fields, using null for missing ones
+      allFields.forEach(field => {
+        normalized[field] = row[field] ?? null;
+      });
+
+      return normalized;
+    }));
 
     if (buffer.rows.length >= this.bufferSize) {
-      await this.flush(type);  // Use the same flush method as HEP
+      await this.flush(type);
     }
   }
 }
 
 class CompactionManager {
-  constructor(bufferManager) {
+  constructor(bufferManager, debug = false) {
     this.bufferManager = bufferManager;
     this.compactionIntervals = {
       '10m': 10 * 60 * 1000,
@@ -418,6 +480,7 @@ class CompactionManager {
       '24h': 24 * 60 * 60 * 1000
     };
     this.compactionLock = new Map();
+    this.debug = debug;
   }
 
   async initialize() {
@@ -493,7 +556,9 @@ class CompactionManager {
 
   async checkAndCompact() {
     const typeDirs = await this.getTypeDirectories();
-    console.log('Found types for compaction:', typeDirs);
+    if (this.debug || typeDirs.length > 0) {
+      console.log('Found types for compaction:', typeDirs);
+    }
 
     for (const type of typeDirs) {
       if (this.compactionLock.get(type)) {
@@ -506,28 +571,17 @@ class CompactionManager {
         let metadata = await this.bufferManager.getTypeMetadata(type);
         
         if (!metadata.files || !metadata.files.length) {
-          console.log(`No files found in metadata for type ${type}`);
+          if (this.debug) console.log(`No files found in metadata for type ${type}`);
           continue;
         }
 
-        // Verify and clean metadata before compaction
         metadata = await this.verifyAndCleanMetadata(type, metadata);
         
-        if (!metadata.files.length) {
-          console.log(`No valid files remain after metadata cleanup for type ${type}`);
-          continue;
+        if (metadata.files.length > 0) {
+          console.log(`Type ${type} has ${metadata.files.length} files to consider for compaction`);
+          await this.compactTimeRange(type, metadata.files, '10m', '1h');
+          await this.compactTimeRange(type, metadata.files, '1h', '24h');
         }
-        
-        console.log(`Type ${type} has ${metadata.files.length} files to consider for compaction`);
-        console.log('Files:', metadata.files.map(f => ({
-          path: f.path,
-          type: f.type,
-          min_time: new Date(f.min_time / 1000000).toISOString(),
-          max_time: new Date(f.max_time / 1000000).toISOString()
-        })));
-        
-        await this.compactTimeRange(type, metadata.files, '10m', '1h');
-        await this.compactTimeRange(type, metadata.files, '1h', '24h');
       } catch (error) {
         console.error(`Error during compaction for type ${type}:`, error);
       } finally {
@@ -961,24 +1015,29 @@ class CompactionManager {
 class HEPServer {
   constructor(config = {}) {
     this.debug = config.debug || false;
-    this.queryClient = null;  // Add queryClient property
+    this.queryClient = null;
+    this.buffer = null;
+    this.compaction = null;
   }
 
   async initialize() {
     try {
+      // Initialize buffer manager
       this.buffer = new ParquetBufferManager();
       await this.buffer.initialize();
-      
-      this.compaction = new CompactionManager(this.buffer);
+
+      // Initialize compaction manager with debug flag
+      this.compaction = new CompactionManager(this.buffer, true); // Always show compaction logs
       await this.compaction.initialize();
 
-      // Initialize query client
-      this.queryClient = new QueryClient(this.buffer.baseDir);
+      // Initialize query client with buffer manager
+      this.queryClient = new QueryClient(this.buffer.baseDir, this.buffer);
       await this.queryClient.initialize();
-      
+
+      // Start servers
       await this.startServers();
     } catch (error) {
-      console.error('Failed to initialize HEPServer:', error);
+      console.error('Failed to initialize HEP server:', error);
       throw error;
     }
   }
@@ -1021,7 +1080,17 @@ class HEPServer {
           async fetch(req) {
             const url = new URL(req.url);
             
-            if (url.pathname === '/query') {
+            if (url.pathname === '/') {
+              try {
+                const html = await Bun.file('./index.html').text();
+                return new Response(html, {
+                  headers: { 'Content-Type': 'text/html' }
+                });
+              } catch (error) {
+                console.error('Error serving index.html:', error);
+                return new Response('Error loading interface', { status: 500 });
+              }
+            } else if (url.pathname === '/query') {
               try {
                 let query;
                 
@@ -1061,7 +1130,7 @@ class HEPServer {
               try {
                 const body = await req.text();
                 const lines = body.split('\n').filter(line => line.trim());
-                                
+                
                 const config = {
                   addTimestamp: true,
                   typeMappings: [],
@@ -1069,27 +1138,44 @@ class HEPServer {
                 };
 
                 // Process lines in bulk
-                const bulkData = new Map(); // measurement -> rows
+                const bulkData = new Map();
                 
                 for (const line of lines) {
-                  const parsed = parse(line, config);
-                  const measurement = parsed.measurement;
-                  
-                  if (!bulkData.has(measurement)) {
-                    bulkData.set(measurement, []);
+                  try {
+                    const parsed = parse(line, config);
+                    const measurement = parsed.measurement;
+                    
+                    if (!bulkData.has(measurement)) {
+                      bulkData.set(measurement, []);
+                    }
+                    
+                    // Use let for timestamp since we might need to reassign
+                    let timestamp = new Date(parsed.timestamp);
+                    if (isNaN(timestamp.getTime())) {
+                      console.warn(`Invalid timestamp in line: ${line}, using current time`);
+                      timestamp = new Date();
+                    }
+                    
+                    bulkData.get(measurement).push({
+                      timestamp,
+                      tags: JSON.stringify(parsed.tags || {}),
+                      // Convert undefined values to null
+                      ...Object.fromEntries(
+                        Object.entries(parsed.fields || {})
+                          .map(([k, v]) => [k, v ?? null])
+                      )
+                    });
+                  } catch (error) {
+                    console.warn(`Error parsing line: ${line}`, error);
+                    continue; // Skip invalid lines
                   }
-                  
-                  bulkData.get(measurement).push({
-                    timestamp: new Date(parsed.timestamp),
-                    tags: JSON.stringify(parsed.tags),
-                    ...parsed.fields
-                  });
                 }
 
                 // Bulk insert by measurement
                 for (const [measurement, rows] of bulkData) {
-                  // console.log(`Writing ${rows.length} rows to measurement ${measurement}`);
-                  await self.buffer.addLineProtocolBulk(measurement, rows);
+                  if (rows.length > 0) {
+                    await self.buffer.addLineProtocolBulk(measurement, rows);
+                  }
                 }
 
                 return new Response(null, { status: 201 });
@@ -1097,7 +1183,6 @@ class HEPServer {
                 console.error('Write error:', error);
                 return new Response(error.message, { status: 400 });
               }
-
             }
 
             return new Response('Not found', { status: 404 });
@@ -1132,6 +1217,11 @@ class HEPServer {
   async shutdown() {
     console.log('Shutting down HEP server...');
     
+    // Stop compaction first
+    if (this.compaction) {
+      await this.compaction.close();
+    }
+
     // Stop TCP server
     if (this.tcpServer) {
       try {
