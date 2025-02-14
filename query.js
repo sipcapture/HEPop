@@ -152,6 +152,17 @@ class QueryClient {
     try {
       const dbName = options.db || 'hep';
       const files = await this.findRelevantFiles(parsed.type, parsed.timeRange);
+      const buffer = this.buffer.buffers.get(parsed.type);
+      
+      // Determine if this is HEP or line protocol data
+      const isHepData = typeof parsed.type === 'number';
+      
+      // Select appropriate columns based on data type
+      const selectColumns = isHepData ? 
+        'timestamp, rcinfo, payload' : 
+        (buffer?.rows?.[0] ? 
+          Object.keys(buffer.rows[0]).join(', ') : 
+          '*');
 
       // Build query with union_by_name=true
       let query;
@@ -160,16 +171,15 @@ class QueryClient {
                                parsed.columns.toLowerCase().includes('avg(');
         
         if (isAggregateQuery) {
-          // For aggregate queries, apply WHERE conditions before aggregating
           query = `
             WITH filtered_data AS (
-              SELECT ${this.buffer.isLineProtocol ? '*' : 'timestamp, rcinfo, payload'} 
+              SELECT ${selectColumns}
               FROM read_parquet([${files.map(f => `'${f.path}'`).join(', ')}], union_by_name=true)
               WHERE timestamp >= TIMESTAMP '${new Date(parsed.timeRange.start / 1000000).toISOString()}'
               AND timestamp <= TIMESTAMP '${new Date(parsed.timeRange.end / 1000000).toISOString()}'
               ${parsed.conditions}
               UNION ALL
-              SELECT ${this.buffer.isLineProtocol ? '*' : 'timestamp, rcinfo, payload'}
+              SELECT ${selectColumns}
               FROM buffer_data
               WHERE timestamp >= TIMESTAMP '${new Date(parsed.timeRange.start / 1000000).toISOString()}'
               AND timestamp <= TIMESTAMP '${new Date(parsed.timeRange.end / 1000000).toISOString()}'
@@ -181,17 +191,16 @@ class QueryClient {
             ${parsed.limit}
           `;
         } else {
-          // Non-aggregate queries remain the same
           query = `
             SELECT ${parsed.columns}
             FROM (
-              SELECT ${this.buffer.isLineProtocol ? '*' : 'timestamp, rcinfo, payload'}
+              SELECT ${selectColumns}
               FROM read_parquet([${files.map(f => `'${f.path}'`).join(', ')}], union_by_name=true)
               WHERE timestamp >= TIMESTAMP '${new Date(parsed.timeRange.start / 1000000).toISOString()}'
               AND timestamp <= TIMESTAMP '${new Date(parsed.timeRange.end / 1000000).toISOString()}'
               ${parsed.conditions}
               UNION ALL
-              SELECT ${this.buffer.isLineProtocol ? '*' : 'timestamp, rcinfo, payload'}
+              SELECT ${selectColumns}
               FROM buffer_data
               WHERE timestamp >= TIMESTAMP '${new Date(parsed.timeRange.start / 1000000).toISOString()}'
               AND timestamp <= TIMESTAMP '${new Date(parsed.timeRange.end / 1000000).toISOString()}'
