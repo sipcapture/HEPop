@@ -153,7 +153,8 @@ class QueryClient {
       const dbName = options.db || 'hep';
       const files = await this.findRelevantFiles(parsed.type, parsed.timeRange);
       const buffer = this.buffer.buffers.get(parsed.type);
-      
+      const connection = await this.db.connect();
+
       // Determine if this is HEP or line protocol data
       const isHepData = typeof parsed.type === 'number';
       
@@ -163,6 +164,50 @@ class QueryClient {
         (buffer?.rows?.[0] ? 
           Object.keys(buffer.rows[0]).join(', ') : 
           '*');
+
+      // Create temp table from buffer if there's data
+      if (buffer?.rows?.length) {
+        const createTableQuery = `
+          CREATE TEMP TABLE buffer_data AS 
+          SELECT * FROM (VALUES ${buffer.rows.map(row => {
+            if (!isHepData) {
+              return `(
+                TIMESTAMP '${row.timestamp.toISOString()}',
+                '${row.tags}',
+                ${Object.entries(row)
+                  .filter(([k]) => !['timestamp', 'tags'].includes(k))
+                  .map(([,v]) => typeof v === 'string' ? `'${v}'` : v)
+                  .join(', ')}
+              )`;
+            } else {
+              return `(
+                TIMESTAMP '${new Date(row.create_date).toISOString()}',
+                '${JSON.stringify(row.protocol_header)}',
+                '${row.raw || ''}'
+              )`;
+            }
+          }).join(', ')}) 
+          AS t(${selectColumns})
+        `;
+
+        await connection.runAndReadAll(createTableQuery);
+      } else {
+        // Create empty temp table with correct schema
+        await connection.runAndReadAll(`
+          CREATE TEMP TABLE buffer_data (
+            timestamp TIMESTAMP,
+            ${isHepData ? 
+              `rcinfo VARCHAR,
+               payload VARCHAR` : 
+              `tags VARCHAR,
+               ${Object.entries(buffer?.schema?.fields || {})
+                 .filter(([k]) => !['timestamp', 'tags'].includes(k))
+                 .map(([k, f]) => `${k} ${f.type === 'DOUBLE' ? 'DOUBLE' : 'VARCHAR'}`)
+                 .join(',\n               ')}`
+            }
+          )
+        `);
+      }
 
       // Build query with union_by_name=true
       let query;
@@ -223,16 +268,18 @@ class QueryClient {
         `;
       }
 
-      // Execute query
-      const connection = await this.db.connect();
+      // Execute query and return results
       const result = await connection.runAndReadAll(query);
-      return result.getRows().map(row => {
+      const rows = result.getRows().map(row => {
         const obj = {};
         result.columnNames().forEach((col, i) => {
           obj[col] = row[i];
         });
         return obj;
       });
+
+      await connection.close();
+      return rows;
 
     } catch (error) {
       console.error('Query error:', error);
