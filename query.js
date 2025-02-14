@@ -121,8 +121,15 @@ class QueryClient {
     const whereClause = sql.match(/WHERE\s+(.*?)(?:\s+(?:ORDER|GROUP|LIMIT|$))/i);
     let conditions = '';
     if (whereClause) {
-      conditions = whereClause[1].replace(/time\s*(>=|>|<=|<|=)\s*'[^']+'\s*(AND|OR)?/i, '').trim();
-      if (conditions) conditions = `AND ${conditions}`;
+      // Keep all conditions except the time condition
+      conditions = whereClause[1]
+        .split(/\s+AND\s+/i)
+        .filter(cond => !cond.toLowerCase().includes('time'))
+        .join(' AND ');
+      
+      if (conditions) {
+        conditions = `AND ${conditions}`;
+      }
     }
 
     // Extract ORDER BY, LIMIT, etc.
@@ -224,16 +231,17 @@ class QueryClient {
             WITH filtered_data AS (
               SELECT * FROM read_parquet([${files.map(f => `'${f.path}'`).join(', ')}], union_by_name=true)
               WHERE timestamp >= TIMESTAMP '${new Date(parsed.timeRange.start / 1000000).toISOString()}'
-              AND timestamp <= TIMESTAMP '${new Date(parsed.timeRange.end / 1000000).toISOString()}'
-              ${parsed.conditions}
+                AND timestamp <= TIMESTAMP '${new Date(parsed.timeRange.end / 1000000).toISOString()}'
+                ${parsed.conditions}
               UNION ALL
               SELECT * FROM buffer_data
               WHERE timestamp >= TIMESTAMP '${new Date(parsed.timeRange.start / 1000000).toISOString()}'
-              AND timestamp <= TIMESTAMP '${new Date(parsed.timeRange.end / 1000000).toISOString()}'
-              ${parsed.conditions}
+                AND timestamp <= TIMESTAMP '${new Date(parsed.timeRange.end / 1000000).toISOString()}'
+                ${parsed.conditions}
             )
             SELECT ${parsed.columns}
             FROM filtered_data
+            WHERE 1=1 ${parsed.conditions}
             ${parsed.orderBy}
             ${parsed.limit}
           `;
