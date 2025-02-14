@@ -157,42 +157,49 @@ class QueryClient {
 
       // Determine if this is HEP or line protocol data
       const isHepData = typeof parsed.type === 'number';
-      
-      // Select appropriate columns based on data type
-      const selectColumns = isHepData ? 
-        'timestamp, rcinfo, payload' : 
-        (buffer?.rows?.[0] ? 
-          Object.keys(buffer.rows[0]).join(', ') : 
-          '*');
 
+      // Drop existing temp table if exists
+      await connection.runAndReadAll('DROP TABLE IF EXISTS buffer_data');
+      
       // Create temp table from buffer if there's data
       if (buffer?.rows?.length) {
-        const createTableQuery = `
-          CREATE TEMP TABLE buffer_data AS 
-          SELECT * FROM (VALUES ${buffer.rows.map(row => {
-            if (!isHepData) {
-              return `(
-                TIMESTAMP '${row.timestamp.toISOString()}',
-                '${row.tags}',
-                ${Object.entries(row)
-                  .filter(([k]) => !['timestamp', 'tags'].includes(k))
-                  .map(([,v]) => typeof v === 'string' ? `'${v}'` : v)
-                  .join(', ')}
-              )`;
-            } else {
-              return `(
-                TIMESTAMP '${new Date(row.create_date).toISOString()}',
-                '${JSON.stringify(row.protocol_header)}',
-                '${row.raw || ''}'
-              )`;
-            }
-          }).join(', ')}) 
-          AS t(${selectColumns})
-        `;
+        const firstRow = buffer.rows[0];
+        const columns = Object.keys(firstRow);
+        
+        // Create schema string
+        const schemaStr = columns.map(col => {
+          const value = firstRow[col];
+          const type = typeof value === 'number' ? 'DOUBLE' :
+                      value instanceof Date ? 'TIMESTAMP' :
+                      'VARCHAR';
+          return `${col} ${type}`;
+        }).join(',\n');
 
-        await connection.runAndReadAll(createTableQuery);
+        // Create empty table first
+        await connection.runAndReadAll(`
+          CREATE TEMP TABLE buffer_data (
+            ${schemaStr}
+          )
+        `);
+
+        // Insert data in batches
+        const batchSize = 1000;
+        for (let i = 0; i < buffer.rows.length; i += batchSize) {
+          const batch = buffer.rows.slice(i, i + batchSize);
+          await connection.runAndReadAll(`
+            INSERT INTO buffer_data 
+            SELECT * FROM (VALUES ${batch.map(row => `(
+              ${columns.map(col => {
+                const value = row[col];
+                if (value instanceof Date) return `TIMESTAMP '${value.toISOString()}'`;
+                if (typeof value === 'string') return `'${value.replace(/'/g, "''")}'`;
+                return value === null ? 'NULL' : value;
+              }).join(', ')}
+            )`).join(', ')})
+          `);
+        }
       } else {
-        // Create empty temp table with correct schema
+        // Create empty table with basic schema
         await connection.runAndReadAll(`
           CREATE TEMP TABLE buffer_data (
             timestamp TIMESTAMP,
@@ -200,16 +207,13 @@ class QueryClient {
               `rcinfo VARCHAR,
                payload VARCHAR` : 
               `tags VARCHAR,
-               ${Object.entries(buffer?.schema?.fields || {})
-                 .filter(([k]) => !['timestamp', 'tags'].includes(k))
-                 .map(([k, f]) => `${k} ${f.type === 'DOUBLE' ? 'DOUBLE' : 'VARCHAR'}`)
-                 .join(',\n               ')}`
+               value DOUBLE`
             }
           )
         `);
       }
 
-      // Build query with union_by_name=true
+      // Build query
       let query;
       if (files.length > 0) {
         const isAggregateQuery = parsed.columns.toLowerCase().includes('count(') || 
@@ -218,14 +222,12 @@ class QueryClient {
         if (isAggregateQuery) {
           query = `
             WITH filtered_data AS (
-              SELECT ${selectColumns}
-              FROM read_parquet([${files.map(f => `'${f.path}'`).join(', ')}], union_by_name=true)
+              SELECT * FROM read_parquet([${files.map(f => `'${f.path}'`).join(', ')}], union_by_name=true)
               WHERE timestamp >= TIMESTAMP '${new Date(parsed.timeRange.start / 1000000).toISOString()}'
               AND timestamp <= TIMESTAMP '${new Date(parsed.timeRange.end / 1000000).toISOString()}'
               ${parsed.conditions}
               UNION ALL
-              SELECT ${selectColumns}
-              FROM buffer_data
+              SELECT * FROM buffer_data
               WHERE timestamp >= TIMESTAMP '${new Date(parsed.timeRange.start / 1000000).toISOString()}'
               AND timestamp <= TIMESTAMP '${new Date(parsed.timeRange.end / 1000000).toISOString()}'
               ${parsed.conditions}
@@ -239,14 +241,12 @@ class QueryClient {
           query = `
             SELECT ${parsed.columns}
             FROM (
-              SELECT ${selectColumns}
-              FROM read_parquet([${files.map(f => `'${f.path}'`).join(', ')}], union_by_name=true)
+              SELECT * FROM read_parquet([${files.map(f => `'${f.path}'`).join(', ')}], union_by_name=true)
               WHERE timestamp >= TIMESTAMP '${new Date(parsed.timeRange.start / 1000000).toISOString()}'
               AND timestamp <= TIMESTAMP '${new Date(parsed.timeRange.end / 1000000).toISOString()}'
               ${parsed.conditions}
               UNION ALL
-              SELECT ${selectColumns}
-              FROM buffer_data
+              SELECT * FROM buffer_data
               WHERE timestamp >= TIMESTAMP '${new Date(parsed.timeRange.start / 1000000).toISOString()}'
               AND timestamp <= TIMESTAMP '${new Date(parsed.timeRange.end / 1000000).toISOString()}'
               ${parsed.conditions}
