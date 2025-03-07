@@ -3,10 +3,11 @@ import path from 'path';
 import fs from 'fs';
 
 class QueryClient {
-  constructor(baseDir = './data') {
+  constructor(baseDir = './data', bufferManager = null) {
     this.baseDir = baseDir;
     this.db = null;
     this.defaultTimeRange = 10 * 60 * 1000000000; // 10 minutes in nanoseconds
+    this.buffer = bufferManager; // Store reference to buffer manager
   }
 
   async initialize() {
@@ -120,8 +121,15 @@ class QueryClient {
     const whereClause = sql.match(/WHERE\s+(.*?)(?:\s+(?:ORDER|GROUP|LIMIT|$))/i);
     let conditions = '';
     if (whereClause) {
-      conditions = whereClause[1].replace(/time\s*(>=|>|<=|<|=)\s*'[^']+'\s*(AND|OR)?/i, '').trim();
-      if (conditions) conditions = `AND ${conditions}`;
+      // Keep all conditions except the time condition
+      conditions = whereClause[1]
+        .split(/\s+AND\s+/i)
+        .filter(cond => !cond.toLowerCase().includes('time'))
+        .join(' AND ');
+      
+      if (conditions) {
+        conditions = `AND ${conditions}`;
+      }
     }
 
     // Extract ORDER BY, LIMIT, etc.
@@ -141,45 +149,114 @@ class QueryClient {
     };
   }
 
-  async query(sql) {
-    if (!this.db) {
-      throw new Error('QueryClient not initialized');
+  async query(sql, options = {}) {
+    const parsed = this.parseQuery(sql);
+    
+    if (!this.buffer) {
+      throw new Error('No buffer manager available');
     }
 
     try {
-      const parsed = this.parseQuery(sql);
-      if (!parsed.type) {
-        throw new Error('Could not determine type from query');
-      }
-
+      const dbName = options.db || 'hep';
       const files = await this.findRelevantFiles(parsed.type, parsed.timeRange);
-      if (!files.length) {
-        return [];
+      const buffer = this.buffer.buffers.get(parsed.type);
+      const connection = await this.db.connect();
+
+      // Create temp table from buffer if there's data
+      if (buffer?.rows?.length) {
+        // Drop existing temp table if exists
+        await connection.runAndReadAll('DROP TABLE IF EXISTS buffer_data');
+
+        // Create temp table with schema from first row
+        const firstRow = buffer.rows[0];
+        const columns = Object.keys(firstRow);
+        
+        await connection.runAndReadAll(`
+          CREATE TEMP TABLE buffer_data AS 
+          SELECT * FROM (VALUES ${buffer.rows.map(row => `(
+            ${columns.map(col => {
+              const value = row[col];
+              if (value instanceof Date) return `TIMESTAMP '${value.toISOString()}'`;
+              if (typeof value === 'string') return `'${value.replace(/'/g, "''")}'`;
+              return value === null ? 'NULL' : value;
+            }).join(', ')}
+          )`).join(', ')})
+          AS t(${columns.join(', ')})
+        `);
       }
 
-      const connection = await this.db.connect();
-      try {
-        const query = `
+      // Build query
+      let query;
+      if (files.length > 0) {
+        const isAggregateQuery = parsed.columns.toLowerCase().includes('count(') || 
+                               parsed.columns.toLowerCase().includes('avg(');
+        
+        if (isAggregateQuery) {
+          query = `
+            WITH filtered_data AS (
+              SELECT * FROM read_parquet([${files.map(f => `'${f.path}'`).join(', ')}], union_by_name=true)
+              WHERE timestamp >= TIMESTAMP '${new Date(parsed.timeRange.start / 1000000).toISOString()}'
+              AND timestamp <= TIMESTAMP '${new Date(parsed.timeRange.end / 1000000).toISOString()}'
+              ${parsed.conditions}
+              ${buffer?.rows?.length ? `
+                UNION ALL
+                SELECT * FROM buffer_data
+                WHERE timestamp >= TIMESTAMP '${new Date(parsed.timeRange.start / 1000000).toISOString()}'
+                AND timestamp <= TIMESTAMP '${new Date(parsed.timeRange.end / 1000000).toISOString()}'
+                ${parsed.conditions}
+              ` : ''}
+            )
+            SELECT ${parsed.columns}
+            FROM filtered_data
+          `;
+        } else {
+          query = `
+            SELECT ${parsed.columns}
+            FROM (
+              SELECT * FROM read_parquet([${files.map(f => `'${f.path}'`).join(', ')}], union_by_name=true)
+              WHERE timestamp >= TIMESTAMP '${new Date(parsed.timeRange.start / 1000000).toISOString()}'
+              AND timestamp <= TIMESTAMP '${new Date(parsed.timeRange.end / 1000000).toISOString()}'
+              ${parsed.conditions}
+              ${buffer?.rows?.length ? `
+                UNION ALL
+                SELECT * FROM buffer_data
+                WHERE timestamp >= TIMESTAMP '${new Date(parsed.timeRange.start / 1000000).toISOString()}'
+                AND timestamp <= TIMESTAMP '${new Date(parsed.timeRange.end / 1000000).toISOString()}'
+                ${parsed.conditions}
+              ` : ''}
+            ) combined_data
+            ${parsed.orderBy}
+            ${parsed.limit}
+          `;
+        }
+      } else if (buffer?.rows?.length) {
+        // Only query buffer data
+        query = `
           SELECT ${parsed.columns}
-          FROM read_parquet([${files.map(f => `'${f.path}'`).join(', ')}])
-          ${parsed.timeRange ? `WHERE timestamp >= TIMESTAMP '${new Date(parsed.timeRange.start / 1000000).toISOString()}'
-            AND timestamp <= TIMESTAMP '${new Date(parsed.timeRange.end / 1000000).toISOString()}'` : ''}
+          FROM buffer_data
+          WHERE timestamp >= TIMESTAMP '${new Date(parsed.timeRange.start / 1000000).toISOString()}'
+          AND timestamp <= TIMESTAMP '${new Date(parsed.timeRange.end / 1000000).toISOString()}'
           ${parsed.conditions}
           ${parsed.orderBy}
           ${parsed.limit}
         `;
-
-        const reader = await connection.runAndReadAll(query);
-        return reader.getRows().map(row => {
-          const obj = {};
-          reader.columnNames().forEach((col, i) => {
-            obj[col] = row[i];
-          });
-          return obj;
-        });
-      } finally {
-        await connection.close();
+      } else {
+        // No data available
+        return [];
       }
+
+      const result = await connection.runAndReadAll(query);
+      const rows = result.getRows().map(row => {
+        const obj = {};
+        result.columnNames().forEach((col, i) => {
+          obj[col] = row[i];
+        });
+        return obj;
+      });
+
+      await connection.close();
+      return rows;
+
     } catch (error) {
       console.error('Query error:', error);
       throw error;
