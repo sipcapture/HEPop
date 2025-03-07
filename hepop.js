@@ -469,6 +469,74 @@ class ParquetBufferManager {
       await this.flush(type);
     }
   }
+
+  async compact(type) {
+    try {
+      const typeMetadata = await this.getTypeMetadata(type);
+      if (typeMetadata.files.length < 2) return; // Need at least 2 files to compact
+
+      console.log(`Starting compaction for type ${type}`);
+      const db = await DuckDBInstance.create(':memory:');
+      const connection = await db.connect();
+
+      // Create sorted compacted file using DuckDB
+      const compactedPath = path.join(
+        this.baseDir,
+        this.writerId,
+        'dbs',
+        `hep-${this.metadata.next_db_id}`,
+        `hep_${type}-${this.metadata.next_table_id}`,
+        'compacted.parquet'
+      );
+
+      await fs.promises.mkdir(path.dirname(compactedPath), { recursive: true });
+
+      // Use DuckDB to read, sort, and write in one operation
+      const query = `
+        COPY (
+          SELECT * FROM read_parquet([${typeMetadata.files.map(f => `'${f.path}'`).join(', ')}], union_by_name=true)
+          ORDER BY timestamp
+        ) TO '${compactedPath}'
+      `;
+
+      await connection.runAndReadAll(query);
+      await connection.close();
+      await db.close();
+
+      // Update metadata
+      const stats = await this.getParquetStats(compactedPath);
+      const newFile = {
+        path: compactedPath,
+        size: stats.size,
+        rows: stats.rows,
+        min_time: stats.min_time,
+        max_time: stats.max_time
+      };
+
+      // Remove old files and update metadata
+      for (const file of typeMetadata.files) {
+        try {
+          await fs.promises.unlink(file.path);
+          console.log(`Removed old file: ${file.path}`);
+        } catch (error) {
+          console.warn(`Failed to remove old file ${file.path}:`, error);
+        }
+      }
+
+      typeMetadata.files = [newFile];
+      typeMetadata.parquet_size_bytes = newFile.size;
+      typeMetadata.row_count = newFile.rows;
+      typeMetadata.min_time = newFile.min_time;
+      typeMetadata.max_time = newFile.max_time;
+
+      await this.writeTypeMetadata(type, typeMetadata);
+      console.log(`Compaction complete for type ${type}`);
+
+    } catch (error) {
+      console.error(`Compaction error for type ${type}:`, error);
+      throw error;
+    }
+  }
 }
 
 class CompactionManager {
