@@ -2,11 +2,60 @@ import { DuckDBInstance } from '@duckdb/node-api';
 import path from 'path';
 import fs from 'fs';
 
+/** Max in-memory rows materialized into SQL per query (safety cap). */
+export const MAX_BUFFER_QUERY_ROWS = 5000;
+
+export function quoteIdent(name) {
+  return `"${String(name).replace(/"/g, '""')}"`;
+}
+
+export function escapeSqlString(value) {
+  return String(value).replace(/'/g, "''");
+}
+
+export function stripTimePredicates(whereBody) {
+  if (!whereBody) return '';
+  let rest = whereBody.trim();
+  rest = rest.replace(/\btime\s*(>=|>|<=|<|=)\s*'[^']*'/gi, '');
+  rest = rest.replace(/^\s*(?:AND|OR)\s+/i, '');
+  rest = rest.replace(/\s+(?:AND|OR)\s*$/i, '');
+  rest = rest.replace(/\s+(?:AND|OR)\s+(?:AND|OR)\s+/gi, ' AND ');
+  rest = rest.replace(/\s{2,}/g, ' ').trim();
+  return rest;
+}
+
+export function buildTimestampWhereClause(timeRange) {
+  const parts = [];
+  if (timeRange.start != null) {
+    parts.push(
+      `timestamp >= TIMESTAMP '${new Date(timeRange.start / 1000000).toISOString()}'`
+    );
+  }
+  if (timeRange.end != null) {
+    parts.push(
+      `timestamp <= TIMESTAMP '${new Date(timeRange.end / 1000000).toISOString()}'`
+    );
+  }
+  return parts.length ? parts.join(' AND ') : 'TRUE';
+}
+
+function sqlLiteral(value) {
+  if (value === null || value === undefined) return 'NULL';
+  if (value instanceof Date) {
+    return `TIMESTAMP '${value.toISOString()}'`;
+  }
+  if (typeof value === 'number' && Number.isFinite(value)) return String(value);
+  if (typeof value === 'boolean') return value ? 'TRUE' : 'FALSE';
+  if (typeof value === 'string') return `'${escapeSqlString(value)}'`;
+  return `'${escapeSqlString(JSON.stringify(value))}'`;
+}
+
 class QueryClient {
-  constructor(baseDir = './data') {
+  constructor(baseDir = './data', bufferManager = null) {
     this.baseDir = baseDir;
     this.db = null;
     this.defaultTimeRange = 10 * 60 * 1000000000; // 10 minutes in nanoseconds
+    this.buffer = bufferManager;
   }
 
   async initialize() {
@@ -33,13 +82,10 @@ class QueryClient {
       );
 
       try {
-        // Always read fresh metadata
         const metadataPath = path.join(typePath, 'metadata.json');
         const metadata = JSON.parse(await fs.promises.readFile(metadataPath, 'utf8'));
 
-        // Only use files that exist and match time range
         const relevantFiles = metadata.files.filter(file => {
-          // Skip files that don't exist
           if (!fs.existsSync(file.path)) {
             return false;
           }
@@ -63,28 +109,22 @@ class QueryClient {
   }
 
   parseQuery(sql) {
-    // Extract SELECT columns
     const selectMatch = sql.match(/SELECT\s+(.*?)\s+FROM/i);
     const columns = selectMatch ? selectMatch[1].trim() : '*';
 
-    // Extract type/measurement name
     const fromMatch = sql.match(/FROM\s+([a-zA-Z0-9_]+)/i);
     let type = null;
 
     if (fromMatch) {
       const tableName = fromMatch[1];
-      // Check if it's a HEP type (hep_NUMBER)
       const hepMatch = tableName.match(/^hep_(\d+)$/i);
       if (hepMatch) {
-        type = parseInt(hepMatch[1]);
+        type = parseInt(hepMatch[1], 10);
       } else {
-        // It's a Line Protocol measurement name
         type = tableName;
       }
     }
 
-
-    // Extract time range
     const timeMatch = sql.match(/time\s*(>=|>|<=|<|=)\s*'([^']+)'/i);
     let timeRange;
 
@@ -105,10 +145,10 @@ class QueryClient {
         case '=':
           timeRange = { start: timestamp, end: timestamp };
           break;
+        default:
+          timeRange = { start: now - this.defaultTimeRange, end: now };
       }
     } else {
-
-      // Default to last 10 minutes
       const now = Date.now() * 1000000;
       timeRange = {
         start: now - this.defaultTimeRange,
@@ -116,18 +156,18 @@ class QueryClient {
       };
     }
 
-    // Extract additional WHERE conditions
     const whereClause = sql.match(/WHERE\s+(.*?)(?:\s+(?:ORDER|GROUP|LIMIT|$))/i);
     let conditions = '';
     if (whereClause) {
-      conditions = whereClause[1].replace(/time\s*(>=|>|<=|<|=)\s*'[^']+'\s*(AND|OR)?/i, '').trim();
-      if (conditions) conditions = `AND ${conditions}`;
+      const rest = stripTimePredicates(whereClause[1]);
+      if (rest) {
+        conditions = `AND ${rest}`;
+      }
     }
 
-    // Extract ORDER BY, LIMIT, etc.
     const orderMatch = sql.match(/ORDER\s+BY\s+(.*?)(?:\s+(?:LIMIT|$))/i);
     const limitMatch = sql.match(/LIMIT\s+(\d+)/i);
-    
+
     const orderBy = orderMatch ? `ORDER BY ${orderMatch[1]}` : '';
     const limit = limitMatch ? `LIMIT ${limitMatch[1]}` : '';
 
@@ -137,82 +177,124 @@ class QueryClient {
       timeRange,
       conditions,
       orderBy,
-      limit
+      limit,
+      timestampWhere: buildTimestampWhereClause(timeRange)
     };
   }
 
-  async query(sql) {
-    if (!this.db) {
-      throw new Error('QueryClient not initialized');
+  async createBufferTempTable(connection, bufferRows) {
+    if (!bufferRows.length) return false;
+
+    const capped = bufferRows.slice(0, MAX_BUFFER_QUERY_ROWS);
+    if (bufferRows.length > MAX_BUFFER_QUERY_ROWS) {
+      console.warn(
+        `Buffer query capped at ${MAX_BUFFER_QUERY_ROWS} rows (${bufferRows.length} in memory)`
+      );
     }
 
+    await connection.runAndReadAll('DROP TABLE IF EXISTS buffer_data');
+
+    const firstRow = capped[0];
+    const columns = Object.keys(firstRow);
+    const columnList = columns.map(quoteIdent).join(', ');
+
+    const valuesSql = capped.map(row => `(
+            ${columns.map(col => sqlLiteral(row[col])).join(', ')}
+          )`).join(', ');
+
+    await connection.runAndReadAll(`
+          CREATE TEMP TABLE buffer_data AS
+          SELECT * FROM (VALUES ${valuesSql})
+          AS t(${columnList})
+        `);
+    return true;
+  }
+
+  async query(sql, options = {}) {
+    const parsed = this.parseQuery(sql);
+
+    if (!this.buffer) {
+      throw new Error('No buffer manager available');
+    }
+
+    const connection = await this.db.connect();
     try {
-      const parsed = this.parseQuery(sql);
-      if (!parsed.type) {
-        throw new Error('Could not determine type from query');
-      }
-
       const files = await this.findRelevantFiles(parsed.type, parsed.timeRange);
-      if (!files.length) {
-        return [];
-      }
+      const bufferRows = this.buffer.getBufferSnapshot(parsed.type);
+      const hasBuffer = await this.createBufferTempTable(connection, bufferRows);
 
-      const connection = await this.db.connect();
-      try {
-        const query = `
+      let query;
+      if (files.length > 0) {
+        const isAggregateQuery = parsed.columns.toLowerCase().includes('count(') ||
+          parsed.columns.toLowerCase().includes('avg(');
+
+        const parquetPaths = files.map(f => `'${escapeSqlString(f.path)}'`).join(', ');
+        const bufferUnion = hasBuffer ? `
+                UNION ALL
+                SELECT * FROM buffer_data
+                WHERE ${parsed.timestampWhere}
+                ${parsed.conditions}
+              ` : '';
+
+        if (isAggregateQuery) {
+          query = `
+            WITH filtered_data AS (
+              SELECT * FROM read_parquet([${parquetPaths}], union_by_name=true)
+              WHERE ${parsed.timestampWhere}
+              ${parsed.conditions}
+              ${bufferUnion}
+            )
+            SELECT ${parsed.columns}
+            FROM filtered_data
+          `;
+        } else {
+          query = `
+            SELECT ${parsed.columns}
+            FROM (
+              SELECT * FROM read_parquet([${parquetPaths}], union_by_name=true)
+              WHERE ${parsed.timestampWhere}
+              ${parsed.conditions}
+              ${bufferUnion}
+            ) combined_data
+            ${parsed.orderBy}
+            ${parsed.limit}
+          `;
+        }
+      } else if (hasBuffer) {
+        query = `
           SELECT ${parsed.columns}
-          FROM read_parquet([${files.map(f => `'${f.path}'`).join(', ')}])
-          ${parsed.timeRange ? `WHERE timestamp >= TIMESTAMP '${new Date(parsed.timeRange.start / 1000000).toISOString()}'
-            AND timestamp <= TIMESTAMP '${new Date(parsed.timeRange.end / 1000000).toISOString()}'` : ''}
+          FROM buffer_data
+          WHERE ${parsed.timestampWhere}
           ${parsed.conditions}
           ${parsed.orderBy}
           ${parsed.limit}
         `;
-
-        const reader = await connection.runAndReadAll(query);
-        return reader.getRows().map(row => {
-          const obj = {};
-          reader.columnNames().forEach((col, i) => {
-            obj[col] = row[i];
-          });
-          return obj;
-        });
-      } finally {
-        await connection.close();
+      } else {
+        return [];
       }
+
+      const result = await connection.runAndReadAll(query);
+      return result.getRows().map(row => {
+        const obj = {};
+        result.columnNames().forEach((col, i) => {
+          obj[col] = row[i];
+        });
+        return obj;
+      });
     } catch (error) {
       console.error('Query error:', error);
       throw error;
+    } finally {
+      await connection.close();
     }
   }
 
   async close() {
-    // Nothing to clean up
+    if (this.db) {
+      await this.db.close();
+      this.db = null;
+    }
   }
-}
-
-// Example usage:
-async function main() {
-  const client = new QueryClient();
-  await client.initialize();
-
-  try {
-    const result = await client.query(`
-      SELECT * FROM hep_1 
-      WHERE time >= '2025-02-08T19:00:00' 
-      AND time < '2025-02-08T20:00:00' 
-      LIMIT 10
-    `);
-    console.log('Query result:', result);
-  } finally {
-    await client.close();
-  }
-}
-
-if (require.main === module) {
-  main().catch(console.error);
 }
 
 export default QueryClient;
-
-
