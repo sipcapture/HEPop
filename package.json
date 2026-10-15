@@ -5,6 +5,7 @@
   "type": "module",
    "scripts": {
     "start": "bun hepop.js",
+    "test": "bun test",
     "postinstall": "cp patches/bun_duckdb.js node_modules/@duckdb/node-bindings/duckdb.js",
    },
   "devDependencies": {

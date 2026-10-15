@@ -179,25 +179,39 @@ class ParquetBufferManager {
     }, this.flushInterval);
   }
 
+  /** Shallow copy of in-memory rows for queries (safe across concurrent flush). */
+  getBufferSnapshot(type) {
+    const buffer = this.buffers.get(type);
+    if (!buffer?.rows?.length) {
+      return [];
+    }
+    return buffer.rows.map((row) => ({ ...row }));
+  }
+
   async flush(type) {
     const buffer = this.buffers.get(type);
     if (!buffer?.rows.length) return;
-    
+
+    const rows = buffer.rows;
+    const schema = buffer.schema;
+    const isLineProtocol = buffer.isLineProtocol;
+    buffer.rows = [];
+
     try {
-      const filePath = await this.getFilePath(type, buffer.isLineProtocol ? 
-        buffer.rows[0].timestamp : buffer.rows[0].create_date);
+      const filePath = await this.getFilePath(type, isLineProtocol ?
+        rows[0].timestamp : rows[0].create_date);
       await fs.promises.mkdir(path.dirname(filePath), { recursive: true });
 
       // Create writer with appropriate schema
       const writer = await parquet.ParquetWriter.openFile(
-        buffer.schema,
+        schema,
         filePath,
         this.writerOptions
       );
 
       // Write rows based on type
-      for (const data of buffer.rows) {
-        if (buffer.isLineProtocol) {
+      for (const data of rows) {
+        if (isLineProtocol) {
           await writer.appendRow(data);
         } else {
           await writer.appendRow({
@@ -218,21 +232,15 @@ class ParquetBufferManager {
         type, 
         filePath, 
         stats.size, 
-        buffer.rows.length, 
-        buffer.rows.map(d => buffer.isLineProtocol ? 
+        rows.length, 
+        rows.map(d => isLineProtocol ?
           d.timestamp : new Date(d.create_date))
       );
       
-      // Clear buffer
-      this.buffers.set(type, {
-        rows: [],
-        schema: buffer.schema,
-        isLineProtocol: buffer.isLineProtocol
-      });
-      
-      console.log(`Wrote ${buffer.rows.length} records to ${filePath}`);
+      console.log(`Wrote ${rows.length} records to ${filePath}`);
     } catch (error) {
       console.error(`Parquet flush error:`, error);
+      buffer.rows = rows.concat(buffer.rows);
     }
   }
 
@@ -408,31 +416,49 @@ class ParquetBufferManager {
     }
   }
 
+  inferLineProtocolFieldType(value) {
+    if (typeof value === 'number') return 'DOUBLE';
+    if (typeof value === 'boolean') return 'BOOLEAN';
+    return 'UTF8';
+  }
+
+  ensureLineProtocolSchemaFields(buffer, fieldNames, sampleRow) {
+    for (const key of fieldNames) {
+      if (['timestamp', 'tags'].includes(key) || buffer.schemaFields[key]) {
+        continue;
+      }
+      const value = sampleRow?.[key];
+      buffer.schemaFields[key] = {
+        type: this.inferLineProtocolFieldType(value),
+        optional: true
+      };
+      buffer.schema = new parquet.ParquetSchema(buffer.schemaFields);
+    }
+  }
+
   async addLineProtocolBulk(measurement, rows) {
     const type = measurement;
-    
+    if (!rows.length) return;
+
     if (!this.buffers.has(type)) {
-      // Create schema from first row to ensure correct types
       const firstRow = rows[0];
       const schemaFields = {
         timestamp: { type: 'TIMESTAMP_MILLIS' },
         tags: { type: 'UTF8' }
       };
 
-      // Add fields with proper types
       Object.entries(firstRow)
         .filter(([key]) => !['timestamp', 'tags'].includes(key))
         .forEach(([key, value]) => {
           schemaFields[key] = {
-            type: typeof value === 'number' ? 'DOUBLE' :
-                  typeof value === 'boolean' ? 'BOOLEAN' : 'UTF8',
+            type: this.inferLineProtocolFieldType(value),
             optional: true
           };
         });
 
-      // Create new buffer with schema
       this.buffers.set(type, {
         rows: [],
+        schemaFields,
         schema: new parquet.ParquetSchema(schemaFields),
         isLineProtocol: true
       });
@@ -449,6 +475,8 @@ class ParquetBufferManager {
         }
       });
     });
+
+    this.ensureLineProtocolSchemaFields(buffer, allFields, rows[0]);
 
     // Add rows with normalized fields
     buffer.rows.push(...rows.map(row => {
@@ -467,74 +495,6 @@ class ParquetBufferManager {
 
     if (buffer.rows.length >= this.bufferSize) {
       await this.flush(type);
-    }
-  }
-
-  async compact(type) {
-    try {
-      const typeMetadata = await this.getTypeMetadata(type);
-      if (typeMetadata.files.length < 2) return; // Need at least 2 files to compact
-
-      console.log(`Starting compaction for type ${type}`);
-      const db = await DuckDBInstance.create(':memory:');
-      const connection = await db.connect();
-
-      // Create sorted compacted file using DuckDB
-      const compactedPath = path.join(
-        this.baseDir,
-        this.writerId,
-        'dbs',
-        `hep-${this.metadata.next_db_id}`,
-        `hep_${type}-${this.metadata.next_table_id}`,
-        'compacted.parquet'
-      );
-
-      await fs.promises.mkdir(path.dirname(compactedPath), { recursive: true });
-
-      // Use DuckDB to read, sort, and write in one operation
-      const query = `
-        COPY (
-          SELECT * FROM read_parquet([${typeMetadata.files.map(f => `'${f.path}'`).join(', ')}], union_by_name=true)
-          ORDER BY timestamp
-        ) TO '${compactedPath}'
-      `;
-
-      await connection.runAndReadAll(query);
-      await connection.close();
-      await db.close();
-
-      // Update metadata
-      const stats = await this.getParquetStats(compactedPath);
-      const newFile = {
-        path: compactedPath,
-        size: stats.size,
-        rows: stats.rows,
-        min_time: stats.min_time,
-        max_time: stats.max_time
-      };
-
-      // Remove old files and update metadata
-      for (const file of typeMetadata.files) {
-        try {
-          await fs.promises.unlink(file.path);
-          console.log(`Removed old file: ${file.path}`);
-        } catch (error) {
-          console.warn(`Failed to remove old file ${file.path}:`, error);
-        }
-      }
-
-      typeMetadata.files = [newFile];
-      typeMetadata.parquet_size_bytes = newFile.size;
-      typeMetadata.row_count = newFile.rows;
-      typeMetadata.min_time = newFile.min_time;
-      typeMetadata.max_time = newFile.max_time;
-
-      await this.writeTypeMetadata(type, typeMetadata);
-      console.log(`Compaction complete for type ${type}`);
-
-    } catch (error) {
-      console.error(`Compaction error for type ${type}:`, error);
-      throw error;
     }
   }
 }
@@ -1095,7 +1055,7 @@ class HEPServer {
       await this.buffer.initialize();
 
       // Initialize compaction manager with debug flag
-      this.compaction = new CompactionManager(this.buffer, true); // Always show compaction logs
+      this.compaction = new CompactionManager(this.buffer, this.debug);
       await this.compaction.initialize();
 
       // Initialize query client with buffer manager
